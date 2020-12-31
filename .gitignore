@@ -1,0 +1,9 @@
+# compiled python3 scripts
+py/__pycache__/*
+
+# illustrator and PS files
+*.psd
+*.ai
+
+# don't include JS dependencies
+web/packages/*

@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
+	<title>DENA BHIMS - new encounter</title>
+	<!--jquery -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+	
+	<!-- bootstrap -->
+	<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css"/>
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+
+	<!-- font awesome --> 
+	<link href="packages/fontawesome/css/all.min.css" rel="stylesheet">
+
+	<!-- Leaflet -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+		crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+		integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+		crossorigin=""></script>
+
+	<!-- custom css -->
+	<link rel="stylesheet" href="css/bhims-entry.css">
+	<link rel="stylesheet" href="css/bhims.css">
+</head>
+
+<body>
+	 <!-- loading indicator should be hidden and will only be shown when loading data -->
+	<div class="modal-background modal-background-light hidden" id="loading-indicator-background"></div>
+	<div class="hidden" id="loading-indicator"></div>
+	<!--<div class="bg-blur-100 full-screen"></div>-->
+	<div id="main-container">
+		<div class="background-blur vertical-scroll" id="main-form-container">
+			<form class="mx-0 px-0 form-container" id="input-form">
+				<div class="required-indicator-explanation hidden">
+					<span class="required-indicator">*
+					<label class=""></span>= required</label>
+				</div>
+				<div class="form-body">
+					<div class="form-section title-section selected" data-section-index="-1">
+						<div class="form-title">
+							<h1>Bear-Human Incident Form</h1>
+							<h4>Denali National Park and Preserve</h4>
+						</div>
+						<div class="section-body">
+							<div class="section-body-content">
+								<p class="form-description">
+									The information entered in this form will be used to track immediate bear management situations as 
+									well as long term trends in bear-human interactions in Denali National Park and Preserve. Please fill
+									out the form <strong>once for each bear encounter</strong> that you've had. Thank you for helping preserve 
+									and protect Denali's bears.
+								</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="form-section" id="section-0" data-section-index="0" data-section-name="people">
+						
+						<h4 class="section-title">People involved</h4>
+						
+						<div class="section-body justify-start">
+							
+							<div class="section-body-content">
+								
+								<div class="accordion form-item-list" id="people-involved-accordion" data-table-name="people">
+									
+								  <div class="card cloneable hidden" id="cloneable-card-0">
+								    <div class="card-header" id="cardHeader-0-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-0-cloneable" data-target="collapse-0-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label">New person</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="person" aria-label="Delete person">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								      
+								    </div>
+
+								    <div id="collapse-0-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-0-cloneable" data-parent="#people-involved-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+														<div class="field-container small-field">
+															<input class="input-field card-label-field" type="text" name="first_name" placeholder="First name" id="input-first_name-0" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-first_name-0">First name</label>
+														</div>
+														<div class="field-container small-field">
+															<input class="input-field card-label-field" type="text" name="last_name" placeholder="Last name" id="input-last_name-0" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-last_name-0">Last name</label>
+														</div>
+												</div>
+												
+												<div class="field-container">
+													<input class="input-field large-field" type="text" name="address_1-0" placeholder="Street address" id="input-address_1-0">
+													<label class="field-label" for=input-address_1>Street address</label>
+												</div>
+												
+												<div class="field-container">
+													<input class="input-field large-field" type="text" name="address_2-0" placeholder="Address line 2" id="input-address_2-0">
+													<label class="field-label" for=input-address_2>Address line 2</label>
+												</div>
+												
+												<div class="field-container">
+														<div class="field-container small-field">
+															<select class="input-field default" type="text" name="country_code" placeholder="Country of residence" id="input-country-0" onchange="onCountryPostalCodeChange(event)" required></select>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-country-0">Country of residence</label>
+														</div>
+														<div class="field-container small-field">
+															<input class="input-field" type="text" name="zip_code" placeholder="Postal code" id="input-zip_code-0" onchange="onCountryPostalCodeChange(event)" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-zip_code-0">Postal code</label>
+														</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<input class="input-field" type="text" name="city" placeholder="City" id="input-city-0">
+														<label class="field-label" for="input-city-0">City</label>
+													</div>
+													<div class="collapse field-container small-field">
+														<select class="input-field default" name="state_code" placeholder="Select a state" id="input-state-0" data-dependent-target="#input-country-0" data-dependent-value="US,CA"></select>
+														<label class="field-label" for="input-state-0">State</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+														<div class="field-container small-field">
+															<input class="input-field" type="email" name="email_address" placeholder="Email" id="input-email_address-0" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-email_address-0">Email</label>
+														</div>
+														<div class="field-container small-field">
+															<input class="input-field" type="tel" name="phone_number" placeholder="Phone" id="input-phone_number-0">
+															<label class="field-label" for="input-phone_number-0">Phone</label>
+														</div>
+												</div>
+												
+												<div class="field-container">
+														<div class="field-container small-field">
+															<select class="input-field default" name="sex_code" placeholder="Select a gender" id="input-sex_code-0"></select>
+															<label class="field-label" for="input-sex_code-0">Gender</label>
+														</div>
+														<div class="field-container small-field">
+															<select class="input-field default" name="residency_code" placeholder="Select a residency" id="input-residency_code-0"></select>
+															<label class="field-label" for="input-residency_code-0">Residency</label>
+														</div>
+												</div>
+												
+												<div class="field-container">
+													<label class="checkmark-container">
+														<input class="input-field input-checkbox" type="checkbox" name="is_primary_person" id="input-is_primary_person-0">
+														<span class="checkmark data-input-checkmark"></span>
+													</label>
+													<label class="field-label checkbox-label" for="input-is_primary_person-0">This is the primary reporting person</label>
+												</div>
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="people-involved-accordion">
+										<strong>+</strong> Add person
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-0 -->
+
+					<!-- ################### section-1 ################## -->
+					<div class="form-section" id="section-1" data-section-index="1" data-section-name="human-group">
+						<h4 class="section-title">Group information</h4>
+						<div class="section-body scroll validate-field-parent"><!--"validate-field-parent" is a utility class used by validateField()-->
+							<div class="section-body-content">
+
+								<!-- Group type -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="human_group_type_code" placeholder="Type of group" id="input-human_group_type-1" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-human_group_type-1">Type of group</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_human_group_type" placeholder='Description of the "Other" group' id="input-other_human_group_type-1" data-dependent-target="#input-human_group_type-1" data-dependent-value="OTH" required>
+										<label class="field-label" for="input-other_human_group_type-1">Description of the "Other" group</label>
+									</div>
+								</div>
+
+								<!-- Observation type-->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="observation_type_code" placeholder="Observation type" id="input-observation_type-1"></select>
+										<label class="field-label" for="input-observation_type-1">Observation type</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_observation_type" placeholder='Description of the "Other" observation type' id="input-other_observation_type-1" data-dependent-target="#input-observation_type-1" data-dependent-value="OTH" required>
+										<label class="field-label" for="input-other_observation_type-1">Description of the "Other" observation type</label>
+									</div>
+								</div>
+								
+								<!-- Group size -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<input class="input-field" type="number" name="group_size_total" placeholder="Number of people in group" id="input-group_size_total-1" min=0>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-group_size_total-1">Number of people in group</label>
+									</div>
+									<div class="field-container small-field">
+										<input class="input-field" type="number" name="group_size_encounter" placeholder="Number of people involved in the encounter" id="input-group_size_encounter-1" min=0>
+										<label class="field-label" for="input-group_size_encounter-1">Number of people involved in the encounter</label>
+									</div>
+								</div>
+								
+								<!-- General human activity -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="general_human_activity_code" placeholder="General group activity" id="input-general_human_activity-1" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-general_human_activity-1">General group activity</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_general_human_activity" placeholder='Description of the "Other" activity' id="input-other_general_human_activity-1" data-dependent-target="#input-general_human_activity-1" data-dependent-value="OTH" required>
+										<label class="field-label" for="input-other_general_human_activity-1">Description of the "Other" activity</label>
+									</div>
+								</div>
+
+								<!-- Safety info -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="received_safety_info" placeholder="Had the group received safety info?" id="input-received_safety_info-1" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-received_safety_info-1">Had the group received safety information before the encounter?</label>
+									</div>
+								</div>
+								<div class="collapse field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="safety_info_source_code" placeholder="Safety information source" id="input-safety_info_source-1" data-dependent-target="#input-received_safety_info-1" data-dependent-value="1"required></select>
+										<label class="field-label" for="input-safety_info_source-1">Safety information source</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_safety_info_source" placeholder='Description of the "Other" information source' id="input-other_safety_info_source-1" data-dependent-target="#input-safety_info_source-1" data-dependent-value="OTH" required>
+										<label class="field-label" for="input-other_safety_info_source-1">Description of the "Other" safety information source</label>
+									</div>
+								</div>
+
+								<!-- Making noise-->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="was_making_noise" placeholder="Was the group making noise?" id="input-was_making_noise-1" data-lookup-table="boolean_response_codes" required></select>
+										<label class="field-label" for="input-was_making_noise-1">Was the group making noise to warn bears of their presence?</label>
+									</div>
+								</div>
+								<div class="field-container">
+									<div class="collapse field-container small-field">
+										<select class="input-field default" type="text" name="making_noise_code" placeholder="What type of noise was the group making?" id="input-making_noise-1" data-dependent-target="#input-was_making_noise-1" data-dependent-value="1" required></select>
+										<label class="field-label" for="input-making_noise-1">What type of noise was the group making to warn bears of their presence?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_making_noise" placeholder='Description of the "Other" type of noise' id="input-other_making_noise-1" data-dependent-target="#input-making_noise-1" data-dependent-value="999" required>
+										<label class="field-label" for="input-other_making_noise-1">Description of the "Other" type of noise</label>
+									</div>
+								</div>
+
+
+								<!-- Firearm and bear spray present -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="bear_spray_was_present" placeholder="Was bear spray present?" id="input-bear_spray_was_present-1" data-lookup-table="boolean_response_codes"></select>
+										<label class="field-label" for="input-bear_spray_was_present-1">Did anyone in the group have bear spray?</label>
+									</div>
+									<div class="field-container small-field">
+										<select class="input-field default" name="firearm_was_present" placeholder="Was a firearm present?" id="input-firearm_was_present-1" data-lookup-table="boolean_response_codes"></select>
+										<label class="field-label" for="input-firearm_was_present-1">Did anyone in the group have a firearm?</label>
+									</div>
+								</div>
+							
+							</div>
+						</div>
+					</div>
+					<!--###################### end of section-1 #########################-->
+				
+
+					<!-- ################### section-2 ################## -->
+					<div class="form-section" id="section-2" data-section-index="2" data-section-name="encounter-info">
+						<h4 class="section-title">Encounter information</h4>
+						<div class="section-body scroll validate-field-parent"><!--"validate-field-parent" is a utility class used by validateField()-->
+							<div class="section-body-content">
+								<!-- date and time start -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<div class="field-container small-field">
+											<input class="input-field centered-text" type="date" name="start_date" placeholder="Date of the encounter" id="input-start_date-2" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-start_date-2">Date of the encounter</label>
+										</div>
+										<div class="field-container small-field">
+											<input class="input-field centered-text" type="time" name="start_time" placeholder="Start time of the encounter" id="input-start_time-2" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-start_date-2">Time the encounter started</label>
+										</div>
+									</div>
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="daylight_code" placeholder="General time of day" id="input-daylight_code-2"></select>
+										<!--<span class="required-indicator">*</span>-->
+										<label class="field-label" for="input-daylight_code-2">General time of day</label>
+									</div>
+								</div>
+								
+								<!-- Duration -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<input class="input-field" type="number" name="duration_minutes" min=0 step=1 placeholder="Duration of the encounter (in minutes)" id="input-duration_minutes-2" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-duration_minutes-2">Duration of the encounter (in minutes)</label>
+									</div>
+									<div class="field-container small-field">
+										<select class="input-field default" type="number" name="duration_code" placeholder="Duration of the encounter" id="input-duration_code-2"></select>
+										<label class="field-label" for="input-duration_code-2">Duration of the encounter</label>
+									</div>
+								</div>
+								
+								<!-- People present -->
+								<div class="field-container disabled">
+									<select class="input-field default" name="people_present_code" placeholder="Were people present during the encounter?" id="input-people_present_code-2" required></select>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-people_present_code-2">Were people present for the encounter?</label>
+								</div>
+
+								<!-- Bear was seen -->
+								<div class="field-container">
+									<select class="input-field default" type="text" name="bear_was_seen" placeholder="Did anyone see the bear?" id="input-bear_was_seen-2" data-lookup-table="boolean_response_codes" required></select>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-bear_was_seen-2">Did anyone see the bear?</label>
+								</div>
+
+								<!-- Distance of the bear -->
+								<div class="collapse field-container">
+									<div class="field-container small-field">
+										<div class="flex-field-container">
+											<input class="input-field text-right-when-valid" type="number" name="initial_distance_m" placeholder="How close was the bear at first?" id="input-initial_distance-2" data-dependent-target="#input-bear_was_seen-2" data-dependent-value="1" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-inital_distance-2">How far was the bear when you first saw it?</label>
+										</div>
+										<div class="units-field-container">
+											<select class="input-field centered-text" id="input-initial_distance_units-2" value="ft" required>
+												<option value="ft">feet</option>
+												<option value="m">meters</option>
+											</select>
+										</div>
+									</div>
+									<div class="field-container small-field">
+										<div class="flex-field-container">
+											<input class="input-field text-right-when-valid" type="number" name="closest_distance_m" placeholder="How close did the bear get to people?" id="input-closest_distance-2" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-inital_distance-2">How close did the bear get to you or other people?</label>
+										</div>
+										<div class="units-field-container">
+											<select class="input-field centered-text" id="input-closest_distance_units-2" value="ft" required>
+												<option value="ft">feet</option>
+												<option value="m">meters</option>
+											</select>
+										</div>
+									</div>
+								</div>
+								
+								<!-- food present -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="food_present_code" placeholder="Was food present?" id="input-food_present_code-2" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-safety_info_source-2">Was food present?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_food_present" placeholder='Description of the "Other" food present' id="input-other_food_present-2" data-dependent-target="#input-food_present_code-2" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_food_present-2">Description of the "Other" food present</label>
+									</div>
+								</div>
+
+								<!-- bear obtained food -->
+								<div class="collapse field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="bear_obtained_food" placeholder="Did the bear obtain food?" id="input-bear_obtained_food-2" data-lookup-table="boolean_response_codes" data-dependent-target="#input-food_present_code-2" data-dependent-value="INS,OUT" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-bear_obtained_food-2">Did the bear obtain any food?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="consumed_food_description" placeholder='Description of the consumed food' id="input-consumed_food_description-2" data-dependent-target="#input-bear_obtained_food-2" data-dependent-value="1" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-consumed_food_description-2">Description of the consumed food</label>
+									</div>
+								</div>
+
+								<!-- bear charged -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="bear_charged" placeholder="Did the bear charge?" id="input-bear_charged-2" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-bear_charged-2">Did the bear charge?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field default" type="number" min=1 name="charge_count" placeholder="How many times did the bear charge?" id="input-charge_count-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1">
+										<label class="field-label" for="input-charge_count-2">How many times did the bear charge?</label>
+									</div>
+								</div>
+								<!-- furtherst charge distance -->
+								<div class="collapse field-container">
+									<div class="field-container flex-field-container">
+										<input class="input-field text-right-when-valid" type="number" name="greatest_charge_distance_m" placeholder="What was the farthest distance the bear charged from?" id="input-greatest_charge_distance_m-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-greatest_charge_distance_m-2">What was the farthest distance the bear charged from?</label>
+									</div>
+									<div class="units-field-container">
+										<select class="input-field centered-text" id="input-closest_distance_units-2" value="ft" required>
+											<option value="ft">feet</option>
+											<option values="m">meters</option>
+										</select>
+									</div>
+								</div>
+
+								<!-- Reported probable cause -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" type="text" name="reported_probable_cause_code" placeholder="What do you think caused the encounter?" id="input-reported_probable_cause-2" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-reported_probable_cause-2">What do you think was the probably cause for the encounter?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_reported_probable_cause" placeholder='Description of the "Other" probable cause' id="input-other_reported_probable_cause-2" data-dependent-value="OTH" data-dependent-target="#input-reported_probable_cause-2" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_reported_probable_cause-2">Description of the "Other" probable cause</label>
+									</div>
+								</div>
+							
+							</div>
+						</div>
+					</div>
+					<!--###################### end of section-2 #########################-->
+					
+
+					<!-- ################### section-3 ################## -->
+					<div class="form-section" id="section-3" data-section-index="3" data-section-name="encounter-info">
+						<h4 class="section-title">Location description</h4>
+						<div class="section-body scroll validate-field-parent"><!--"validate-field-parent" is a utility class used by validateField()-->
+							<div class="section-body-content">
+
+								<!-- Location fields -->
+								<div class="field-container single-line-field">
+									<label class="field-label inline-label" for="input-location_type-3">Describe location by:</label>
+									<select class="input-field" id="input-location_type-3" value>
+										<option value="Place name">Place name</option>
+										<option value="Backcountry unit">Backcountry unit</option>
+										<option value="Road mile">Road mile</option>
+										<option value="GPS coordinates">GPS coordinates</option>
+									</select>
+								</div>
+								<div class="collapse show field-container small-field">
+									<select class="input-field default" name="place_name_code" placeholder="Name of the encounter location" id="input-place_name-3" data-dependent-target="#input-location_type-3" data-dependent-value="Place name" required></select>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-place_name-3">Name of the encounter location</label>
+								</div>
+								<div class="collapse field-container small-field">
+									<select class="input-field default" name="backcountry_unit_code" placeholder="Backcountry unit" id="input-backcountry_unit-3" data-dependent-target="#input-location_type-3" data-dependent-value="Backcountry unit" required></select>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-backcountry_unit-3">Backcountry unit</label>
+								</div>
+								<div class="collapse field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="road_name_code" placeholder="Road name" id="input-road_name-3" data-dependent-target="#input-location_type-3" data-dependent-value="Road mile" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-road_name_code-3">Road name</label>
+									</div>
+									<div class="field-container small-field">
+										<input class="input-field default" type="number" name="road_mile" placeholder="Road mile" id="input-road_mile-3" data-dependent-target="#input-location_type-3" data-dependent-value="Road mile" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-road_mile-3">Road mile</label>
+									</div>
+								</div>
+
+								<!-- lat/lon fields -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field no-option-fill" name="coordinate_format" id="input-coordinate_format-3" value="ddd" required>
+											<option value="ddd">Decimal degrees (dd.ddd&#176)</option>
+											<option value="ddm">Degrees decimal minutes (dd&#176 mm.mmm)</option>
+											<option value="dms">Degrees minutes seconds (dd&#176 mm' ss")</option>
+										</select>
+										<label class="field-label" for="input-coordinate_format-3">Coordinate format</label>
+									</div>
+								</div>
+								<div class="field-container">
+									<!-- dd.ddd -->
+									<div class="collapse show field-container small-field">
+										<div class="field-container small-field">
+											<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitide_dec_deg" placeholder="Lat: dd.ddd" id="input-lat_dec_deg-3" required>
+											<span class="required-indicator">*</span>
+											<span class="unit-symbol">&#176</span>
+											<label class="field-label" for="input-lat_dec_deg-3">Latitude</label>
+										</div>
+										<div class="field-container small-field">
+											<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude_dec_deg" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg-3" required>
+											<span class="required-indicator">*</span>
+											<span class="unit-symbol">&#176</span>
+											<label class="field-label" for="input-lon_dec_deg-3">Longitude</label>
+										</div>
+									</div>
+									<!--dd mm.mmm-->
+									<div class="collapse field-container small-field">
+										<div class="field-container small-field justify-content-start">
+											<div class="flex-field-container flex-nowrap">
+												<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_ddm-3" required>
+												<span class="required-indicator">*</span>
+												<span class="unit-symbol">&#176</span>
+											</div>
+											<div class="flex-field-container flex-nowrap">
+												<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mm" id="input-lat_dec_min-3" required>
+												<span class="unit-symbol">'</span>
+											</div>
+											<label class="field-label">Latitude</label>
+										</div>
+										<div class="field-container small-field justify-content-start">
+											<div class="flex-field-container flex-nowrap">
+												<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-180" max="180" placeholder="ddd" id="input-lon_deg_ddm-3" required>
+												<span class="required-indicator">*</span>
+												<span class="unit-symbol">&#176</span>
+											</div>
+											<div class="flex-field-container flex-nowrap">
+												<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mmm" id="input-lon_dec_min-3" required>
+												<span class="unit-symbol">'</span>
+											</div>
+											<label class="field-label">Longitude</label>
+										</div>
+									</div>
+									<!--dd mm ss-->
+									<div class="collapse field-container small-field">
+										<div class="field-container small-field">
+											<div class="field-container degree-field-container">
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_dms-3" required>
+													<span class="required-indicator">*</span>
+													<span class="unit-symbol">&#176</span>
+												</div>
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lat_min_dms-3" required>
+													<span class="unit-symbol">'</span>
+												</div>
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lat_dec_sec-3" required>
+													<span class="unit-symbol">"</span>
+												</div>
+											</div>
+											<label class="field-label">Latitude</label>
+										</div>
+										<div class="field-container small-field">
+											<div class="field-container degree-field-container">
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-180" max="180" placeholder="dd" id="input-lon_deg_dms-3" required>
+													<span class="required-indicator">*</span>
+													<span class="unit-symbol">&#176</span>
+												</div>
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lon_min_dms-3" required>
+													<span class="unit-symbol">'</span>
+												</div>
+												<div class="flex-field-container flex-nowrap">
+													<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lon_dec_sec-3" required>
+													<span class="unit-symbol">"</span>
+												</div>
+											</div>
+											<label class="field-label">Longitude</label>
+										</div>
+									</div>
+									<div class="field-container small-field">
+										<div class="field-container small-field">
+											<select class="input-field" name="datum_code" id="input-datum-3" value="1"></select>
+											<label class="field-label" for="input-datum-3">Datum</label>
+										</div>
+										<div class="field-container small-field">
+											<select class="input-field default" name="location_accuracy_code" id="input-location_accuracy-3" placeholder="GPS coordinate accuracy" required></select>
+											<label class="field-label" for="input-location_accuracy-3">GPS coordinate accuracy</label>
+										</div>
+									</div>
+								</div>
+								<!--map-->
+								<div class="field-container map-container">
+									<div class="marker-container" id="encounter-marker-container">
+										<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
+										<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
+									</div>
+									<div class="map" id="encounter-location-map"></div>
+								</div>
+
+								<!--location description-->
+								<div class="field-container">
+									<input class="input-field" type="text" name="location_description" placeholder="Description of the encounter location" id="input-location_description-3" required>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-location_description-3">Description of the encounter location</label>
+								</div>
+
+								<!-- relative location (from Glacier's BHIMS form) -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="relative_location_code" placeholder="Relative location of the bear" id="input-relative_location-3"></select>
+										<label class="field-label" for="input-relative_location-3">Relative location of the bear</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_relative_location" placeholder='Description of the "Other" relative location' id="input-other_visibility-3" data-dependent-target="#input-relative_location-3" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_relative_location-3">Description of the "Other" relative location</label>
+									</div>
+								</div>
+
+								<!-- Habitat type -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="habitat_type_code" placeholder="Habitat type" id="input-habitat_type-3" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-habitat_type-3">Habitat type</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_habitat_type" placeholder='Description of the "Other" habitat type' id="input-other_habitat_type-2" data-dependent-target="#input-habitat_type-3" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_habitat_type-3">Description of the "Other" habitat type</label>
+									</div>
+								</div>
+
+								<!--habitat description-->
+								<div class="field-container">
+									<input class="input-field" type="text" name="habitat_description" placeholder="Description of the surrounding habitat" id="input-location_description-3" required>
+									<span class="required-indicator">*</span>
+									<label class="field-label" for="input-habitat_description-3">Description of the surrounding habitat</label>
+								</div>
+
+								<!-- visibility -->
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="visibility_code" placeholder="Visibility description" id="input-visibility-3" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-visibility-3">Visibility description</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_visibility" placeholder='Description of the "Other" visibility' id="input-other_visibility-3" data-dependent-target="#input-visibility-3" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_visibility-3">Description of the "Other" visibility</label>
+									</div>
+								</div>
+
+								<!--vis distance and description-->					
+								<div class="field-container">
+									<div class="field-container small-field">
+										<div class="field-container flex-field-container">
+											<input class="input-field text-right-when-valid" type="number" min="0" name="visibility_distance_m" placeholder="Approximately how far could you see?" id="input-visibility_distance_m-3" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-visibility_distance_m-3">Approximately how far could you see?</label>
+										</div>
+										<div class="units-field-container">
+											<select class="input-field centered-text" id="input-visibility_distance_units-2" value="ft" required>
+												<option value="ft">feet</option>
+												<option value="m">meters</option>
+											</select>
+										</div>
+									</div>
+									<div class="field-container small-field">
+										<input class="input-field" type="text" name="visibility_description" placeholder="Visibility description" id="input-visibility_description-3" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-visibility_description-3">Visibility description</label>
+									</div>
+								</div>
+
+							</div>
+						</div>
+					</div>
+					<!--###################### end of section-3 #########################-->
+
+					<!--########################## section-4 ############################-->
+					<div class="form-section" id="section-4" data-section-index="4" data-section-name="bears">
+						
+						<h4 class="section-title">Bear descriptions</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="bear_cohort_code" placeholder="Bear group type" id="input-bear_cohort-4" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-bear_cohort-4">Bear group type</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_bear_cohort" placeholder='Description of the "Other" bear group type' id="input-other_bear_cohort-4" data-dependent-target="#input-bear_cohort-4" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_bear_cohort-3">Description of the "Other" bear group type</label>
+									</div>
+								</div>
+
+								<div class="accordion form-item-list" id="bear-info-accordion" data-table-name="bears">
+								  <div class="card cloneable hidden" id="cloneable-card-4">
+								    <div class="card-header" id="cardHeader-4-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-4-cloneable" data-target="collapse-4-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label" data-index-label="true">New bear</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="bear" aria-label="Delete bear">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								      
+								    </div>
+
+								    <div id="collapse-4-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-4-cloneable" data-parent="#bear-info-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default" name="bear_species_code" placeholder="Bear species" id="input-bear_species-4" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-bear_species-4">Bear species</label>
+													</div>
+													<div class="field-container small-field">
+														<select class="input-field card-label-field default" name="bear_sex_code" placeholder="Bear sex" id="input-bear_sex-4" data-card-label-index="1" data-lookup-table="sex_codes" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-bear_sex-4">Last name</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default card-label-field" name="bear_color_code" placeholder="Bear color" data-card-label-index="0" id="input-bear_color-4" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-bear_color-4">Bear color</label>
+													</div>
+													<div class="field-container small-field">
+														<select class="input-field card-label-field default" name="bear_age_code" placeholder="Bear age" id="input-bear_age-4" data-card-label-index="2" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-bear_age-4">Bear age</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default" name="bear_injury_code" placeholder="Was this bear injured?" id="input-bear_injury-4"></select>
+														<label class="field-label" for="input-bear_injury-4">Bear injury</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<input class="input-field" type="text" name="bear_park_id" placeholder="ID for this bear (if known)" id="input-bear_park_id-4">
+														<label class="field-label" for="input-bear_park_id-4">ID for this bear</label>
+													</div>
+												</div>
+
+												<div class="field-container">
+													<input class="input-field" type="text" name="bear_description" placeholder="Other notabled markings or features" id="input-bear_description-4">
+													<label class="field-label" for="input-bear_description-4">Other notabled markings or features</label>
+												</div>
+
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default" name="previously_encountered" placeholder="Was this bear encountered before?" id="input-previously_encountered-4" data-lookup-table="boolean_response_codes"></select>
+														<label class="field-label" for="input-previously_encountered-4">Was this bear encountered before?</label>
+													</div>
+												</div>
+
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="bear-info-accordion">
+										<strong>+</strong> Add bear
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-4 -->
+
+					<!--########################## section-5 ############################-->
+					<div class="form-section" id="section-5" data-section-index="5" data-section-name="interactions">
+						
+						<h4 class="section-title">Bear-human interactions</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="initial_human_action_code" placeholder="What were you doing before you noticed the bear?" id="input-initial_human_action-5" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-initial_human_action-5">What were you doing before you noticed the bear?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_initial_human_action" placeholder='Description of your "Other" initial action' id="input-other_initial_human_action-5" data-dependent-target="#input-initial_human_action-5" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_initial_human_action-5">Description of your "Other" initial action</label>
+									</div>
+								</div>
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="initial_bear_action_code" placeholder="What was the bear primarily doing when you first notcied it?" id="input-initial_bear_action-5" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-initial_human_action-5">What was the bear primarily doing when you first noticed it?</label>
+									</div>
+									<div class="collapse field-container small-field">
+										<input class="input-field" type="text" name="other_initial_bear_action" placeholder="Description of the bear's &quot;Other&quot; initial action" id="input-other_initial_bear_action-5" data-dependent-target="#input-initial_bear_action-5" data-dependent-value="OTH" required>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-other_initial_bear_action-5">Description of the bear's "Other" initial action</label>
+									</div>
+								</div>
+
+								<div class="collapse accordion form-item-list" id="reactions-accordion" data-table-name="reactions">
+								  <div class="card cloneable hidden" id="cloneable-card-5">
+								    <div class="card-header" id="cardHeader-5-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-5-cloneable" data-target="collapse-5-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label" data-label-sep=": " data-index-label="true">What happened next?</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="reaction" aria-label="Delete reaction">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								      
+								    </div>
+
+								    <div id="collapse-5-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-5-cloneable" data-parent="#reactions-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default card-label-field" name="reaction_by" placeholder="Who reacted next?" id="input-reaction_by-5" data-lookup-table="reaction_by_codes" data-card-label-index="0" onchange="updateReactionsSelect($(event.target))" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-reaction_by-5">Reaction by</label>
+													</div>
+													<div class="field-container small-field">
+														<select class="input-field default card-label-field no-option-fill" name="reaction_code" placeholder="Select who reacted to see reaction options" id="input-reaction-5" data-card-label-index="1" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-reaction-5"></label>
+													</div>
+												</div>
+												
+												<div class="collapse field-container">
+													<input class="input-field" type="text" name="other_reaction" placeholder="Description of the &quot;Other&quot; reaction" id="input-other_reaction-5" data-dependent-target="#input-reaction-5" data-dependent-value="10,113,204" required>
+													<span class="required-indicator">*</span>
+													<label class="field-label" for="input-other_reaction-5">Description of the "Other" reaction</label>
+												</div>
+												
+
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="collapse add-item-container">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="reactions-accordion">
+										<strong>+</strong> Add reaction
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-5 -->
+
+					<!--########################## section-6 ############################-->
+					<div class="form-section" id="section-6" data-section-index="6" data-section-name="property">
+						
+						<h4 class="section-title">Property damage</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="was_property_damaged" placeholder="Was any property damaged?" id="input-was_property_damaged-6" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-initial_human_action-6">Was any property damaged?</label>
+									</div>
+								</div>
+
+								<div class="accordion form-item-list collapse" id="property-accordion" data-dependent-target="#input-was_property_damaged-6" data-dependent-value="1" data-table-name="property_damage">
+								  
+								  <div class="card cloneable hidden" id="cloneable-card-6">
+								    <div class="card-header" id="cardHeader-6-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-6-cloneable" data-target="collapse-6-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label">New property details</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="property item" aria-label="Delete property item">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								    </div>
+								    <div id="collapse-6-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-6-cloneable" data-parent="#property-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+													<div class="field-container small-field">
+														<div class="field-container mini-field">
+															<input class="input-field text-right-when-valid" type="number" min="0" name="quantity" placeholder="Quantity" id="input-quantity-6" required></select>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-quantity-6">Quantity</label>
+														</div>
+														<div class="field-container flex-field-container">
+															<input class="input-field card-label-field" type="text" name="property_description" placeholder="Description of the property" id="input-property_description-6" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-other_reaction-6">Description of the property</label>
+														</div>
+													</div>
+													<div class="field-container small-field">
+														<div class="field-container small-field">
+															<span class="unit-symbol unit-symbol-left">$</span>
+															<input class="input-field" type="number" min="0" step="0.01" name="property_value" placeholder="Property value" id="input-property_value-6" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-property_value-6">Property value</label>
+														</div>
+														<div class="field-container small-field">
+															<span class="unit-symbol unit-symbol-left">$</span>
+															<input class="input-field" type="number" min="0" step="0.01" name="damage_cost" placeholder="Cost of damage" id="input-damage_cost-6" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-damage_cost-6">Damage cost</label>
+														</div>
+													</div>
+												</div>
+
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default" type="text" name="was_in_persons_control" placeholder="Was this item within your control?" id="input-was_in_persons_control-6" data-lookup-table="boolean_response_codes"></select>
+														<label class="field-label" for="input-was_in_persons_control-6">Was this item within your control?</label>
+													</div>
+												</div>
+
+												<div class="field-container">		
+													<div class="field-container small-field">
+														<select class="input-field default" type="text" name="item_was_recovered" placeholder="Did you revover this item?" id="input-item_was_recovered-6" data-lookup-table="boolean_response_codes"></select>
+														<label class="field-label" for="input-item_was_recovered-6">Did you revover this item?</label>
+													</div>
+													<div class="field-container small-field collapse">
+														<div class="field-container small-field">
+															<span class="unit-symbol unit-symbol-left">$</span>
+															<input class="input-field" type="number" min="0" step="0.01" name="recovered_value" placeholder="Recovered value" id="input-recovered_value-6" data-dependent-target="#input-item_was_recovered-6" data-dependent-value="1" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-recovered_value-6">Recovered value</label>
+														</div>
+														<div class="field-container small-field">
+															<input class="input-field" type="date" name="recovery_date" placeholder="When did you recover the item?" id="input-recovery_date-6" required>
+															<span class="required-indicator">*</span>
+															<label class="field-label" for="input-quantity-6">When did you recover the item?</label>
+														</div>
+													</div>
+												</div>
+												<div class="field-container">
+												</div>
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container collapse">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="property-accordion" data-dependent-target="#input-was_property_damaged-6" data-dependent-value="1">
+										<strong>+</strong> Add property
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-6 -->
+
+					<!--########################## section-7 ############################-->
+					<div class="form-section" id="section-7" data-section-index="7" data-section-name="deterrents">
+						
+						<h4 class="section-title">Deterrents used</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="deterrents_were_used" placeholder="Were any deterrents used?" id="input-deterrents_were_used-7" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-deterrents_were_used-7">Were any deterrents used?</label>
+									</div>
+								</div>
+
+								<div class="accordion form-item-list collapse" id="deterrents-accordion" data-dependent-target="#input-deterrents_were_used-7" data-dependent-value="1" data-table-name="deterrents_used">
+								  
+								  <div class="card cloneable hidden" id="cloneable-card-7">
+								    <div class="card-header" id="cardHeader-7-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-7-cloneable" data-target="collapse-7-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label">New deterrent details</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="deterrent" aria-label="Delete deterrent">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								    </div>
+								    <div id="collapse-7-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-7-cloneable" data-parent="#deterrents-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default card-label-field" name="deterrent_type_code" placeholder="What deterrent was used?" id="input-deterrent_type-7" data-card-label-index="0" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-deterrent_type-7">What deterrent was used?</label>
+													</div>
+													<div class="field-container small-field collapse">
+														<input class="input-field" type="text" name="other_deterrent_type" placeholder="Description of the &quot;Other&quot; deterrent type" id="input-other_deterrent_type-7" data-dependent-target="#input-deterrent_type-7" data-dependent-value="OTH" required>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-other_deterrent_type-7">Description of the "Other" deterrent type</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<input class="input-field" type="number" min="1" name="times_deployed" placeholder="How many times was the deterrent used?" id="input-times_deployed-7" required>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-times_deployed-7">How many times was the deterrent used?</label>
+													</div>
+													<div class="field-container small-field">
+														<select class="input-field default" name="bear_behavior_changed" placeholder="Did the deterrent change the bear's behavior?" data-lookup-table="boolean_response_codes" id="input-bear_behavior_changed-7" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-bear_behavior_changed-7">Did the deterrent change the bear's behavior?</label>
+													</div>
+												</div>
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container collapse">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="deterrents-accordion" data-dependent-target="#input-deterrents_were_used-7" data-dependent-value="1">
+										<strong>+</strong> Add deterrent
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-7 -->
+
+					<!--########################## section-8 ############################-->
+					<div class="form-section" id="section-8" data-section-index="8" data-section-name="structure-interactions">
+						
+						<h4 class="section-title">Structure interactions</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="structures_were_involved" placeholder="Did the bear interact with any structures?" id="input-structures_were_involved-8" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-structures_were_involved-8">Did the bear interact with any structures?</label>
+									</div>
+								</div>
+
+								<div class="accordion form-item-list collapse" id="structure-interactions-accordion" data-dependent-target="#input-structures_were_involved-8" data-dependent-value="1" data-table-name="structure_interactions">
+								  
+								  <div class="card cloneable hidden" id="cloneable-card-8">
+								    <div class="card-header" id="cardHeader-8-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-8-cloneable" data-target="collapse-8-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label">New structure interaction</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="structure interaction" aria-label="Delete structure interaction">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								    </div>
+								    <div id="collapse-8-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-8-cloneable" data-parent="#structure-interactions-accordion">
+								      <div class="card-body">
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default card-label-field" name="structure_type_code" placeholder="What kind of structure was involved?" id="input-structure_type-8" data-card-label-index="0" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-structure_type-8">What kind of structure was involved?</label>
+													</div>
+													<div class="field-container small-field collapse">
+														<input class="input-field" type="text" name="other_structure_type" placeholder="Description of the &quot;Other&quot; structure type" id="input-other_structure_type-8" data-dependent-target="#input-structure_type-8" data-dependent-value="OTH" required>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-other_structure_type-8">Description of the "Other" structure type</label>
+													</div>
+												</div>
+												
+												<div class="field-container">
+													<div class="field-container small-field">
+														<select class="input-field default" name="structure_interaction_code" placeholder="How did the bear interact with the structure?" id="input-interaction_code-8" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-interaction_code-8">How did the bear interact with the structure?</label>
+													</div>
+													<div class="field-container small-field">
+														<input class="input-field" type="text" min="1" name="structure_description" placeholder="Structure description" id="input-structure_description-8" required>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-structure_description-8">Structure description</label>
+													</div>
+												</div>
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container collapse">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="structure-interactions-accordion" data-dependent-target="#input-structures_were_involved-8" data-dependent-value="1">
+										<strong>+</strong> Add interaction
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-8 -->
+
+					<!--########################## section-9 ############################-->
+					<div class="form-section" id="section-9" data-section-index="9" data-section-name="narrative">
+						
+						<h4 class="section-title">Narrative</h4>
+						<div class="section-body justify-start">
+							<div class="section-body-content validate-field-parent">
+								<!--<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
+									<span class="record-on-indicator"></span>
+									<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
+									<div class="tip tip-right">
+										<h6>Start dictation</h6>
+										<i class="tooltip-arrow"></i>
+									</div>
+								</button>-->
+								<div class="field-container">
+									<textarea class="input-field narrative-field" name="narrative" placeholder="Please describe the encounter in your own words" id="input-narrative-9" required></textarea>
+									<span class="required-indicator">*</span>
+									<div class="recorded-text-container">
+										<span id="recorded-text-final" contenteditable="true"></span>
+										<span id="recorded-text-interim"></span>
+									</div>
+									<div class="mic-button-container">
+										<label class="recording-status-message" id="recording-status-message"></label>
+										<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
+											<!--<span class="record-on-indicator"></span>-->
+											<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
+											<!--<div class="tip tip-left">
+												<h6>Start dictation</h6>
+												<i class="tooltip-arrow"></i>
+											</div>-->
+										</button>
+									</div>
+								</div>
+
+								<div class="field-container">
+									<div class="field-container small-field">
+										<select class="input-field default" name="has_attachments" placeholder="Do you have any files to attach (photos, videos, etc.)?" id="input-has_attachments-9" data-lookup-table="boolean_response_codes" required></select>
+										<span class="required-indicator">*</span>
+										<label class="field-label" for="input-has_attachments-9">Do you have any files to attach (photos, videos, etc.)?</label>
+									</div>
+								</div>
+								
+								<div class="accordion form-item-list collapse" id="attachments-accordion" data-dependent-target="#input-has_attachments-9" data-dependent-value="1" data-table-name="attachments">
+								  
+								  <div class="card cloneable hidden" id="cloneable-card-9">
+								    <div class="card-header" id="cardHeader-9-cloneable">
+											<a class="card-link" data-toggle="collapse" href="#collapse-9-cloneable" data-target="collapse-9-cloneable">
+												<div class="card-link-content">
+													<h5 class="card-link-label">New attached file</h5>
+												</div>
+												<div class="card-link-content">
+													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="attachment" aria-label="Delete attachment">
+														<i class="fas fa-trash fa-lg"></i>
+													</button>
+													<i class="fa fa-chevron-down pull-right"></i>
+												</div>
+											</a>
+								    </div>
+								    <div id="collapse-9-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-9-cloneable" data-parent="#attachments-accordion">
+								      <div class="card-body">
+												<div class="field-container align-items-center">
+													<div class="field-container small-field">
+														<select class="input-field default" name="file_type_code" placeholder="What type of file are you uploading?" id="input-file_type-9" onchange="onAttachmentTypeChange(event)" required></select>
+														<span class="required-indicator">*</span>
+														<label class="field-label" for="input-file_type_code-9">What kind of file are you uploading?</label>
+													</div>
+													<div class="collapse field-container small-field">
+														<div class="collapse field-container small-field file-preview-container">
+															<div class="attachment-progress-bar-container">
+																<div class="attachment-progress-bar">
+																	<div class="attachment-progress-indicator"></div>
+																</div>
+															</div>
+															<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)">
+														</div>
+														<div class="attachment-file-input-container">
+															<label class="filename-label"></label>
+															<label class="generic-button text-center file-input-label" for="attachment-upload-9">select file</label>
+															<input class="input-field hidden attachment-input" id="attachment-upload-9" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type-9" data-dependent-value="!<blank>" onchange="onAttachmentInputChange(event)" required>
+														</div>
+													</div>
+												</div>
+
+												<div class="field-container">
+													<input class="input-field" type="text" min="1" name="file_description" placeholder="What does this file depict?" id="input-file_description-9" required>
+													<span class="required-indicator">*</span>
+													<label class="field-label" for="input-file_description-9">What does this file depict?</label>
+												</div>
+								      </div>
+								    </div>
+								    <!--end of card -->
+								  </div>
+
+								</div>
+							
+								<div class="add-item-container collapse">
+									<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="attachments-accordion" data-dependent-target="#input-has_attachments-9" data-dependent-value="1">
+										<strong>+</strong> Add attachment
+									</button>
+								</div>
+							
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-9 -->
+
+					<!--########################## section-10 ############################-->
+					<div class="form-section submit-section" id="section-10" data-section-index="10" data-section-name="submit">
+						
+						<h4 class="section-title"></h4>
+						<div class="section-body">
+							<div class="section-body-content">
+								<p class="form-description" id="submit-message">
+									Once you have verified the information you've entered, click the submit button below
+								</p>
+								<div class="submit-button-container">
+									<button class="generic-button form-navigation" type="button" onclick="onSubmitButtonClick(event)" id="submit-button">Submit encounter</button>
+								</div>
+								<div class="submition-confirmation-container hidden">
+									<h4>Submission successful</h4>
+									<p class="form-description">Thank you for submitting information about this bear encounter.
+									</p>
+									<a href="http://inpdenards.nps.doi.net:8282/bhims-index.html">Return to the home page</a>
+								</div>
+							</div>
+						
+						</div>	
+					</div>
+					<!-- end of section-10 -->
+				</div>
+				<!--########### end of form body ##########################-->
+
+				<div class="form-footer">
+					<button class="generic-button form-navigation disabled hidden" type="button" id="previous-button" onclick="onPreviousNextButtonClick(event, -1)">previous</button>
+					<ol class="section-indicator form-navigation hidden">
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="0" aria-label="People section">
+								<div class="tip">
+									<h6>People involved</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="1" aria-label="Group information section">
+								<div class="tip">
+									<h6>Group information</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="2" aria-label="Encounter information section">
+								<div class="tip">
+									<h6>Encounter information</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="3" aria-label="Location description section">
+								<div class="tip">
+									<h6>Location description</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="4" aria-label="Bear descriptions section">
+								<div class="tip">
+									<h6>Bear descriptions</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="5" aria-label="Bear-human interactions section">
+								<div class="tip">
+									<h6>Bear-human interactions</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="6" aria-label="Property damage section">
+								<div class="tip">
+									<h6>Property damage</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="7" aria-label="Deterrents used section">
+								<div class="tip">
+									<h6>Deterrents used</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="8" aria-label="Structure interactions section">
+								<div class="tip">
+									<h6>Structure interactions</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="9" aria-label="Narrative section">
+								<div class="tip">
+									<h6>Narrative</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+						<li>
+							<button class="indicator-dot tooltipped" type="button" onclick="onIndicatorDotClick(event)" data-section-index="10" aria-label="Submit">
+								<div class="tip">
+									<h6>Submit</h6>
+									<i class="tooltip-arrow"></i>
+								</div>
+							</button>
+						</li>
+					</ol>
+					<button class="generic-button form-navigation hidden" type="button" id="next-button" onclick="onPreviousNextButtonClick(event, 1)">next</button>
+					<button class="generic-button" type="button" id="title-section-continue-button">continue</button>
+					<input class="generic-button hidden" id="submit-button" type="submit" value="submit">
+
+				</div>	
+			</form>
+
+		</div>
+
+	</div>
+
+	<!--attachment preview modal -->
+	<div class="modal fade lightbox-modal" id="attachment-modal" tabindex="-1" role="dialog" aria-hidden="true">
+	  <div class="modal-dialog" role="document" data-dismiss="modal">
+	    <div class="modal-content" data-dismiss="modal">
+	      <div class="modal-body modal-img-body">
+	      	<div class="modal-header-container">
+		      	<div class="modal-img-body-header">
+			        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+			          <span aria-hidden="true">&times;</span>
+			        </button>
+		      	</div>
+		      </div>
+	      	<img class="modal-img hidden" src="#" id="modal-img-preview" data-dismiss="modal">
+	      	<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls>
+	      		<source src="#">
+	      		Sorry, your browser does not support HTML video content
+	      	</video>
+	      	<audio class="modal-img hidden" id="modal-audio-preview" controls>
+	      		<source src="#">
+	      		Sorry, your browser does not support HTML audio content
+	      	</audio>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<!--alert/message modal -->
+	<div class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-hidden="true"></div>
+
+	<script src="js/bhims.js"></script>
+	<script src="js/bhims-entry.js"></script>
+	
+	<script type="text/javascript">
+
+		//Instantiate global map and marker vars
+		//	The encounter marker isn't added to the map until the user explicitly
+		//	does so, but to instantiate with options it needs a location
+		var ENCOUNTER_MAP;
+		var ENCOUNTER_MARKER = new L.marker([0, 0], {
+				draggable: true,
+				autoPan: true,
+		})
+			.on('dragend', setCoordinatesFromMarker);
+		// Other globals
+		var 
+			ATTACHMENT_FILES = {},
+			FIELD_INFO = {},
+			FIELD_VALUES = {};
+
+		// The page takes a few seconds to load sometimes so make sure the user 
+		//	doesn't click the continue button before everything is set up
+		showLoadingIndicator('onload');
+
+		// Query accepted file attachment extensions for each file type
+		var ACCEPTED_ATTACHMENT_EXT = {};
+		queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
+			.then(
+				doneFilter=function(queryResultString){
+					if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+						throw 'Accepted file extension query failed: ' + queryResultString;
+					} else {
+						const queryResult = $.parseJSON(queryResultString);
+						queryResult.forEach(function(object) {
+							ACCEPTED_ATTACHMENT_EXT[object.code] = object.accepted_file_ext;
+						})
+					}
+				},
+				failFilter=function(xhr, status, error) {
+					console.log(`Accepted file extension query failed with status ${status} because ${error} from query:\n${sql}`)
+				}
+		);
+
+		$(document).ready(function() {
+
+			// Get field info
+			getFieldInfo();
+
+			$(window).on('load', ()=>{hideLoadingIndicator()});
+
+			// Set on click for continue button (shown only in title section).
+			//	In addition to going to next section, show required indicator explanation
+			$('#title-section-continue-button').click((event) => {
+				onPreviousNextButtonClick(event, 1);
+				$('.required-indicator-explanation').removeClass('hidden');
+			})
+
+			// If the user does not have previous data saved, add the first card here in 
+			//	case this same form is used for data viewing. If there is saved data, the 
+			//	form and all inputs will be restored from the previous session
+			$('.accordion.form-item-list').each((_, el) => {
+				const tableName = $(el).data('table-name');
+				if (!(tableName in FIELD_VALUES)) addNewCard($(el));
+			});
+
+			// fill selects
+			let deferreds = $('select').map( function() {
+				const $el = $(this);
+				const placeholder = $el.attr('placeholder');
+				const lookupTable = $el.data('lookup-table');
+				const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
+				const id = this.id;
+				if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
+					if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
+					if (!$el.is('.no-option-fill')) {
+						return fillSelectOptions(id, `SELECT code AS value, name FROM ${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`);
+					}
+				}
+			})
+			$.when(
+				...deferreds
+			).then(function() {
+				fillFieldsFromSavedData()
+			});
+
+			$('select').change(onSelectChange);
+			// Set addition change event for initial action selects
+			$('#input-initial_human_action-5, #input-initial_bear_action-5').change(onInitialActionChange);
+
+			// When an input changes, save the result to the FIELD_VALUES global object so data are persistent
+			$('.input-field').change(onInputFieldChange);
+
+			// When a card is clicked, close any open cards in the same accordion
+			$('.collapsed').click(function() {
+				const $accordion = $(this).closest('.accordion');
+				$accordion.find('.card:not(.cloneable) .collapse.show')
+					.removeClass('show')
+					.siblings()
+						.find('.card-header')
+						.addClass('collapsed');
+			});
+
+			// Make sure the hidden class is added/removed when bootstrap collapse events fire
+			$('.collapse.field-container, .collapse.accordion')
+				.on('hidden.bs.collapse', function () {
+					$(this).addClass('hidden');
+				})
+				.on('show.bs.collapse', function () {
+					$(this).removeClass('hidden');
+				});
+
+			// When any card-label-fields change, try to set the parent card label
+			$('.input-field.card-label-field').change(function() {onCardLabelFieldChange($(this))});
+
+			// When the user types anything in a field, remove the .error class (if it was assigned)
+			$('.input-field').keyup(onInputFieldKeyUp);
+
+			// Set up coordinate fields to update eachother and the map
+			$('.coordinates-ddd').change(onDDDFieldChange);
+			$('.coordinates-ddm').change(onDMMFieldChange);
+			$('.coordinates-dms').change(onDMSFieldChange);
+			$('#input-coordinate_format-3').change(onCoordinateFormatChange);
+
+			// Set up the map
+			ENCOUNTER_MAP = L.map('encounter-location-map', {
+				editable: true,
+				scrollWheelZoom: false,
+				center: [63.2, -150.7],
+				zoom: 7
+			});
+			var tilelayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+				attribution: `Tiles &copy; Esri &mdash; Source: Esri, DeLorme, ${new Date().getFullYear()}`
+			}).addTo(ENCOUNTER_MAP);
+			// Make the encounter marker drag/droppable onto the map
+			$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
+			$('#encounter-location-map').droppable({drop: markerDroppedOnMap});
+
+			// Prevent form submission when the user hits the 'Enter' key
+			$('.input-field').keydown((e) => { 
+				//if (event.which == 13) event.returnValue(); 
+				e = e || event;
+				var txtArea = /textarea/i.test((e.target || e.srcElement).tagName);
+				return txtArea || (e.keyCode || e.which || e.charCode || 0) !== 13;
+			});
+
+			var recognition = initSpeechRecognition();
+			if (recognition) {
+				$('#record-narrative-button')
+					.click(onMicIconClick)
+					.removeClass('hidden');
+			}
+			$('#recorded-text-final').on('input', (_, el) => {
+    			$('#input-narrative-9').val($(el).text());
+			});
+			//add event listeners for contenteditable and textarea size change: https://stackoverflow.com/questions/1391278/contenteditable-change-events
+			//might have to use resizeobserver: https://stackoverflow.com/questions/6492683/how-to-detect-divs-dimension-changed
+
+			// resize modal video preview when new video is loaded
+			$('#modal-video-preview').on('loadedmetadata', function(event){
+				const el = event.target;
+				const aspectRatio = el.videoHeight / el.videoWidth;
+				
+			});
+			
+			$('#modal-audio-preview').on('loadedmetadata', function(event){
+				// Set width so close button is on the right edge of video/audio
+				const $el = $(event.target);
+				
+				var maxWidth;
+				try {
+					maxWidth = $el.css('max-width').match(/\d+/)[0];
+				} catch {
+					return
+				}
+	
+				$el.closest('.modal')
+					.find('.modal-img-body')
+						.css('width', Math.min(maxWidth, window.innerWidth) + 'px');
+			});
+
+			$('#attachment-modal').on('hidden.bs.modal', function (event) {
+				// Release resources of video preview when modal closes
+				const $source = $('#modal-video-preview,#modal-audio-preview').not('.hidden').find('source');
+				const currentSrc = $source.attr('src');
+				if (currentSrc != "#") {
+					URL.revokeObjectURL(currentSrc);
+					$source.attr('src', '#');
+				}
+
+				// Remove any inline css to the img/video/audio container element
+				$(event.target).find('.modal-img-body').css('width', '');
+
+			});
+
+			// Save user input when the user leaves the page
+			$(window).on('beforeunload', function(event) {
+				if (Object.keys(FIELD_VALUES).length) {//FIELD_VALUES is cleared on submit
+					window.localStorage.fieldValues = JSON.stringify(FIELD_VALUES);
+				}
+			});
+		});
+
+
+	</script>
+
+</body>
+
+
+
+</html>

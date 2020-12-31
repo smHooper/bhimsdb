@@ -1,0 +1,718 @@
+
+html, body {
+	height: 100%;
+	overflow: hidden;
+}
+
+body { 
+	background-image: linear-gradient(to bottom right, #d6e8ff, #628060, #001c2e);
+	background-image: url('../imgs/bhims_index_bg_1200.jpg');
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	background-position: center; 
+	background-size: cover;
+	position: absolute;
+	bottom: 0;
+	top: 0;
+	left: 0;
+	right: 0;
+}
+
+.bg-blur-100.full-screen {
+	height: 100%;
+  width: 100%;
+  position: fixed;
+  bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+	animation: 1s ease-in 0.2s fadeIn;
+}
+
+#main-container {
+	display: flex; 
+	justify-content: center; 
+	align-items: center;
+	width: 100%; 
+	height: 100%;
+	animation: .5s ease-in 0s fadeIn;
+}
+
+#main-form-container {
+	display: flex; 
+	justify-content: center;
+	align-content: start;
+	flex-wrap: wrap; 
+	width: 920px; 
+	max-width: 90%;
+	padding: 10px 40px 20px 40px;
+	height: 800px;
+	max-height: 90%;
+	/*background-color: rgba(255, 255, 255, 0.4);*/
+	border-radius: 20px;
+	background-image: radial-gradient(circle at bottom 30% right 30%, rgba(255,255,255,0.7), rgba(255,255,255,0.35));
+}
+
+
+
+#input-form {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: center;
+	overflow: hidden;
+	flex-wrap: wrap;
+	padding-bottom: 20px;
+}
+
+.form-body {
+	display: flex;
+	overflow: hidden;
+	scroll-snap-type: x mandatory;
+	scroll-behavior: smooth;
+	-webkit-overflow-scrolling: touch;
+	width: 100%;
+	height: calc(100% - 85px);
+	/*flex: 1 0 auto;*/
+}
+
+@media (prefers-reduced-motion) {
+	.form-body,
+	.section-body,
+	.scroll-body-content {
+		scroll-behavior: auto;
+	}
+}
+
+/*.form-body::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+.form-body::-webkit-scrollbar-thumb {
+	background: black;
+	border-radius: 10px;
+}
+.form-body::-webkit-scrollbar-track {
+	background: transparent;
+}*/
+
+.required-indicator-explanation {
+	width: 100%;
+	height: 2rem;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.required-indicator-explanation > .required-indicator {
+	position: initial;
+}
+
+.form-section {
+	scroll-snap-align: start;
+	flex-shrink: 0;
+	flex-wrap: wrap;
+	width: 100%;
+	height: 100%;
+	margin-right: 50px;
+	border-radius: 10px;
+	position: relative;
+	display: flex;
+	justify-content: center;
+	align-content: start;
+}
+
+.title-section .form-title {
+	width: 100%;
+	min-height: 20px;
+	text-align: center;
+	flex-grow: 0;
+	margin-top: 40px;
+}
+
+.title-section .form-description,
+.submit-section .form-description {
+	font-style: italic;
+	flex-grow: 1;
+	padding: 0px 40px 0px 40px;
+	min-height: 100px;
+}
+
+.title-section .section-body {
+	justify-content: start;
+}
+
+.section-title {
+	width: 100%;
+}
+
+.section-body {
+	width: 100%;
+	height: calc(100% - 28px);
+	padding: 1rem 1rem 0 1rem;
+	align-self: stretch;
+	display: flex;
+	flex-direction: column;
+	flex: 1 0 auto;
+	justify-content: center;
+	scroll-behavior: smooth;
+}
+
+.section-body.scroll {
+	overflow-y: auto;
+}
+
+.section-body.justify-start {
+	justify-content: start;
+}
+
+.section-body-content {
+	/* keep overflow of 1 section from changing content size of others*/
+	height: 100%;
+	scroll-behavior: smooth;
+	/*overflow-y: auto;*/
+}
+
+.form-section.selected .section-body-content {
+	overflow-y: auto;
+}
+
+/*.field-container {
+	display: flex;
+	min-height: 50px;
+}
+
+.field-label {
+	min-width: 150px;
+	font-weight: 500;
+	display: none;
+}*/
+
+.card {
+	background-color: transparent;
+	border: none;
+  padding: 6px;
+}
+
+.card-header {
+	height: 70px;
+	box-shadow: 1px 4px 8px rgba(0,0,0,0.3);
+}
+
+.card-body {
+	background-color: rgba(255, 255, 255, 0.3);
+}
+
+.card-link {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.card-link-content {
+	height: 100%;
+	line-height: 100%;
+	/*display: inline-flex;*/
+}
+
+.card-link-content > * {
+	height: 100%;
+	line-height: 45px;
+	display: inline-flex;
+}
+
+.card-link-label,
+.card-link .fa,
+.card-link .fas {
+	color: hsl(211deg 100% 47%);
+}
+
+
+/* Add animated chevron to card*/
+.card-link .fa {
+	transition: .3s transform ease-in-out;
+	margin-right: 15px;
+	margin-left: 25px;
+	/*padding-top: 25px;*/
+	padding-bottom: 25px;
+}
+
+.card-link.collapsed .fa-chevron-down {
+	transform: rotate(90deg);
+}
+
+
+.input-field {
+    margin-right: 20px;
+    max-width: 100%;
+    flex: 1 1 auto;
+    height: 30px;
+    background-color: rgba(0,0,0,0);
+    outline: -webkit-focus-ring-color auto 0px;
+    -webkit-box-shadow: none;
+    border-color: rgba(0,0,0,0);
+    font-size: 14px;
+    transition: all 0.3s ease-out;
+    border-bottom: 2px solid rgba(0,0,0,0.2);
+    text-indent: 5px;
+}
+
+.input-field.large-field {
+	width: 100%;
+}
+.input-field.small-field {
+	max-width: 50%;
+}
+
+.input-field:not(textarea):hover {
+	/*background-color: hsla(1, 0%, 100%, 0.3);*/
+	border-bottom: 2px solid rgba(0,0,0,0.5);
+	color: rgba(0,0,0,0.6);
+}
+
+.input-field:not(textarea):hover::placeholder {
+  color: rgba(0,0,0,0.5);
+}
+
+.input-field:not(textarea):focus {
+	/*background-color: hsla(1, 0%, 100%, 0.7);
+	box-shadow: inset 0px 1px 6px 0px hsla(1, 0%, 100%, 0.3);*/
+	border-bottom: 2px solid rgba(0,0,0,0.5) !important;
+	color: black;
+}
+
+.input-field.error {
+	border: 2px solid rgba(255, 0, 0, 0.3);
+	box-shadow: 0px 0px 7px 2px hsl(0deg 62% 43% / 50%);
+}
+
+.input-field.disabled,
+.field-container.disabled {
+	/*utility class to turn off fields that aren't relevant*/
+	display: none;
+}
+
+.input-field.text-right-when-valid:not(:placeholder-shown) {
+	text-align: right;
+}
+
+.field-container {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+	flex-wrap: wrap;
+	position: relative;
+}
+
+.field-container.small-field {
+	max-width: 50%;
+	/*flex: 1 0 auto;*/
+}
+
+.flex-field-container {
+    max-width: calc(100% - 90px);
+    flex: 0 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.units-field-container, .mini-field {
+    max-width: 70px;
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: 20px;
+}
+.units-field-container > .input-field {
+	text-indent: 0px;
+}
+
+.field-container.error {
+	background-color: rgba(255, 0, 0, 0.3);
+}
+
+/*set display property for fields that are shown/hidden based on input from another field*/
+.field-container.collapse {
+	display: none;
+}
+.field-container.collapse.show {
+	display: flex;
+}
+
+.field-container.single-line-field {
+	height: 60px;
+}
+
+.field-label {
+	width: 100%;
+	height: 20px;
+	transition: all 0.1s ease-out;
+	font-size: 13px;
+	visibility: visible;
+	padding-left: 4px;
+}
+
+.field-label.checkbox-label {
+	width: calc(100% - 30px);
+}
+
+.field-label.inline-label {
+	width: auto;
+	margin-right: 20px;
+	line-height: 30px;
+}
+
+.input-field:placeholder-shown ~ .field-sub-label, 
+.input-field:placeholder-shown ~ .field-label,
+select.input-field.default ~ .field-label {
+	visibility: hidden;
+	transform: translateY(-10px);
+	color: hsl(1, 0%, 50%);
+}
+
+select.input-field.default,
+.input-field::placeholder,
+textarea.narrative-field::placeholder {
+	color: hsl(1, 0%, 40%);
+}
+
+.required-indicator {
+	color: #b70606;
+	position: absolute;
+	/*
+	Use flex order to make sure it's always first
+	  The reason it's not first in the DOM is so 
+	  that the + sibling combinator will work to 
+	  not show the indicator when the text field 
+	  is no longer empty
+	*/
+	order: -1;
+	transition: opacity 0.5s;
+}
+
+input.input-field:valid + .required-indicator,
+select.input-field:not(.default) + .required-indicator,
+textarea.input-field:valid + .required-indicator {
+	opacity: 0;
+}
+
+
+.unit-symbol,
+.input-with-unit-symbol {
+	margin-right: 10px;
+}
+.unit-symbol {
+	width: 10px;
+}
+input.input-with-unit-symbol {
+	width: calc(100% - 30px);
+}
+input.input-with-unit-symbol:valid {
+	margin-right: 0;
+}
+input.input-with-unit-symbol:invalid ~ .unit-symbol {
+	display: none;
+}
+.unit-symbol-left {
+	/*margin-left: 10px;*/
+	margin-right: 0px;
+	text-indent: 7px;
+	font-size: 14px;
+	line-height: 30px;
+}
+.unit-symbol-left + .input-field {
+	margin-left: -10px;
+	text-indent: 15px;
+	width: calc(100% - 20px);
+}
+
+.degree-field-container {
+	display: flex;
+	width: 100%;
+	justify-content: start;
+	flex-wrap: nowrap;
+}
+
+/*.degree-field-container .input-field {
+	max-width: calc(33.333% - 12px);
+}*/
+
+
+.add-item-container {
+	width: 100%;
+	display: flex;
+	justify-content: flex-end;
+	padding: 15px 30px;
+}
+.add-item-container.collapse {
+	display: none;
+}
+.add-item-container.collapse.show {
+	display: flex;
+}
+
+.form-footer {
+	width: calc(100% - 80px);
+	height: 50px;
+	line-height: 50px;
+	display: flex;
+	justify-content: center;
+	bottom: 0;
+	position: relative;
+	align-items: center;
+}
+
+/*.form-footer > .section-indicator {*/
+.form-footer .generic-button {
+	margin-right: 1rem;
+	margin-bottom: 0px;
+	transition: all 0.5s ease-in;
+}
+
+
+.section-indicator {
+	line-height: 40px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	/*undo default <ol> style*/
+	list-style: none;
+	padding-inline-start: 0;
+	margin-bottom: 0;
+}
+
+.indicator-dot {
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	line-height: 40px;
+	background: rgba(255, 255, 255, 0.5);
+	text-decoration: none;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	margin-right: 0.75rem;
+	position: relative;
+	box-sizing: border-box;
+	border: none;/*turn off bootstrap default button styling*/
+	cursor: pointer;
+}
+
+button.indicator-dot:focus {
+  -webkit-box-shadow: none;
+  outline: -webkit-focus-ring-color auto 0px;
+}
+
+/*.section-indicator > li:last-of-type > .indicator-dot, */
+.form-footer > .generic-button:last-of-type  {
+	margin-right: 0px;
+}
+
+.indicator-dot.selected {
+	background: rgba(255, 255, 255, 1);
+}
+
+
+.modal-header, .modal-footer {
+	border: none;
+}
+
+.modal-body > * {
+	margin: 0px;
+}
+
+
+/* map stuff */
+.map-container {
+	display: flex;
+    flex-direction: column;
+	min-height: 365px;
+	width: 100%;
+	padding-right: 20px;
+	margin-bottom: 20px;
+}
+.map {
+    min-height: 350px;
+    flex: 1 1 auto;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.marker-container {
+	display: flex;
+	height: 45px;
+	line-height: 45px;
+	justify-content: flex-start;
+}
+
+.marker-label {
+    transition: all 0.2s ease-out;
+    font-size: 13px;
+    visibility: visible;
+}
+
+.draggable-marker {
+	margin-left: 10px; 
+	width: 25px; 
+	height: 41px; 
+	z-index: 9999; 
+	outline: none;
+}
+
+.record-on-indicator {
+/*    height: 40px;
+    width: 40px;
+    border-radius: 40px;
+    background-color: #c10e0e;
+    visibility: hidden;
+    transition: all .5s ease-out;
+    z-index: -1;
+    position: absolute;
+    transform: translate(-2px, 3px);*/
+    height: 75%;
+    width: 75%;
+    border-radius: 100%;
+    background-color: hsl(0deg 86% 41% / 0.7);
+    transition: all .5s ease-out;
+    position: absolute;
+    opacity: 0;
+    transform: translate(-2px, 3px);
+}
+
+.record-on-indicator.recording {
+	visibility: visible;
+}
+.recording + .fa-microphone {
+	color: white;
+}
+.mic-button-container {
+	width: 100%;
+	height: 50px;
+	display: flex;
+	justify-content: flex-end;
+	margin-right: 20px;
+	margin-top: -60px;
+}
+.recording-status-message {
+	height: 50px;
+	line-height: 50px;
+	margin-right: 50px;
+	font-size: 13px;
+}
+
+textarea.narrative-field {
+	width: 100%;
+	min-height: 200px;
+	background-color: hsla(1, 0%, 100%, 0.3);
+	border: none;
+	padding: 5px 10px;
+	margin-bottom: 20px;
+	border-bottom: 40px solid transparent; /*make room for mic button */
+	text-indent: 0;
+	color: rgba(0,0,0,0);/*text area holds text but recorded-text-container displays it*/
+}
+.recorded-text-container {
+	position: absolute;
+	width: 100%;
+	height: 200px;
+	padding: 5px 25px 40px 10px;
+	font-size: 14px;
+}
+#recorded-text-final {
+	color: black;
+}
+#recored-text-interim {
+	color: rgba(127, 127, 127);
+}
+#recorded-text-final:focus{
+  -webkit-box-shadow: none;
+  outline: -webkit-focus-ring-color auto 0px;
+}
+
+
+.filename-label {
+	text-align: center;
+	width: 100%;
+	font-size: 14px;
+	line-height: 40px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.file-preview-container,
+.attachment-progress-bar-container {
+	height: 100px;
+	width: 150px;
+	display: flex;
+	align-items: center;
+}
+.file-thumbnail {
+	height: 100%;
+	width: 100%;
+	object-fit: cover;
+	box-shadow: 5px 5px 20px 3px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    border-radius: 10px;
+}
+.attachment-file-input-container {
+	width: calc(100% - 170px);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+.attachment-progress-bar {
+	width: 100%;
+	height: .75rem;
+	border-radius: 1rem;
+	background-color: hsl(0 0% 0% / 0.1);
+	overflow: hidden;
+}
+.attachment-progress-indicator {
+	background-color: hsl(89 20% 58%);
+	width: 0%;
+	height: 100%;
+	border-top-right-radius: 0px;
+	border-bottom-right-radius: 0px;
+	text-align: right;
+	text-indent: 5px;
+	font-size: .7rem;
+	color: white;
+	line-height: 100%;
+	transition: all 0.1s linear;
+}
+
+.submit-section .section-body-content {
+    align-items: center;
+    align-content: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.submit-button-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+.submit-section .form-description {
+	max-width: 50%;
+    min-height: initial;
+    text-align: center;
+}
+
+.submit-section .form-description a {
+	font-style: initial;
+}
+
+.submition-confirmation-container {
+	display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.submition-confirmation-container > * {
+	margin-bottom: 1rem;
+	width: 100%;
+	text-align: center;
+}

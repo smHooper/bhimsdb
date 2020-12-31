@@ -1,0 +1,564 @@
+
+
+.generic-button  {
+  min-width: 150px;
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  border: none;
+  margin-bottom: 35px;
+  background-color: hsl(211 68% 52%); 
+  color: white;
+  border-radius: 12px;
+  -moz-box-shadow:    5px 5px 20px 3px rgba(0, 0, 0, 0.15);
+  -webkit-box-shadow: 5px 5px 20px 3px rgba(0, 0, 0, 0.15);
+  box-shadow:         5px 5px 20px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+.generic-button:hover {
+  text-decoration: none !important; /*keep <a> tags from looking like links */
+  color: white !important;
+}
+.generic-button.disabled {
+  background-color: hsl(211 25% 60%);
+  -moz-box-shadow:    none;
+  -webkit-box-shadow: none;
+  box-shadow:         none;
+}
+
+.danger-button {
+  background-color: hsl(0deg 75% 46%);
+}
+
+.secondary-button {
+  background-color: hsl(231deg 3% 50%);
+}
+
+.modal-button {
+  min-width: 75px;
+  border-radius: 0.5rem;
+  margin-bottom: 0px;
+}
+
+.icon-button {
+  background-color: rgba(0,0,0,0);
+  border: none;
+  -moz-box-shadow:    none;
+  -webkit-box-shadow: none;
+  box-shadow:         none;
+  cursor: pointer;
+}
+
+/* remove default boostrap styling */
+button.generic-button:focus, 
+button.icon-button:focus, 
+img.modal-img:focus,
+video.modal-img:focus,
+audio.modal-img:focus {
+  -webkit-box-shadow: none;
+  outline: -webkit-focus-ring-color auto 0px;
+}
+
+/* Custom checkbox*/
+/* The container */
+.checkmark-container {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  /*padding-left: 35px;
+  padding-right: 50px;*/
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  height:20px;
+}
+
+/* Hide the browser's default checkbox */
+.checkmark-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Create a custom checkbox */
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background-color: none;
+  border: 2px solid hsl(211 68% 52%);
+  vertical-align: center;
+  horizontal-align: center;
+}
+
+/*When the checkbox is checked, fill in background*/ 
+.checkmark-container input:checked ~ .checkmark {
+  background-color: hsl(211 68% 52%);
+  border: none;
+}
+
+/* Create the checkmark/indicator (hidden when not checked) */
+.checkmark:after {
+  content: "";
+  position: absolute;
+  /*display: none;*/
+  opacity: 0;
+}
+
+/* Show the checkmark when checked */
+.checkmark-container input:checked ~ .checkmark:after {
+  /*display: block;*/
+  opacity: 1;
+}
+
+/* Style the checkmark/indicator */
+.checkmark-container .checkmark:after {
+  left: 7px;
+  top: 2px;
+  width: 7px;
+  height: 12px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  -webkit-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  transform: rotate(45deg);
+  vertical-align: center;
+}
+
+.checkmark-container input[type="checkbox"]:focus + span::before {
+  outline: rgb(0, 0, 0) auto 5px;
+  box-shadow: 0 0 0 5px #ffbf47;
+}
+
+.checkbox-label {
+  margin-left: 30px;
+  font-size: 1rem;
+}
+
+
+/*---Utility classes--- */
+
+.shadow-on-hover {
+  -webkit-transition: all 0.2s ease 0.15s;
+          transition: all 0.2s ease 0.15s;
+}
+.shadow-on-hover:hover {
+  -moz-box-shadow:    8px 8px 20px 6px rgba(0, 0, 0, 0.4);
+  -webkit-box-shadow: 8px 8px 20px 6px rgba(0, 0, 0, 0.4);
+  box-shadow:         8px 8px 20px 6px rgba(0, 0, 0, 0.4);
+  transform: scale(1.025, 1.005);
+}
+@media (prefers-reduced-motion) {
+  .shadow-on-hover:hover {
+    transform: none;
+  }
+}
+
+.slide-up-on-hover {
+  -webkit-transition: all 0.2s ease 0.15s;
+          transition: all 0.2s ease 0.15s;
+}
+
+.slide-up-on-hover:hover {
+  transform: translate(0px, -7px);
+  position: relative;
+}
+
+.vertical-scroll {
+  overflow-y: auto;
+}
+
+.hidden {
+  display: none;
+}
+
+.blur {
+  -webkit-filter: blur(5px); /* Chrome, Safari, Opera */
+  filter: blur(5px);
+}
+
+.bg-blur-100 {
+  backdrop-filter: blur(100px);
+}
+
+.bottom-pinned {
+  bottom: 0px;
+}
+
+.background-blur {
+  backdrop-filter: blur(8px);
+}
+
+.centered-text {
+  text-align: center;
+}
+
+.right-text {
+  text-align: right;
+}
+
+
+/*------- -------*/
+
+
+/*--- modal stuff ---*/
+.modal-background {
+  z-index: 8998;
+  margin: 0;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.modal-background-light {
+  background-color: rgb(255,255,255); /* Fallback color */
+  background-color: rgba(255,255,255,0.4); /* White w/ opacity */
+}
+
+.modal-background-dark {
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  -webkit-animation-name: fadeIn;
+  -webkit-animation-duration: 0.4s;
+  animation-name: fadeIn;
+  animation-duration: 0.4s;
+}
+
+.bhims-modal {
+  position: fixed;
+  z-index: 8999;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 16px;
+  -webkit-animation-name: modalSlideInFromRight;
+  -webkit-animation-duration: 0.3s;
+  animation-name: modalSlideInFromRight;
+  animation-duration: 0.3s;
+  display: block;
+  padding: 25px;
+}
+
+.modal-light {
+  width: 600px;
+  height: 330px;
+  background-color: rgb(233, 239, 241);
+}
+
+.modal.lightbox-modal{
+    -webkit-transition: opacity .2s linear, none;
+    -moz-transition: opacity .2s linear, none;
+    -ms-transition: opacity .2s linear, none;
+    -o-transition: opacity .2s linear, none;
+    transition: opacity .2s linear, none;
+}
+
+.modal.lightbox-modal.fade .modal-dialog {
+  /* turn off slide effect of the "fade" class*/
+  transition: none;
+  transform: none;
+
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-modal .modal-content {
+  background-color: rgba(0,0,0,0);
+  border: none;
+  height: 80%;
+  /* display: flex; */
+  width: 80%;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-img-body {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.modal-img-header {
+  padding: 0;
+}
+
+.modal-img-header > .close {
+  color: white;
+}
+
+.modal-img-body {
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.modal-header-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.modal-img-body-header {
+  width: 100%;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-img-body-header > .close {
+  color: white;
+  font-size: 2rem;
+}
+
+.modal-img {
+  width: 100%;
+  height: calc(100% - 20px - 1rem);
+  object-fit: contain;
+}
+
+video.modal-img,
+audio.modal-img {
+  
+}
+
+audio.modal-img {
+  height: 40px;
+  max-width: 500px;
+}
+
+/*------- -------*/
+
+
+/*-- Tooltip --*/
+.tooltipped {
+  display: flex;
+  position: relative;
+}
+
+.tooltipped .tip {
+  min-width: 100px;
+  min-height: 40px;
+  top: -20px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  padding: 8px 20px;
+  color: black;
+  background-color: hsl(89 20% 58%);/*#9da990;*/
+  font-weight: normal;
+  border-radius: 40px;
+  position: absolute;
+  z-index: 99999999;
+  box-sizing: border-box;
+  box-shadow: 2px 5px 10px 1px rgba(0,0,0,0.4);
+  opacity: 0; 
+  visibility: hidden; /*prevents :hover event on the .tip*/
+  transition: opacity 0.8s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tooltipped:hover .tip {
+  opacity: 1; 
+  visibility: visible;
+  transition-delay: 0.3s;
+}
+
+.tooltipped .tip h6 {
+  margin: 0;
+}
+
+.tooltipped .tip .tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -12px;
+  width: 24px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.tooltipped .tip .tooltip-arrow::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 50%;
+  transform: translate(-50%,-50%) rotate(45deg);
+  background-color: #9da990;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.5);
+}
+
+.tip.tip-right {
+  top: 50%;
+  left: 100%;
+  margin-left: 10px;
+  transform: translate(0, -50%);
+}
+
+.tip.tip-right .tooltip-arrow {
+  top: 50%;
+  left: 0;
+  margin-top: -20px;
+  margin-left: -16px;
+  width: 18px;
+  height: 40px;
+}
+
+.tip.tip-right .tooltip-arrow::after {
+  left: 125%;
+  top: 50%;
+  transform: translate(-75%,-50%)  rotate(-22.5deg) skew(45deg);
+  width: 18px;
+}
+
+.tip.tip-left {
+  top: 50%;
+  left: -100%;
+  margin-right: 10px;
+  transform: translate(0, -50%);
+}
+
+.tip.tip-left .tooltip-arrow {
+  top: 50%;
+  right: 0;
+  margin-top: -20px;
+  margin-right: -16px;
+  width: 18px;
+  height: 40px;
+}
+
+.tip.tip-left .tooltip-arrow::after {
+  left: 125%;
+  top: 50%;
+  transform: translate(75%,-50%)  rotate(22.5deg) skew(45deg);
+  width: 18px;
+}
+
+/*------ ------*/
+
+
+/*--- */
+.blink {
+    -webkit-animation: blink 2s ease-in-out infinite;
+    -moz-animation: blink 2s ease-in-out infinite;
+    animation: blink 2s ease-in-out infinite;
+}
+
+
+/*---Loading indicator---*/
+#loading-indicator {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 9999;
+  width: 150px;
+  height: 150px;
+  margin: -75px 0 0 -75px;
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid hsl(89 20% 58%);/*hsl(211deg 68% 52%);*/
+  width: 120px;
+  height: 120px;
+  -webkit-animation: spin 2s linear infinite;
+  animation: spin 2s linear infinite;
+}
+
+
+#loading-indicator-background {
+  z-index: 9998;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* safari */
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+/*------- -------*/
+
+
+/*---Animations--- */
+@-webkit-keyframes slideInFromTop {
+  from {transform: translateY(-50%); opacity: 0}
+  to {transform: translateY(0); opacity: 1;}
+}
+@keyframes slideInFromTop {
+  from {transform: translateY(-50%); opacity: 0}
+  to {transform: translateY(0); opacity: 1;}
+}
+
+@-webkit-keyframes slideInFromBottom {
+  from {transform: translateY(50%); opacity: 0}
+  to {transform: translateY(0); opacity: 1;}
+}
+@keyframes slideInFromBottom {
+  from {transform: translateY(50%); opacity: 0}
+  to {transform: translateY(0); opacity: 1;}
+}
+
+@-webkit-keyframes modalSlideInFromRight {
+  from {transform: translate(-25%, -50%); opacity: 0}
+  to {transform: translate(-50%, -50%); opacity: 1;}
+}
+@keyframes modalSlideInFromRight {
+  from {transform: translate(-25%, -50%); opacity: 0}
+  to {transform: translate(-50%, -50%); opacity: 1;}
+}
+
+@-webkit-keyframes fadeIn {
+  from {opacity: 0} 
+  to {opacity: 1}
+}
+
+@keyframes fadeIn {
+  from {opacity: 0} 
+  to {opacity: 1}
+}
+
+@keyframes blink {
+  0% { opacity: 0.1; }
+  50% { opacity: 1; }
+  100% { opacity: 0.1; }
+}
+@-webkit-keyframes blink {
+  0% { opacity: 0.1; }
+  50% { opacity: 1; }
+  100% { opacity: 0.1; }
+}
+
+/*------- -------*/
+
+
+/*---- Remove arrows from number inputs -- */
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}

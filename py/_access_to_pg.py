@@ -72,7 +72,7 @@ BEAR_COLUMNS = {
 PEOPLE_COLUMNS = {
     'first_name': 'first_name',
     'last_name': 'last_name',
-    'encounter_id': 'encounter_id',
+    'id': 'encounter_id',
     'Zip Code': 'zip_code',
     'State/Prov': 'state_code',
     'Country': 'country_code',
@@ -790,25 +790,21 @@ def main(db_path, pg_connection_txt):
     data = data.rename(columns=DATA_COLUMNS.column_name)
 
     ######## Import into DB
-    out_dir = os.path.join(os.path.dirname(db_path), 'delete')
     with pg_engine.connect() as conn, conn.begin():
         # All other data tables refer to encounters (id) so make sure it gets imported first
         column_names = DATA_COLUMNS.loc[DATA_COLUMNS.table_name == 'encounters', 'column_name'].tolist() + ['id']
-        data.loc[:, column_names].to_sql('encounters', conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, 'encounters.csv'), index=False)#
+        data.loc[:, column_names].to_sql('encounters', conn, if_exists='append', index=False)
 
         for table_name, info in DATA_COLUMNS.loc[DATA_COLUMNS.table_name != 'encounters'].groupby('table_name'):
             column_names = info.column_name.tolist() + ['encounter_id']
             data.rename(columns={'id': 'encounter_id'})\
                 .loc[:, column_names]\
-                .to_sql(table_name, conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, table_name + '.csv'), index=False)#
+                .to_sql(table_name, conn, if_exists='append', index=False)
 
-        try:
-            bears.to_sql('bears', conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, 'bears.csv'), index=False)#
-        except:
-            import pdb; pdb.set_trace()
-        reactions.to_sql('reactions', conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, 'reactions.csv'), index=False)#
-        deterrents_used.to_sql('deterrents_used', conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, 'deterrents_used.csv'), index=False)#
-        structure_interactions.to_sql('structure_interactions', conn, if_exists='append', index=False)#.to_csv(os.path.join(out_dir, 'structure_interactions.csv'), index=False)#'''
+        bears.to_sql('bears', conn, if_exists='append', index=False)
+        reactions.to_sql('reactions', conn, if_exists='append', index=False)
+        deterrents_used.to_sql('deterrents_used', conn, if_exists='append', index=False)
+        structure_interactions.to_sql('structure_interactions', conn, if_exists='append', index=False)
         people.to_sql('people', conn, if_exists='append', index=False)
 
 

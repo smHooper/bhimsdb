@@ -25,10 +25,10 @@ function runQuery($ipAddress, $port, $dbName, $username, $password, $queryStr, $
 
 function runQueryWithinTransaction($conn, $queryStr, $parameters=array()) {
 
+
 	$result = pg_query_params($conn, $queryStr, $parameters);
 	if (!$result) {
 		$err = pg_last_error();
-		echo $err;
 	  	return $err;
 	}
 
@@ -147,13 +147,11 @@ if (isset($_POST['action'])) {
 	}
 
 	if ($_POST['action'] == 'getUser') {
-		if ($_SERVER['AUTH_USER']) echo preg_replace("/^.+\\\\/", "", $_SERVER["AUTH_USER"]);
-    	else echo false;
-
-	}
-
-	if ($_POST['action'] == 'getUserRoles') {
-		echo $USER_ROLES;
+		if ($_SERVER['AUTH_USER']) {
+			echo preg_replace("/^.+\\\\/", "", $_SERVER["AUTH_USER"]);
+    	} else {
+    		echo "no auth_user";
+    	}
 	}
 	
 	if ($_POST['action'] == 'query') {
@@ -166,14 +164,64 @@ if (isset($_POST['action'])) {
 		}
 	}
 
+	/*if ($_POST['action'] == 'insertData') {
+
+		if (isset($_POST['sqlStatements']) && isset($_POST['sqlParameters'])) {
+			// The first statement should be 
+			$resultArray = array();
+			$conn = pg_connect("hostaddr=$dbhost port=$dbport dbname=$dbname user=$username password=$password");
+			if (!$conn) {
+				echo "ERROR: Could not connect DB";
+				exit();
+			}
+
+			// Begin transation
+			pg_query($conn, 'BEGIN');
+
+			// First statement/params are for the encounters table and will return the new encounter ID
+			$encounterSQL = $_POST['sqlStatements'][0];
+			$encounterParams = $_POST['sqlParameters'][0];
+			for ($i = 0; $i < count($encounterParams); $i++) {
+				if ($encounterParams[$i] === '') {
+					$encounterParams[$i] = null;
+				}
+			}
+			runQueryWithinTransaction($conn, $encounterSQL, $encounterParams);
+			echo runQueryWithinTransaction($conn, "SELECT currval(pg_get_serial_sequence('encounters', 'id'))");
+			for ($i = 0; $i < count($_POST['params']); $i++) {
+				// Make sure any blank strings are converted to nulls
+				$params = $_POST['params'][$i];
+				for ($j = 0; $j < count($params); $j++) {
+					if ($params[$j] === '') {
+						$params[$j] = null;
+					}
+				}
+
+				$result = runQueryWithinTransaction($conn, $_POST['sqlStatements'][$i], $params);
+				if (strpos($result[0], 'ERROR') !== false || $result[0] === false) {
+					// roll back the previous queries
+					pg_query($conn, 'ROLLBACK');
+					echo $result, " from the query $i ", $_POST['queryString'][$i], ' with params ', json_encode($params);
+					exit();
+				}
+			}
+
+			// COMMIT the transaction
+			pg_query($conn, 'COMMIT');
+			echo "success";//
+
+		} else {
+			echo "either sqlStatements and/or sqlParameters not given";//false;
+		}
+	}*/
+
+
 	if ($_POST['action'] == 'paramQuery') {
 
 		if (isset($_POST['queryString']) && isset($_POST['params'])) {
 			// If there are multiple SQL statements, execute as a single transaction
 			if (gettype($_POST['queryString']) == 'array') {
-				$resultArray = array();
-				$dbname = $_POST['dbname'];
-				$conn = pg_connect("hostaddr=$dbhost port=$dbport dbname=vistats user=$username password=$password");
+				$conn = pg_connect("hostaddr=$dbhost port=$dbport dbname=$dbname user=$username password=$password");
 				if (!$conn) {
 					echo "ERROR: Could not connect DB";
 					exit();
@@ -215,7 +263,7 @@ if (isset($_POST['action'])) {
 				echo json_encode($result);	
 			}
 		} else {
-			echo "php query failed";//false;
+			echo "either sqlStatements and/or sqlParameters not given";//false;
 		}
 	}
 

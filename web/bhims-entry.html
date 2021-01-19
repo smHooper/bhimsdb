@@ -217,7 +217,7 @@
 								<!-- Group size -->
 								<div class="field-container">
 									<div class="field-container small-field">
-										<input class="input-field" type="number" name="group_size_total" placeholder="Number of people in group" id="input-group_size_total-1" min=0>
+										<input class="input-field" type="number" name="group_size_total" placeholder="Number of people in group" id="input-group_size_total-1" min=0 required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-group_size_total-1">Number of people in group</label>
 									</div>
@@ -250,7 +250,7 @@
 								</div>
 								<div class="collapse field-container">
 									<div class="field-container small-field">
-										<select class="input-field default" type="text" name="safety_info_source_code" placeholder="Safety information source" id="input-safety_info_source-1" data-dependent-target="#input-received_safety_info-1" data-dependent-value="1"required></select>
+										<select class="input-field default" type="text" name="safety_info_source_code" placeholder="Safety information source" id="input-safety_info_source-1" data-dependent-target="#input-received_safety_info-1" data-dependent-value="1"></select>
 										<label class="field-label" for="input-safety_info_source-1">Safety information source</label>
 									</div>
 									<div class="collapse field-container small-field">
@@ -396,7 +396,7 @@
 								<!-- bear obtained food -->
 								<div class="collapse field-container">
 									<div class="field-container small-field">
-										<select class="input-field default" type="text" name="bear_obtained_food" placeholder="Did the bear obtain food?" id="input-bear_obtained_food-2" data-lookup-table="boolean_response_codes" data-dependent-target="#input-food_present_code-2" data-dependent-value="INS,OUT" required></select>
+										<select class="input-field default" type="text" name="bear_obtained_food" placeholder="Did the bear obtain food?" id="input-bear_obtained_food-2" data-lookup-table="boolean_response_codes" data-dependent-target="#input-food_present_code-2" data-dependent-value="1,2" required></select>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-bear_obtained_food-2">Did the bear obtain any food?</label>
 									</div>
@@ -463,7 +463,7 @@
 								<!-- Location fields -->
 								<div class="field-container single-line-field">
 									<label class="field-label inline-label" for="input-location_type-3">Describe location by:</label>
-									<select class="input-field" id="input-location_type-3" value>
+									<select class="input-field no-option-fill" id="input-location_type-3" value="Place name" name="location_type">
 										<option value="Place name">Place name</option>
 										<option value="Backcountry unit">Backcountry unit</option>
 										<option value="Road mile">Road mile</option>
@@ -592,7 +592,7 @@
 											<label class="field-label" for="input-datum-3">Datum</label>
 										</div>
 										<div class="field-container small-field">
-											<select class="input-field default" name="location_accuracy_code" id="input-location_accuracy-3" placeholder="GPS coordinate accuracy" required></select>
+											<select class="input-field default" name="location_accuracy_code" id="input-location_accuracy-3" placeholder="GPS coordinate accuracy"></select>
 											<label class="field-label" for="input-location_accuracy-3">GPS coordinate accuracy</label>
 										</div>
 									</div>
@@ -620,7 +620,7 @@
 										<label class="field-label" for="input-relative_location-3">Relative location of the bear</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_relative_location" placeholder='Description of the "Other" relative location' id="input-other_visibility-3" data-dependent-target="#input-relative_location-3" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_relative_location" placeholder='Description of the "Other" relative location' id="input-other_relative_location-3" data-dependent-target="#input-relative_location-3" data-dependent-value="OTH" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_relative_location-3">Description of the "Other" relative location</label>
 									</div>
@@ -713,7 +713,7 @@
 								    <div class="card-header" id="cardHeader-4-cloneable">
 											<a class="card-link" data-toggle="collapse" href="#collapse-4-cloneable" data-target="collapse-4-cloneable">
 												<div class="card-link-content">
-													<h5 class="card-link-label" data-index-label="true">New bear</h5>
+													<h5 class="card-link-label label-with-index" data-order-column="bear_number">New bear</h5>
 												</div>
 												<div class="card-link-content">
 													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="bear" aria-label="Delete bear">
@@ -836,7 +836,7 @@
 								    <div class="card-header" id="cardHeader-5-cloneable">
 											<a class="card-link" data-toggle="collapse" href="#collapse-5-cloneable" data-target="collapse-5-cloneable">
 												<div class="card-link-content">
-													<h5 class="card-link-label" data-label-sep=": " data-index-label="true">What happened next?</h5>
+													<h5 class="card-link-label label-with-index" data-order-column="reaction_order" data-label-sep=": ">What happened next?</h5>
 												</div>
 												<div class="card-link-content">
 													<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="reaction" aria-label="Delete reaction">
@@ -1435,7 +1435,8 @@
 		var 
 			ATTACHMENT_FILES = {},
 			FIELD_INFO = {},
-			FIELD_VALUES = {};
+			FIELD_VALUES = {},
+			USERNAME;
 
 		// The page takes a few seconds to load sometimes so make sure the user 
 		//	doesn't click the continue button before everything is set up
@@ -1568,9 +1569,12 @@
 					.click(onMicIconClick)
 					.removeClass('hidden');
 			}
-			$('#recorded-text-final').on('input', (_, el) => {
-    			$('#input-narrative-9').val($(el).text());
+
+			// When the recorded text changes, set the input val
+			$('#recorded-text-final').on('input', (e) => {
+    			$('#input-narrative-9').val($(e.target).text());
 			});
+
 			//add event listeners for contenteditable and textarea size change: https://stackoverflow.com/questions/1391278/contenteditable-change-events
 			//might have to use resizeobserver: https://stackoverflow.com/questions/6492683/how-to-detect-divs-dimension-changed
 
@@ -1617,6 +1621,22 @@
 					window.localStorage.fieldValues = JSON.stringify(FIELD_VALUES);
 				}
 			});
+
+			// Get username and store for INSERTing data
+			$.ajax({
+				url: 'bhims.php',
+				method: 'POST',
+				data: {action: 'getUser'},
+				cache: false
+			}).done(function(resultString) {
+					resultString = resultString.trim();
+					if (resultString)  {
+								USERNAME = resultString.toLowerCase();
+					} else {
+						console.log('username query failed. result: ' + resultString)
+					}
+			});
+
 		});
 
 

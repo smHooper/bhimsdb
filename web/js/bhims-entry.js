@@ -15,7 +15,8 @@ function fillFieldsFromSavedData() {
 	for (const key in FIELD_VALUES) {
 		const value = FIELD_VALUES[key];
 		
-		if (key === 'reactions' || key === 'attachments') continue; // reactions are set manually below
+		 // reactions are set manually below whereas attachment data is never saved
+		if (key === 'reactions' || key === 'attachments') continue;
 
 		// Value is either a string/number corresponding to a single field or an object 
 		//	containing a series of values corresponding to an accordion with potentially 
@@ -44,9 +45,6 @@ function fillFieldsFromSavedData() {
 					}
 					//This will unnecessarily call onInputFieldChange() but this is probably
 					//	the best way to ensure that all change event callbacks are get called
-					if ($accordion.data('table-name') == 'reactions') {
-						let b = 1;
-					}
 					$input.change();
 				}
 			}
@@ -63,8 +61,11 @@ function fillFieldsFromSavedData() {
 				$input.val(value);
 			}
 			$input.change();//call change event callbacks
-		}	
+		}
 	}
+
+	// Set the text of the contenteditable narrative div
+	if ('narrative' in FIELD_VALUES) $('#recorded-text-final').text(FIELD_VALUES.narrative);
 
 	// Because the reaction select options are based on the reaction-by select and 
 	//	the order in which inputs are filled is random, the reaction val might be 
@@ -159,13 +160,13 @@ function onInputFieldChange(event) {
 		return;
 	}
 	
-	const val = $input.is('.input-checkbox') ? $input.prop('checked') : $input.val();
+	const val = $input.is('.input-checkbox') ? +$input.prop('checked') : $input.val();
 
 	const fieldInfo = FIELD_INFO[fieldName];
 	if (!fieldInfo) {
 		console.log(`${fieldName} not in FIELD_INFO. ID: ${$input.attr('id')}`);
-		/*FIELD_VALUES[fieldName] = val;
-		return;*/
+		FIELD_VALUES[fieldName] = val;
+		//return;
 	} 
 	
 	// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
@@ -190,7 +191,7 @@ function onInputFieldChange(event) {
 }
 
 
-function validateFields($parent) {
+function validateFields($parent, focusOnField=true) {
 
 
 	const $fields = $parent
@@ -198,9 +199,11 @@ function validateFields($parent) {
 		.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
 		(_, el) => {
 			const $el = $(el);
-			const $hiddenParent = $el.closest('.field-container.collapse, .card.cloneable').not('.show');
+			const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable');
 			if (!$el.val() && $hiddenParent.length === 0) {
 				$el.addClass('error');
+			} else {
+				$el.removeClass('error');
 			}
 	});
 
@@ -216,26 +219,12 @@ function validateFields($parent) {
 				return false;
 			}
 		});
-		$fields.first().focus();
+		if (focusOnField) $fields.first().focus();
 		return false;
 	} else {
 		return true;
 	}
 
-	/*	const $fieldContainers = $parent.find('.input-field:required, .required-indicator + .input-field').map(
-		function() {
-			const $el = $(this);
-			if (!$el.val()) {
-				$el.closest('.field-container').addClass('error');
-			}
-	})
-
-	if ($fieldContainers.filter('.error').length) {
-		$parent.focus();
-		return false;
-	} else {
-		return true;
-	}*/
 }
 
 
@@ -326,9 +315,19 @@ function onPreviousNextButtonClick(event, movement) {
 	if ($button.hasClass('disabled')) return;
 
 	if ($button.attr('id') !== 'title-section-continue-button') {
-		const allFieldsValid = $('.form-section.selected .validate-field-parent:not(.cloneable)')
-			.map(function() {
-				return validateFields($(this))
+		const $parents = $('.form-section.selected .validate-field-parent:not(.cloneable)')
+			.filter((_, el) => {
+				let $closestCollapse = $(el).closest('.collapse');
+				while ($closestCollapse.length) {
+					if (!$closestCollapse.is('.show')) return false;
+					$closestCollapse = $closestCollapse.parent().closest('.collapse');
+				}
+				
+				return true;
+			});
+		const allFieldsValid = $parents
+			.map((_, el) => {
+				return validateFields($(el))
 			}).get()
 			.every((isValid) => isValid);
 		if (!allFieldsValid) return;
@@ -475,6 +474,52 @@ function onSelectChange() {
 		});
 	}*/
 
+}
+
+function onInitialActionChange() {
+	/*
+	Rather than using the dependent-target/value attributes, the interactions 
+	accordion should only be shown when both inital action fields are filled
+	*/
+	var fieldsFull;
+	$('#input-initial_human_action-5, #input-initial_bear_action-5').each((_, el) => {
+		fieldsFull = !!$(el).val(); //if it hasn't been filled yet it'll be '' (empty string)
+		return fieldsFull;//if false, this will break out of .each() loop
+	})
+
+	if (fieldsFull) {
+		$('#reactions-accordion')
+			.collapse('show')
+			.siblings('.add-item-container')
+				.collapse('show');
+	}
+}
+
+
+function onCoordinateFormatChange(event) {
+	/*
+	Rather than using the dependent-target/value attributes, the previous 
+	coordinate fields should be hidden immediately to avoid the brief but 
+	disorienting moment when 2 sets of coordinate fields are visible
+	*/
+
+	const $select = $(event.target);
+	const format = $select.val();
+
+	// Get the collapse to show. If this already shown, that means this function 
+	//	was triggerred manually with .change(), and shouldn't actually be hidden
+	const $currentCollapse = $('.coordinates-' + format).closest('.collapse');
+	if ($currentCollapse.is('.show')) return;
+
+	// Hide all coordinate fields (which is really just the currently visible one)
+	$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').each((_, el) => {
+		$(el).closest('.collapse')
+			.addClass('hidden')//add hidden class first
+			.collapse('hide');
+	})
+		
+	// Show the one that corresponds to the selected format
+	$currentCollapse.collapse('show');
 }
 
 
@@ -744,7 +789,7 @@ function setCardLabel($card, names, defaultText, joinCharacter=' ') {
 	joinCharacter = cardHeaderSeparator != undefined ? cardHeaderSeparator : joinCharacter;
 
 
-	const indexText = $cardLabel.data('index-label') ? //if true, add the index to the label
+	const indexText = $cardLabel.is('.label-with-index') ? //if true, add the index to the label
 		`${$card.index()} - ` : '';//`${parseInt($card.attr('id').match(/\d+$/)) + 1} - ` : ''
 	const joinedText = indexText + sortedComponents.join(joinCharacter);
 
@@ -817,55 +862,20 @@ function onCountryPostalCodeChange(event) {
 }
 
 
-function onInitialActionChange() {
-	/*
-	Rather than using the dependent-target/value attributes, the interactions 
-	accordion should only be shown when both inital action fields are filled
-	*/
-	var fieldsFull;
-	$('#input-initial_human_action-5, #input-initial_bear_action-5').each((_, el) => {
-		fieldsFull = !!$(el).val(); //if it hasn't been filled yet it'll be '' (empty string)
-		return fieldsFull;//if false, this will break out of .each() loop
-	})
-
-	if (fieldsFull) {
-		$('#reactions-accordion')
-			.collapse('show')
-			.siblings('.add-item-container')
-				.collapse('show');
-	}
-}
-
-
-function onCoordinateFormatChange(event) {
-	/*
-	Rather than using the dependent-target/value attributes, the previous 
-	coordinate fields should be hidden immediately to avoid the brief but 
-	disorienting moment when 2 sets of coordinate fields are visible
-	*/
-
-	const $select = $(event.target);
-	// Hide all coordinate fields (which is really just the currently visible one)
-	$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').each((_, el) => {
-		$(el).closest('.collapse')
-			.addClass('hidden')//add hidden class first
-			.collapse('hide');
-	})
-		
-	// Show the one that corresponds to the selected format
-	$('.coordinates-' + $select.val())
-		.closest('.collapse')
-			.collapse('show');
-}
-
-
 function fillCoordinateFields(latDDD, lonDDD) {
 	/*Convert coordinates from decimal degrees to degrees decimal 
 	minutes and degrees minutes seconds and fill in the respective fields*/
 
+	// Set ddd fields
 	const $latDDDField = $('#input-lat_dec_deg-3').val(latDDD);
 	const $lonDDDField = $('#input-lon_dec_deg-3').val(lonDDD);
 
+	// Fill global FIELD_VALUES in case this function was called by dragging 
+	//	and dropping the marker, which won't trigger the onInputFieldChange() event
+	FIELD_VALUES[$latDDDField.attr('name')] = latDDD;
+	FIELD_VALUES[$lonDDDField.attr('name')] = lonDDD;
+
+	// Set ddm fields
 	const minuteStep = $('#input-lat_dec_min-3').attr('step');
 	const minuteRounder = Math.round(1 / (minuteStep ? minuteStep : 0.001));
 	const latSign = latDDD / Math.abs(latDDD)
@@ -879,6 +889,7 @@ function fillCoordinateFields(latDDD, lonDDD) {
 	$('#input-lon_deg_ddm-3').val(lonDegrees);
 	$('#input-lon_dec_min-3').val(lonDecimalMinutes);
 
+	// Set dms fields
 	const secondStep = $('#input-lat_dec_sec-3').attr('step');
 	const secondRounder = Math.round(1 / (secondStep ? secondStep : 0.1));
 	const latMinutes = Math.floor(latDecimalMinutes);
@@ -1126,7 +1137,7 @@ function updateReactionsSelect($actionBySelect) {
 		FROM reaction_codes 
 		WHERE 
 			sort_order IS NOT NULL AND 
-			action_by='${actionBy}' 
+			action_by=${actionBy} 
 		ORDER BY sort_order`
 	);
 }
@@ -1381,9 +1392,10 @@ function initSpeechRecognition() {
 				interimTranscript += event.results[i][0].transcript;
 			}
 		}
+		$('#input-narrative-9').val(finalTranscript).change();
 		$('#recorded-text-final').text(finalTranscript);
 		$('#recorded-text-interim').text(interimTranscript);
-		$('#input-narrative-9').val(finalTranscript);
+		
 	}
 
 	const $micButton = $('#record-narrative-button');
@@ -1400,8 +1412,10 @@ function initSpeechRecognition() {
 			showModal('Speech recognition was not given permission to begin. Please adjust your browser settings.', 'Unable to record speech');
 		} else if (event.error == 'audio-capture') {
 			showModal('No microphone was found. Make sure that you have a microphone installed and that your browser settings allow access to it.', 'No microphone found');
-		}else {
-			$('#recording-status-message').text(`...${event.error.message}...`);
+		} else {
+			const $statusMessage = $('#recording-status-message');
+			$statusMessage.text(`...${event.error.message}...`);
+			setTimeout(5000, () => {$statusMessage.fadeOut(500, (_, el) => {$(el).text('').fadeIn(500)})});
 		}
 	}
 
@@ -1450,18 +1464,104 @@ function saveAttachment(fileInput) {
 	});
 }
 
+
+function getFormattedTimestamp(date) {
+
+	if (date === undefined) date = new Date();
+
+	// Get 0-padded minutes
+	const minutes = ('0' + date.getMinutes()).slice(-2)
+
+	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${minutes}`;
+
+}
+
+
+function valuesToSQL(values, tableName, timestamp) {
+	/*
+	Helper function to convert unordered parameters 
+	into pre-prepared SQL statement and params
+	*/
+	
+	var sortedFields = Object.keys(values).sort();
+	var parameters = sortedFields.map(f => values[f]);
+	
+
+	var returningClause = '', 
+		currvalClause = '',
+		parametized = '';
+
+	if (tableName === 'encounters') {
+		// Need to add RETURNING clause to get the encounter_id
+		returningClause = ' RETURNING id';
+		
+		sortedFields = sortedFields.concat(['entered_by', 'datetime_entered', 'last_edited_by', 'datetime_last_edited']);
+		parameters = parameters.concat([USERNAME, timestamp, USERNAME, timestamp]);
+		parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $'); //$1, $2, ...
+	} else {
+		// Need to add a parameter placeholder for the encounter_id for 
+		//	all tables other than encounters 
+		//parametized += ', $' + (sortedFields.length + 1);
+		// get parametized string before adding enconter_id since currvalClause will take the place of a param
+		parametized ='$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
+		currvalClause = `, currval(pg_get_serial_sequence('encounters', 'id'))`;
+		sortedFields.push('encounter_id');
+	}
+
+	
+	
+	const statement = `
+		INSERT INTO ${tableName}
+			(${sortedFields.join(', ')})
+		VALUES
+			(${parametized}${currvalClause})
+		${returningClause};
+	`;
+	
+
+	return [statement, parameters];
+
+}
+
+
 function onSubmitButtonClick(event) {
 
 	event.preventDefault();
 
+	showLoadingIndicator('onSubmitButtonClick');
+
+	// Validate all fields. This shouldn't be necessary since the user can't move 
+	//	to a new section with invalid fields, but better safe than sorry
+	for (const section of $('.form-section:not(.title-section)')) {
+		const $section = $(section);
+		const allFieldsValid = $section.find('.validate-field-parent')
+			.map((_, parent) => {
+				return validateFields($(parent), focusOnField=false);
+			}).get()
+			.every((isValid) => isValid);
+		if (!allFieldsValid) {
+			hideLoadingIndicator();
+			const onClick = `			
+				const sectionIndex = goToSection(${$section.data('section-index') - $('.form-section.selected').data('section-index')});
+				setPreviousNextButtonState(sectionIndex);
+			`;
+			const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
+			const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onClick}">OK</button>`
+			showModal(modalMessage, 'Missing or invalid information', 'alert', buttonHTML);
+			return;
+		}
+	}	
+
 	// Save attachments
 	const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
 	var deferreds = [];
-	var uploadedFiles = [];
+	var uploadedFiles = {};
 	var failedFiles = [];
+	const timestamp = getFormattedTimestamp();
 	for (const fileInput of $attachmentInputs) {
 		if (fileInput.files.length) {
-			const fileName = fileInput.files[0].name;
+			const thisFile = fileInput.files[0]
+			const fileName = thisFile.name;
 			deferreds.push(saveAttachment(fileInput)
 				.then(
 					doneFilter=(resultString) => {
@@ -1469,7 +1569,28 @@ function onSubmitButtonClick(event) {
 						if (resultString.trim().startsWith('ERROR')) {
 							failedFiles.push(fileName);
 						} else {
-							uploadedFiles.push(fileName)
+							const $card = $(fileInput).closest('.card');
+							const filePath = resultString.trim().replace(/\//g, '\\');//replace forward slashes with backslash
+							const fileInfo = {
+								client_file_name: fileName,
+								file_path: filePath,//should be the saved filepath (with UUID)
+								file_size_kb: Math.floor(thisFile.size / 1000),
+								mime_type: thisFile.type,
+								attached_by: USERNAME,//retrieved in window.onload()
+								datetime_attached: timestamp,
+								last_changed_by: USERNAME,
+								datetime_last_changed: timestamp
+							};
+
+							for (const inputField of $card.find('.input-field')) {
+								const fieldName = inputField.name;
+								// Get input values for all input fields except file input (which has 
+								//	the name "uploadedFile" used by php script)
+								if (fieldName in FIELD_INFO) {
+									fileInfo[fieldName] = inputField.value;
+								}
+							}
+							uploadedFiles[Object.keys(uploadedFiles).length] = fileInfo;
 						}
 					
 					},
@@ -1482,28 +1603,145 @@ function onSubmitButtonClick(event) {
 
 		}
 	}
-	// When all of the uploads have finished (or failed), let the user know the result
+
+	// When all of the uploads have finished (or failed), check if any failed. 
+	//	If they all succeeded, then insert data
 	$.when(...deferreds).then(function() {
 		if (failedFiles.length) {
 
 			const message = `
-				The following files failed to upload:<br>
-					<ul>
-						<li>${failedFiles.join('</li><li>')}</li>
-					</ul>
-			`;
+				The following files could not be saved to the server:<br>
+				<ul>
+					<li>${failedFiles.join('</li><li>')}</li>
+				</ul>
+				<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
+			hideLoadingIndicator();
 			showModal(message, 'File uploads failed');
 			return;
 		} else {
-			showModal('Upload successful for ' + uploadedFiles[0], 'Upload successful');
+			
+			// Insert data
+			var sqlStatements = [];
+			var sqlParameters = [];
+
+			// Handle all fields in tables with 1:1 relationship to 
+			var unorderedParameters = {};
+			for (const input of $('.input-field')) {
+				
+				const fieldName = input.name;
+
+				//this field isn't stored in the DB or fieldName is actually a table name 
+				//	for a table with a 1:many relationship to encounters 
+				if (!(fieldName in FIELD_INFO && fieldName in FIELD_VALUES)) continue;
+
+				const fieldInfo = FIELD_INFO[fieldName];
+
+				const tableName = fieldInfo.tableName;
+				if (!(tableName in unorderedParameters)) {
+					unorderedParameters[tableName] = {}
+				}
+				
+				unorderedParameters[tableName][fieldName] = FIELD_VALUES[fieldName];
+			}
+
+
+			// Make sure that encounters is the first insert since everything references it
+			const [encountersSQL, encountersParams] = valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
+			sqlStatements.push(encountersSQL);
+			sqlParameters.push(encountersParams);
+
+			// loop through each table and add statements and params
+			for (tableName in unorderedParameters) {
+				if (tableName !== 'encounters') {
+					const [statement, params] = valuesToSQL(unorderedParameters[tableName], tableName)
+					sqlStatements.push(statement);
+					sqlParameters.push(params);
+				} 
+			}
+
+			// Handle accordions with 1-to-many relationships to encounters
+			//	Select only accordions that are visible (all accordions that aren't 
+			//	collapsed .collapse-s).
+			for (const el of $('.accordion.form-item-list:not(.collapse:not(.show))')) {
+				const $accordion = $(el);
+				const tableName = $accordion.data('table-name');
+				const fieldValueObjects = tableName === 'attachments' ?
+					uploadedFiles :
+					FIELD_VALUES[tableName];
+
+				if (!fieldValueObjects) {
+					console.log(`No FIELD_VALUES for ${tableName} (${$accordion.attr('id')})`);
+					continue;
+				}
+
+				// For some accordions, the order of the items matters (i.e., reactions and bears). 
+				//	Look for the class .label-with-index and get the index from the id of each card
+				const indexCardLinks = $accordion.find('.card:not(.cloneable) .card-link-label.label-with-index');
+				let cardIndices = indexCardLinks
+					.map((i, el) => {
+						return parseInt(
+							$(el).closest('.card')
+								.attr('id')
+								.match(/\d+$/)
+							);
+					}).get(); // returns array like [0, 2, 3] where array items are keys of fieldValueObjects
+
+				for (const i in fieldValueObjects) {
+					let fieldValues = {...fieldValueObjects[i]};
+					
+					// Remove any fields aren't stored in the DB
+					for (const fieldName in fieldValues) {
+						if (!(fieldName in FIELD_INFO)) delete fieldValues[fieldName];
+					}
+
+					// Record the order of the items if necessary
+					if (indexCardLinks.length) {
+						// i is the persistent key of this card whereas cardIndices.indexOf(i) 
+						//	gives the sequential order
+						const order = cardIndices.indexOf(parseInt(i));
+						const orderField = $(indexCardLinks[order]).data('order-column');
+						fieldValues[orderField] = order + 1;
+					}
+
+					const [statement, params] = valuesToSQL(fieldValues, tableName);
+					sqlStatements.push(statement);
+					sqlParameters.push(params);
+				}
+			}
+
+			$.ajax({
+				url: 'bhims.php',
+				method: 'POST',
+				data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
+				cache: false
+			}).done((queryResultString) => {
+				queryResultString = queryResultString.trim();
+
+				hideLoadingIndicator();
+
+				if (queryResultString !== 'success') {
+					showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+					return;
+				}
+
+				$('#section-10 .submition-confirmation-container')
+					.removeClass('hidden')
+					.siblings()
+						.addClass('hidden');
+
+				// Clear localStorage
+				//FIELD_VALUES = {};
+				//window.localStorage.clear();
+			}).fail((xhr, status, error) => {
+				showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+			})
+
+			
+
+
 		}
-	})
+	});
 
-	//Insert data
 
-	/*$('#section-10 .submition-confirmation-container')
-		.removeClass('hidden')
-		.siblings()
-			.addClass('hidden');*/
 
 }

@@ -7,6 +7,19 @@ $.expr[':'].isSection = function(element, index, meta) {
 }
 
 
+function isInViewport(el) {
+	const rect = el.getBoundingClientRect();
+	return (
+		rect.top >= 0 &&
+		rect.left >= 0 &&
+		rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+		rect.right <= (window.innerWidth || document.documentElement.clientWidth) &&
+		(rect.top || rect.bottom) &&
+		(rect.left || rect.right)
+	);
+}
+
+
 function fillFieldsFromSavedData() {
 
 	
@@ -1030,7 +1043,7 @@ function confirmMoveEncounterMarker(lat, lon) {
 		<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="setCoordinatesFromMarker()">No</button>
 		<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
 	`;
-	const message = `You've already placed the encounter location marker on the map. Are you sure you want to move it to a new location? Click 'No' to revert your changes.`
+	const message = `You've already placed the encounter location marker on the map. Are you sure you want to move it to a new location? Click 'No' to keep it in the current location.`
 	showModal(message, `Move the encounter location?`, 'confirm', footerButtons);
 }
 
@@ -1093,8 +1106,45 @@ function onDMSFieldChange() {
 }
 
 
-function onBearGroupTypeChange() {
+function onLocationSelectChange(e) {
+	/*
+	Event handler for when either the place name or BC unit select changes. 
+	try to update the location coordinates and marker from coordinates stored 
+	in the DB
+	*/
 
+	// If the element isn't in the viewport, this function is likely being manually 
+	//	triggered with .change() (when data are loaded from localStorage). In that 
+	//	case, nothing should happen
+	const el = e.target;
+	if (!isInViewport(el)) return;
+
+	const latDDD = $('#input-lat_dec_deg-3').val();
+	const lonDDD = $('#input-lon_dec_deg-3').val();
+
+	const code = el.value;
+	const coordinates = $('#input-location_type-3').val() === 'Place name' ? 
+		PLACE_NAME_COORDINATES :
+		BACKCOUNTRY_UNIT_COORDINATES;
+
+	if (code in coordinates) {
+		const latlon = coordinates[code];
+		if (latDDD && lonDDD) {
+			confirmMoveEncounterMarker(latlon.lat, latlon.lon);
+		} else {
+			placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
+		}
+
+		// Set datum code to WGS84 since the coordinates are
+		$('#input-datum-3').val(1); //WGS84
+	}
+}
+
+
+function onBearGroupTypeChange() {
+	/*
+	If the ages/sexes of individual bears doesn't match the cohort selected, warn the user
+	*/
 
 
 }

@@ -471,12 +471,12 @@
 									</select>
 								</div>
 								<div class="collapse show field-container small-field">
-									<select class="input-field default" name="place_name_code" placeholder="Name of the encounter location" id="input-place_name-3" data-dependent-target="#input-location_type-3" data-dependent-value="Place name" required></select>
+									<select class="input-field default" name="place_name_code" placeholder="Name of the encounter location" id="input-place_name-3" data-dependent-target="#input-location_type-3" data-dependent-value="Place name" onchange="onLocationSelectChange(event)" required></select>
 									<span class="required-indicator">*</span>
 									<label class="field-label" for="input-place_name-3">Name of the encounter location</label>
 								</div>
 								<div class="collapse field-container small-field">
-									<select class="input-field default" name="backcountry_unit_code" placeholder="Backcountry unit" id="input-backcountry_unit-3" data-dependent-target="#input-location_type-3" data-dependent-value="Backcountry unit" required></select>
+									<select class="input-field default" name="backcountry_unit_code" placeholder="Backcountry unit" id="input-backcountry_unit-3" data-dependent-target="#input-location_type-3" data-dependent-value="Backcountry unit" onchange="onLocationSelectChange(event)" required></select>
 									<span class="required-indicator">*</span>
 									<label class="field-label" for="input-backcountry_unit-3">Backcountry unit</label>
 								</div>
@@ -1436,14 +1436,16 @@
 			ATTACHMENT_FILES = {},
 			FIELD_INFO = {},
 			FIELD_VALUES = {},
-			USERNAME;
+			USERNAME,
+			BACKCOUNTRY_UNIT_COORDINATES = {},
+			PLACE_NAME_COORDINATES = {},
+			ACCEPTED_ATTACHMENT_EXT = {};
 
 		// The page takes a few seconds to load sometimes so make sure the user 
 		//	doesn't click the continue button before everything is set up
 		showLoadingIndicator('onload');
 
 		// Query accepted file attachment extensions for each file type
-		var ACCEPTED_ATTACHMENT_EXT = {};
 		queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
 			.then(
 				doneFilter=function(queryResultString){
@@ -1637,6 +1639,39 @@
 					}
 			});
 
+			// Get coordinates for BC units and place names
+			queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+				.then(
+					doneFilter=function(queryResultString){
+						if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+							throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+						} else {
+							const queryResult = $.parseJSON(queryResultString);
+							queryResult.forEach(function(object) {
+								BACKCOUNTRY_UNIT_COORDINATES[object.code] = {lat: object.latitude, lon: object.longitude};
+							})
+						}
+					},
+					failFilter=function(xhr, status, error) {
+						console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+					}
+				);
+			queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+				.then(
+					doneFilter=function(queryResultString){
+						if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+							throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+						} else {
+							const queryResult = $.parseJSON(queryResultString);
+							queryResult.forEach(function(object) {
+								PLACE_NAME_COORDINATES[object.code] = {lat: object.latitude, lon: object.longitude};
+							})
+						}
+					},
+					failFilter=function(xhr, status, error) {
+						console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+					}
+				);
 		});
 
 

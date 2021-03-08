@@ -1,0 +1,5 @@
+# Unix/POSix
+web/packages/* linguist-vendored
+
+# Windows
+web/packages/* linguist-vendored

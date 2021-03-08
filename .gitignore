@@ -7,3 +7,5 @@ py/__pycache__/*
 
 # don't include JS dependencies
 web/packages/*
+
+web/*/Thumbs.db

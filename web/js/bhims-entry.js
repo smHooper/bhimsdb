@@ -36,8 +36,9 @@ function fillFieldsFromSavedData() {
 		//	several cards
 		if (typeof(value) === 'object') { // corresponds to an accordion
 			// Loop through each object and add a card/fill fields 
-			const $accordion = $('.accordion')
+			const $accordion = $('.accordion:not(.hidden)')
 				.filter((_, el) => {return $(el).data('table-name') === key})
+			if (!$accordion.length) continue;//if the accordion is hidden, ignore it
 			for (const index in value) {
 				const $card = addNewCard($accordion, index);
 				const inputValues = value[index];
@@ -45,9 +46,15 @@ function fillFieldsFromSavedData() {
 					const thisVal = inputValues[fieldName];
 					
 					// Find input where the name === to this field
-					const $input = $card
-						.find('.input-field')
-						.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
+					var $input;
+					try {
+						$input = $card
+							.find('.input-field')
+							.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
+					} catch {
+						console.log($card)
+						const a =1;
+					}
 					
 					// If this is a checkbox, set the checked property. Otherwise,
 					//	just set the val directly
@@ -90,8 +97,8 @@ function fillFieldsFromSavedData() {
 		const reactions = FIELD_VALUES.reactions;
 		for (index in reactions) {
 			const $card = addNewCard($reactionsAccordion, index);
-			const $reaction = $('#input-reaction-5-' + index);
-			const $reactionBy = $('#input-reaction_by-5-' + index)
+			const $reaction = $('#input-reaction-' + index);
+			const $reactionBy = $('#input-reaction_by-' + index)
 				.val(reactions[index].reaction_by)
 				.change();
 			updateReactionsSelect($reactionBy)
@@ -113,8 +120,9 @@ function fillFieldsFromSavedData() {
 function getFieldInfo() {
 
 	// Check if the user has a field values from a saved session
-	const fieldValueString = window.localStorage.fieldValues;
-	if (fieldValueString) FIELD_VALUES = $.parseJSON(fieldValueString);
+	const pageName = window.location.pathname.split('/').pop();
+	const fieldValueString = window.localStorage[pageName] ? window.localStorage[pageName] : null;
+	if (fieldValueString) FIELD_VALUES = $.parseJSON(fieldValueString).fieldValues;
 
 	// Determine which table each column belongs to
 	const sql = `
@@ -129,27 +137,24 @@ function getFieldInfo() {
 			column_name NOT IN ('encounter_id', 'id')
 		;
 	`;
-	queryDB(sql).then(
-		doneFilter=(queryResultString) => {
-			const queryResult = $.parseJSON(queryResultString);
-			if (queryResult) {
-				const hasSavedSession = Object.keys(FIELD_VALUES).length;
-				queryResult.forEach( (row) => {
-					const columnName = row.column_name;
-					FIELD_INFO[columnName] = {};
-					FIELD_INFO[columnName].tableName = row.table_name;
-					FIELD_INFO[columnName].dataType = row.data_type;
-				});
-				
-				/*if (hasSavedSession) {
-					fillFieldsFromSavedData();	
-				}*/
+	queryDB(sql)
+		.done(
+			queryResultString => {
+				const queryResult = $.parseJSON(queryResultString);
+				if (queryResult) {
+					const hasSavedSession = Object.keys(FIELD_VALUES).length;
+					queryResult.forEach( (row) => {
+						const columnName = row.column_name;
+						FIELD_INFO[columnName] = {};
+						FIELD_INFO[columnName].tableName = row.table_name;
+						FIELD_INFO[columnName].dataType = row.data_type;
+					});
+				}
 			}
-		},
-		failFilter=(xhr, status, error) => {
+		).fail(
+			(xhr, status, error) => {
 			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		}
-	);
+		});
 
 }
 
@@ -157,6 +162,8 @@ function getFieldInfo() {
 function onInputFieldChange(event) {
 
 	const $input = $(event.target);
+	if ($input.closest('.cloneable').length) return;//triggered manually and should be ignored
+
 	const $accordion = $input.closest('.accordion');
 
 	// Don't save any attachments data. window.localStorage limit for most browsers 
@@ -212,7 +219,7 @@ function validateFields($parent, focusOnField=true) {
 		.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
 		(_, el) => {
 			const $el = $(el);
-			const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable');
+			const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable, .field-container.disabled');
 			if (!$el.val() && $hiddenParent.length === 0) {
 				$el.addClass('error');
 			} else {
@@ -248,7 +255,7 @@ function goToSection(movement=1) {
 	@param movement: number of sections to jump to (positive=right or negative=left)
 	*/
 
-	const $currentSection = $('.form-section').filter('.selected');
+	const $currentSection = $('.form-section.selected');
 	const currentIndex = parseInt($currentSection.data('section-index'));
 	const nextIndex = currentIndex + movement;
 	const nextElementID = `#section-${nextIndex}`;
@@ -301,23 +308,15 @@ function goToSection(movement=1) {
 
 function setPreviousNextButtonState(nextIndex) {
 	/* 
-	Toggle the .disabled class on the next or previous button 
+	Toggle the disabled attribute on the next or previous button 
 	if the user is at the first or last section
 
 	@param nextIndex [integer]: the section index that the user is moving to
 	
 	*/
 
-	if (nextIndex === 0) {
-		$('#previous-button').addClass('disabled');
-	} else {
-		$('#previous-button').removeClass('disabled');
-	}
-	if (nextIndex === $('.form-section:not(.title-section)').length - 1) {
-		$('#next-button').addClass('disabled');
-	} else {
-		$('#next-button').removeClass('disabled');
-	}
+	$('#previous-button').prop('disabled', nextIndex === 0)
+	$('#next-button').prop('disabled', nextIndex === $('.form-section:not(.title-section)').length - 1)
 }
 
 
@@ -325,7 +324,7 @@ function onPreviousNextButtonClick(event, movement) {
 
 	event.preventDefault();//prevent form from reloading
 	const $button = $(event.target);
-	if ($button.hasClass('disabled')) return;
+	if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
 
 	if ($button.attr('id') !== 'title-section-continue-button') {
 		const $parents = $('.form-section.selected .validate-field-parent:not(.cloneable)')
@@ -339,11 +338,14 @@ function onPreviousNextButtonClick(event, movement) {
 				return true;
 			});
 		const allFieldsValid = $parents
-			.map((_, el) => {
-				return validateFields($(el))
-			}).get()
+			.map(
+				(_, el) => validateFields($(el))
+			).get()
 			.every((isValid) => isValid);
-		if (!allFieldsValid) return;
+		if (!allFieldsValid) {
+			showModal('There is at least one field on this page that is not valid or is not filled in. You must fill all required fields (has <span style="color:#b70606;">* </span> to the left of the field) before continuing to the next page. You can hover over each field for more information.', 'Invalid/incomplete fields')
+			return;
+		}
 	}
 
 	const nextIndex = goToSection(movement);
@@ -495,7 +497,7 @@ function onInitialActionChange() {
 	accordion should only be shown when both inital action fields are filled
 	*/
 	var fieldsFull;
-	$('#input-initial_human_action-5, #input-initial_bear_action-5').each((_, el) => {
+	$('#input-initial_human_action, #input-initial_bear_action').each((_, el) => {
 		fieldsFull = !!$(el).val(); //if it hasn't been filled yet it'll be '' (empty string)
 		return fieldsFull;//if false, this will break out of .each() loop
 	})
@@ -535,15 +537,18 @@ function onCoordinateFormatChange(event) {
 	$currentCollapse.collapse('show');
 }
 
+function onUnitsFieldChange(e) {
+
+	const $select = $(e.target);
+	const $target = $($select.data('calculation-target'));
+
+}
 
 function addNewCard($accordion, cardIndex=null) {
 	/* 
 	Add a new card to the accordion. There needs to be a card with the class "cloneable", 
 	which should be hidden and only used to add a new item
 	*/
-
-	
-	// Validate existing person sub-forms
 
 	const $dummyCard = $accordion.find('.card.cloneable');
 	if ($dummyCard.length === 0) {
@@ -560,11 +565,12 @@ function addNewCard($accordion, cardIndex=null) {
 	//	<element_identifier>-<section_index>-<card_index>.
 	//	This is necessary to distinguish elements from others in 
 	//	other form sections and other cards within the section
-	const sectionIndex = $accordion.closest('.form-section')
-		.data('section-index');
+	/*const sectionIndex = $accordion.closest('.form-section')
+		.data('section-index');*/
+	const tableName = $accordion.data('table-name');
 	if (!cardIndex) {
 		var cardIndex = $accordion.find('.card').length - 1;// - 1 because cloneable is 0th
-		while ($(`#card-${sectionIndex}-${cardIndex}`).length) {
+		while ($(`#card-${tableName}-${cardIndex}`).length) {
 			cardIndex++;
 		}
 	}
@@ -574,7 +580,7 @@ function addNewCard($accordion, cardIndex=null) {
 		parseInt($lastCard.attr('id').match(/\d+$/)) + 1 :
 		0;
 		*/
-	const idSuffix = `${sectionIndex}-${cardIndex}`;
+	const idSuffix = `${tableName}-${cardIndex}`;//`${sectionIndex}-${cardIndex}`;
 
 	const $newCard = $dummyCard.clone(withDataAndEvents=true)
 		.removeClass('cloneable hidden')
@@ -607,7 +613,7 @@ function addNewCard($accordion, cardIndex=null) {
 		.filter('.error')
 			.removeClass('error');
 	$newCollapse.find('.field-container .file-input-label')
-		.attr('for', `attachment-upload-${idSuffix}`);
+		.attr('for', `attachment-upload-${cardIndex}`);
 	
 	// Add to the accordion
 	$newCard.appendTo($accordion).fadeIn();
@@ -621,7 +627,7 @@ function addNewCard($accordion, cardIndex=null) {
 	// If this a a card in the interactions section (5), remove options from the 
 	//	reaction select because they get filled when the user selects a reaction_by
 	/*if ($newCollapse.attr('id').startsWith('collapse-5')) {
-		const $reactionSelect = $newCollapse.find('select.input-field').filter((_, el) => {return el.id.startsWith('input-reaction-5')})
+		const $reactionSelect = $newCollapse.find('select.input-field').filter((_, el) => {return el.id.startsWith('input-reaction')})
 		$reactionSelect.find('option:not([value=""])').remove();
 		
 	}*/
@@ -722,14 +728,21 @@ function showModal(message, title, modalType='alert', footerButtons='') {
 
 function onConfirmDeleteCardClick(cardID) {
 	
-	$('#' + cardID).fadeOut(500, function(){
-		const $card = $(this);
+	const $card = $('#' + cardID);
+
+	$card.fadeOut(500, function(){
 		const cardIndex = cardID.match(/\d+$/)[0];
 		const tableName = $card.closest('.accordion').data('table-name');
 		const $siblings = $card.siblings('.card:not(.cloneable)');
+		
 		$card.remove();
-		delete FIELD_VALUES[tableName][cardIndex];
-		$siblings.each((_, el) => {onCardLabelFieldChange($(el).find('.card-label-field').first())});
+
+		const fieldValues = FIELD_VALUES[tableName];
+		if (fieldValues) {
+			if (Object.keys(fieldValues).length >= cardIndex) delete fieldValues[cardIndex];
+		}
+
+		$siblings.each((_, card) => {onCardLabelFieldChange($(card).find('.card-label-field').first())});
 	})
 }
 
@@ -747,15 +760,18 @@ function onDeleteCardClick(event) {
 	const $card = $button.closest('.card');
 	const cardID = $card.attr('id');
 
+	const dependentInputID = $card.closest('.accordion')
+		.data('dependent-target');
+	const isLastCard = $card.siblings('.card').length === 1;
 
-	if ($card.siblings('.card').length === 1) {
+	if (isLastCard && !dependentInputID) {
 		showModal(`This is the only ${itemName} listed thus far, and you must enter at least one.`, `Invalid operation`);
 	} else {
 		// If the user confirms the delete, fade it out after .5 sec then reset the remaining card labels
-		const onConfirmClick = ``;
+		const onConfirmClick = isLastCard && dependentInputID ? `$('${dependentInputID}').val(0).change();` : `onConfirmDeleteCardClick('${cardID}');`
 		const footerButtons = `
 			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
-			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="onConfirmDeleteCardClick('${cardID}')">Yes</button>
+			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
 		`;
 		showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
 	}
@@ -855,8 +871,8 @@ function onCountryPostalCodeChange(event) {
 
 	const $el = $(event.target);
 	const $cardBody = $el.closest('.card-body');
-	const $country = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-country-0')});
-	const $zipcode = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-zip_code-0')});
+	const $country = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-country')});
+	const $zipcode = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-zip_code')});
 	const countryCode = $country.val();
 	const postalCode = $zipcode.val();
 
@@ -864,8 +880,8 @@ function onCountryPostalCodeChange(event) {
 		getCityAndState(countryCode, postalCode)
 			.then(function(jsonResponse) {
 				if (jsonResponse.city && jsonResponse.state_short) {
-					$city = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-city-0')});
-					$state = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-state-0')});
+					$city = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-city')});
+					$state = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-state')});
 					$city.val(jsonResponse.city);
 					$state.val(jsonResponse.state_short).change();
 				}
@@ -875,13 +891,90 @@ function onCountryPostalCodeChange(event) {
 }
 
 
+function configureMap() {
+	
+	var map = L.map('encounter-location-map', {
+		editable: true,
+		scrollWheelZoom: false,
+		center: [63.2, -150.7],
+		zoom: 7
+	});
+	var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+	}).addTo(map);
+
+	const deferred = $.ajax({url: 'resources/dena_bc_units.json'})
+		.done(geojson => {
+			const defaultGeojsonStyle = {
+				color: '#000',
+				opacity: 0.2,
+				fillColor: '#000',
+				fillOpacity: 0.15 
+			}
+			const hoverGeojsonStyle = {
+				color: '#000',
+				opacity: 0.4,
+				fillColor: '#000',
+				fillOpacity: 0.15 
+			}
+
+			const onMouseover = (e) => {
+				let layer = e.target;
+
+				layer.setStyle(hoverGeojsonStyle)
+
+				if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+					layer.bringToFront();
+				}
+			}
+			const onMouseout = (e) => {
+				bcUnitsLayer.resetStyle(e.target);
+			}
+			const onEachFeature = (feature, layer) => {
+				layer.on({
+					mouseover: onMouseover,
+					mouseout: onMouseout
+				})
+			}
+
+			var bcUnitsLayer; // define before calling L.geoJSON() so onMouseout event can reference
+			bcUnitsLayer = L.geoJSON(
+				geojson, 
+				{
+					style: {
+						color: '#000',
+						opacity: 0.2,
+						fillColor: '#000',
+						fillOpacity: 0.15 
+					},
+					onEachFeature: onEachFeature //add mouseover and mouseout listeners
+				}
+			).bindTooltip(
+				layer => layer.feature.properties.Unit + ': ' + layer.feature.properties.Name,
+				{
+					sticky: true
+				}
+			).addTo(map);
+
+		}).fail((xhr, error, status) => {
+			console.log('BC unit geojson read failed: ' + error);
+		})
+
+	// Make the encounter marker drag/droppable onto the map
+	$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
+	$('#encounter-location-map').droppable({drop: markerDroppedOnMap});
+
+	return map;
+}
+
+
 function fillCoordinateFields(latDDD, lonDDD) {
 	/*Convert coordinates from decimal degrees to degrees decimal 
 	minutes and degrees minutes seconds and fill in the respective fields*/
 
 	// Set ddd fields
-	const $latDDDField = $('#input-lat_dec_deg-3').val(latDDD);
-	const $lonDDDField = $('#input-lon_dec_deg-3').val(lonDDD);
+	const $latDDDField = $('#input-lat_dec_deg').val(latDDD);
+	const $lonDDDField = $('#input-lon_dec_deg').val(lonDDD);
 
 	// Fill global FIELD_VALUES in case this function was called by dragging 
 	//	and dropping the marker, which won't trigger the onInputFieldChange() event
@@ -889,7 +982,7 @@ function fillCoordinateFields(latDDD, lonDDD) {
 	FIELD_VALUES[$lonDDDField.attr('name')] = lonDDD;
 
 	// Set ddm fields
-	const minuteStep = $('#input-lat_dec_min-3').attr('step');
+	const minuteStep = $('#input-lat_dec_min').attr('step');
 	const minuteRounder = Math.round(1 / (minuteStep ? minuteStep : 0.001));
 	const latSign = latDDD / Math.abs(latDDD)
 	const latDegrees = Math.floor(Math.abs(latDDD)) * latSign
@@ -897,24 +990,27 @@ function fillCoordinateFields(latDDD, lonDDD) {
 	const lonSign = lonDDD/Math.abs(lonDDD)
 	const lonDegrees = Math.floor(Math.abs(lonDDD)) * lonSign;
 	const lonDecimalMinutes = Math.round((Math.abs(lonDDD) - Math.abs(lonDegrees)) * 60 * minuteRounder) / minuteRounder;
-	$('#input-lat_deg_ddm-3').val(latDegrees);
-	$('#input-lat_dec_min-3').val(latDecimalMinutes);
-	$('#input-lon_deg_ddm-3').val(lonDegrees);
-	$('#input-lon_dec_min-3').val(lonDecimalMinutes);
+	$('#input-lat_deg_ddm').val(latDegrees);
+	$('#input-lat_dec_min').val(latDecimalMinutes);
+	$('#input-lon_deg_ddm').val(lonDegrees);
+	$('#input-lon_dec_min').val(lonDecimalMinutes);
 
 	// Set dms fields
-	const secondStep = $('#input-lat_dec_sec-3').attr('step');
+	const secondStep = $('#input-lat_dec_sec').attr('step');
 	const secondRounder = Math.round(1 / (secondStep ? secondStep : 0.1));
 	const latMinutes = Math.floor(latDecimalMinutes);
 	const latDecimalSeconds = Math.round((latDecimalMinutes - latMinutes) * 60 * secondRounder) / secondRounder;
 	const lonMinutes = Math.floor(lonDecimalMinutes);
 	const lonDecimalSeconds = Math.round((lonDecimalMinutes - lonMinutes) * 60 * secondRounder) / secondRounder;
-	$('#input-lat_deg_dms-3').val(latDegrees);
-	$('#input-lat_min_dms-3').val(latMinutes);
-	$('#input-lat_dec_sec-3').val(latDecimalSeconds);
-	$('#input-lon_deg_dms-3').val(lonDegrees);
-	$('#input-lon_min_dms-3').val(lonMinutes);
-	$('#input-lon_dec_sec-3').val(lonDecimalSeconds);
+	$('#input-lat_deg_dms').val(latDegrees);
+	$('#input-lat_min_dms').val(latMinutes);
+	$('#input-lat_dec_sec').val(latDecimalSeconds);
+	$('#input-lon_deg_dms').val(lonDegrees);
+	$('#input-lon_min_dms').val(lonMinutes);
+	$('#input-lon_dec_sec').val(lonDecimalSeconds);
+
+	// Remove error class from coordinate fields
+	$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').removeClass('error');
 
 }
 
@@ -936,7 +1032,7 @@ function markerIsOnMap() {
 
 function getRoundedDDD(lat, lon) {
 
-	const step = $('#input-lat_dec_deg-3').attr('step');
+	const step = $('#input-lat_dec_deg').attr('step');
 	const rounder = Math.round(1 / (step ? step : 0.0001));
 	const latDDD = Math.round(lat * rounder) / rounder;
 	const lonDDD = Math.round(lon * rounder) / rounder;
@@ -1007,6 +1103,9 @@ function markerDroppedOnMap(event) {
 	placeEncounterMarker(latlng);
 
 	removeDraggableMarker();
+
+	$('#input-location_accuracy').val(3).change();//== < 5km
+
 }
 
 
@@ -1016,6 +1115,8 @@ function setCoordinatesFromMarker() {
 	const latlng = ENCOUNTER_MARKER.getLatLng();
 	var [latDDD, lonDDD] = getRoundedDDD(latlng.lat, latlng.lng);
 	fillCoordinateFields(latDDD, lonDDD);
+
+	$('#input-location_accuracy').val(3).change();//== < 5km
 }
 
 
@@ -1031,14 +1132,14 @@ function coordinatesToDDD(latDegrees=0, lonDegrees=0, latMinutes=0, lonMinutes=0
 }
 
 
-function confirmMoveEncounterMarker(lat, lon) {
+function confirmMoveEncounterMarker(lat, lon, confirmJSCodeString='') {
 	/* 
 	If the encounter Marker is already on the map, ask the user
 	(with a modal dialog) if they want to move it to [lat, lon]. 
 	Otherwise, just place it at [lat, lon].
 	*/ 
 	
-	const onConfirmClick = `placeEncounterMarker({lat: ${lat}, lng: ${lon}})`;
+	const onConfirmClick = `placeEncounterMarker({lat: ${lat}, lng: ${lon}});${confirmJSCodeString}`;
 	const footerButtons = `
 		<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="setCoordinatesFromMarker()">No</button>
 		<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
@@ -1051,8 +1152,8 @@ function confirmMoveEncounterMarker(lat, lon) {
 function onDDDFieldChange() {
 	/*Event handler for when a decimal degree field is changed*/
 
-	const latDDD = $('#input-lat_dec_deg-3').val();
-	const lonDDD = $('#input-lon_dec_deg-3').val();
+	const latDDD = $('#input-lat_dec_deg').val();
+	const lonDDD = $('#input-lon_dec_deg').val();
 
 	if (latDDD && lonDDD) {
 		if (markerIsOnMap()) { 
@@ -1067,10 +1168,10 @@ function onDDDFieldChange() {
 function onDMMFieldChange() {
 	/*Event handler for when a degree decimal minute field is changed*/
 
-	const latDegrees = $('#input-lat_deg_ddm-3').val();
-	const lonDegrees = $('#input-lon_deg_ddm-3').val();
-	const latDecimalMinutes = $('#input-lat_dec_min-3').val();
-	const lonDecimalMinutes = $('#input-lon_dec_min-3').val();
+	const latDegrees = $('#input-lat_deg_ddm').val();
+	const lonDegrees = $('#input-lon_deg_ddm').val();
+	const latDecimalMinutes = $('#input-lat_dec_min').val();
+	const lonDecimalMinutes = $('#input-lon_dec_min').val();
 
 	if (latDegrees && lonDegrees && latDecimalMinutes && lonDecimalMinutes) {
 		var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latDecimalMinutes, lonDecimalMinutes);
@@ -1087,12 +1188,12 @@ function onDMMFieldChange() {
 function onDMSFieldChange() {
 	/*Event handler for when a degree decimal minute field is changed*/
 
-	const latDegrees = $('#input-lat_deg_dms-3').val();
-	const lonDegrees = $('#input-lon_deg_dms-3').val();
-	const latMinutes = $('#input-lat_min_dms-3').val();
-	const lonMinutes = $('#input-lon_min_dms-3').val();
-	const latDecimalSeconds = $('#input-lat_dec_sec-3').val();
-	const lonDecimalSeconds = $('#input-lon_dec_sec-3').val();
+	const latDegrees = $('#input-lat_deg_dms').val();
+	const lonDegrees = $('#input-lon_deg_dms').val();
+	const latMinutes = $('#input-lat_min_dms').val();
+	const lonMinutes = $('#input-lon_min_dms').val();
+	const latDecimalSeconds = $('#input-lat_dec_sec').val();
+	const lonDecimalSeconds = $('#input-lon_dec_sec').val();
 
 	if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
 		var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
@@ -1103,6 +1204,18 @@ function onDMSFieldChange() {
 		}
 	}
 
+}
+
+
+function confirmSetMarkerFromLocationSelect() {
+	/*
+	Helper function to make sure appropriate actions are triggered when
+	coordinates are set from the user selecting a location
+	*/
+
+	// Set datum code to WGS84 since the coordinates stored in the DB are WGS84
+	$('#input-datum').val(1).change(); //WGS84
+	$('#input-location_accuracy').val(4).change(); // == < 20km
 }
 
 
@@ -1119,24 +1232,25 @@ function onLocationSelectChange(e) {
 	const el = e.target;
 	if (!isInViewport(el)) return;
 
-	const latDDD = $('#input-lat_dec_deg-3').val();
-	const lonDDD = $('#input-lon_dec_deg-3').val();
+	const latDDD = $('#input-lat_dec_deg').val();
+	const lonDDD = $('#input-lon_dec_deg').val();
 
 	const code = el.value;
-	const coordinates = $('#input-location_type-3').val() === 'Place name' ? 
+	const coordinates = $('#input-location_type').val() === 'Place name' ? 
 		PLACE_NAME_COORDINATES :
 		BACKCOUNTRY_UNIT_COORDINATES;
 
 	if (code in coordinates) {
 		const latlon = coordinates[code];
 		if (latDDD && lonDDD) {
-			confirmMoveEncounterMarker(latlon.lat, latlon.lon);
+			const onConfirm = 'confirmSetMarkerFromLocationSelect();';
+			confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
 		} else {
 			placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
+			confirmSetMarkerFromLocationSelect();
 		}
 
-		// Set datum code to WGS84 since the coordinates are
-		$('#input-datum-3').val(1); //WGS84
+
 	}
 }
 
@@ -1154,7 +1268,7 @@ function updateReactionsSelect($actionBySelect) {
 
 	const actionBy = $actionBySelect.val();
 	const cardIndex = $actionBySelect.attr('id').match(/\d+$/);
-	const reactionSelectID = `input-reaction-5-${cardIndex}`;
+	const reactionSelectID = `input-reaction-${cardIndex}`;
 	const $reactionSelect = $('#' + reactionSelectID).empty();
 
 
@@ -1197,7 +1311,7 @@ function updateAttachmentAcceptString(fileTypeSelectID) {
 	
 	const $fileTypeSelect = $('#' + fileTypeSelectID);
 	const extensions = ACCEPTED_ATTACHMENT_EXT[$fileTypeSelect.val()];
-	const suffix = $fileTypeSelect.attr('id').match(/\d+\-\d+$/);
+	const suffix = $fileTypeSelect.attr('id').match(/\d+$/);
 	$(`#attachment-upload-${suffix}`).attr('accept', extensions);
 
 	$fileTypeSelect.data('previous-value', $fileTypeSelect.val());
@@ -1423,59 +1537,59 @@ function initSpeechRecognition() {
 	}
 	
 	recognition = new SpeechRecognition();
-	recognition.continuous = true;
+	recognition.continuous = true; //recognizes until explicitly stopped
 	recognition.interimResults = true;
 	
-	recognition.onresult = function(event) {
-		if (typeof(event.results) == 'undefined') {
+	recognition.onresult = function(e) {
+		if (typeof(e.results) == 'undefined') {
 			recognition.stop();
 			return;
 		}
 
 		var interimTranscript = '';
 		var finalTranscript = $('#recorded-text-final').text() || '';
-		results = event.results;
-		for (var i = 0; i < results.length; i++) {
-			if (event.results[i].isFinal) {
-				finalTranscript += event.results[i][0].transcript;
+		for (let result of e.results) {
+			if (result.isFinal) {
+				finalTranscript += result[0].transcript;
 			} else {
-				interimTranscript += event.results[i][0].transcript;
+				interimTranscript += result[0].transcript;
+				$('#recorded-text-interim').text(interimTranscript);
 			}
 		}
-		$('#input-narrative-9').val(finalTranscript).change();
+		$('#input-narrative').val(finalTranscript).change();
 		$('#recorded-text-final').text(finalTranscript);
-		$('#recorded-text-interim').text(interimTranscript);
+		$('#recorded-text-interim').text('');
 		
 	}
 
 	const $micButton = $('#record-narrative-button');
 	const $micIcon = $micButton.children('i');
 	const $recordingIndicator = $micButton.children('.record-on-indicator');
-	recognition.onstart = function(event) {
+	recognition.onstart = function(e) {
 		$micIcon.addClass('blink');
 		$recordingIndicator.addClass('recording');
 		console.log('audio started');
 	}
 
-	recognition.onerror = function(event) {
-		if (event.error === 'not-allowed') {
+	recognition.onerror = function(e) {
+		if (e.error === 'not-allowed') {
 			showModal('Speech recognition was not given permission to begin. Please adjust your browser settings.', 'Unable to record speech');
-		} else if (event.error == 'audio-capture') {
+		} else if (e.error == 'audio-capture') {
 			showModal('No microphone was found. Make sure that you have a microphone installed and that your browser settings allow access to it.', 'No microphone found');
 		} else {
 			const $statusMessage = $('#recording-status-message');
-			$statusMessage.text(`...${event.error.message}...`);
+			$statusMessage.text(`...${e.error.message}...`);
 			setTimeout(5000, () => {$statusMessage.fadeOut(500, (_, el) => {$(el).text('').fadeIn(500)})});
 		}
 	}
 
-	recognition.onend = function(event) {
+	recognition.onend = function(e) {
 		$micIcon.removeClass('blink');
 		$recordingIndicator.removeClass('recording');
 		console.log('audio ended');
 	}
 
-	recognition.soundstart = function(event) {
+	recognition.soundstart = function(e) {
 		console.log('soundstart')
 	}
 
@@ -1483,9 +1597,9 @@ function initSpeechRecognition() {
 }
 
 
-function onMicIconClick(event){
+function onMicIconClick(e){
 	//var recognition = initDictation();
-	event.preventDefault();
+	e.preventDefault();
 
 	if (! recognition) {
 		console.log("speech recognition API not available")
@@ -1512,6 +1626,78 @@ function saveAttachment(fileInput) {
 		processData: false,
 		data: formData
 	});
+}
+
+
+function onDENABearFieldChange(e) {
+	
+	e.preventDefault();
+
+	var values = {};
+	for (const bearField of $('.dena-bear-field')) {
+		// If the field hasn't been filled, exit
+		if (!bearField.value) return;
+		values[bearField.name] = bearField.value;
+	}
+
+	const bearsAgeSexCodes = {
+		'1':  [	//single bear of unknown age/sex
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ], 			
+		'2':  [ // bear with 1 cub of unknown age
+				{bear_age_code: 4, bear_sex_code: 1}, 
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ], 			
+		'3':  [ // bear with 2 cubs of unknown age
+				{bear_age_code: 4, bear_sex_code: 1}, 
+				{bear_age_code: -1, bear_sex_code: -1}, 
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ], 		
+		'4':  [ // bear with 3 cubs of unknown age
+				{bear_age_code: 4, bear_sex_code: 1},  
+				{bear_age_code: -1, bear_sex_code: -1}, 
+				{bear_age_code: -1, bear_sex_code: -1}, 
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ], 	
+		'5':  [ // 2 adults
+				{bear_age_code: 4, bear_sex_code: 1}, 
+				{bear_age_code: 4, bear_sex_code: 1}
+			  ],			
+		'-1': [ // unknown
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ],				
+		'-2': [ // other (so unknown)
+				{bear_age_code: -1, bear_sex_code: -1}
+			  ]				
+	};
+	const ageAndSex = bearsAgeSexCodes[values.bear_cohort_code];
+	
+	const $accordion = $('#bear-info-accordion');
+	
+	// Clear cards
+	$accordion.find('.card:not(.cloneable)').remove();
+
+	// For each individual bear, add a card
+	FIELD_VALUES.bears = [];
+
+	for (const i in ageAndSex) {
+		const $card = addNewCard($accordion);
+		const $inputs = $card.find('.input-field');
+		const bear = {...ageAndSex[i], ...values};
+		bear.bear_number = parseInt(i) + 1;
+		//values.bear_age_code = bear.age;
+		//values.bear_sex_code = bear.sex;
+		// Fill values for this card
+		for (name in bear) {
+			$inputs.filter((_, el) => {return el.name == name})
+				.val(bear[name])
+				.change();
+		}
+
+		FIELD_VALUES.bears[i] = {...bear};
+	
+	}
+
 }
 
 
@@ -1632,12 +1818,12 @@ function onSubmitButtonClick(event) {
 								datetime_last_changed: timestamp
 							};
 
-							for (const inputField of $card.find('.input-field')) {
+							for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
 								const fieldName = inputField.name;
 								// Get input values for all input fields except file input (which has 
 								//	the name "uploadedFile" used by php script)
 								if (fieldName in FIELD_INFO) {
-									fileInfo[fieldName] = inputField.value;
+									fileInfo[fieldName] = inputField.value; 
 								}
 							}
 							uploadedFiles[Object.keys(uploadedFiles).length] = fileInfo;
@@ -1676,17 +1862,19 @@ function onSubmitButtonClick(event) {
 
 			// Handle all fields in tables with 1:1 relationship to 
 			var unorderedParameters = {};
-			for (const input of $('.input-field')) {
+			for (const input of $('.input-field:not(.ignore-on-insert)')) {
 				
 				const fieldName = input.name;
 
-				//this field isn't stored in the DB or fieldName is actually a table name 
-				//	for a table with a 1:many relationship to encounters 
-				if (!(fieldName in FIELD_INFO && fieldName in FIELD_VALUES)) continue;
+				//if this field isn't stored in the DB or then skip it 
+				if (!(fieldName in FIELD_INFO)) continue;
 
 				const fieldInfo = FIELD_INFO[fieldName];
-
 				const tableName = fieldInfo.tableName;
+
+				//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
+				if ((!(fieldName in FIELD_VALUES) || typeof(FIELD_VALUES[tableName]) === 'object')) continue;
+
 				if (!(tableName in unorderedParameters)) {
 					unorderedParameters[tableName] = {}
 				}
@@ -1711,8 +1899,11 @@ function onSubmitButtonClick(event) {
 
 			// Handle accordions with 1-to-many relationships to encounters
 			//	Select only accordions that are visible (all accordions that aren't 
-			//	collapsed .collapse-s).
-			for (const el of $('.accordion.form-item-list:not(.collapse:not(.show))')) {
+			//	collapsed .collapse-s). Because this has to be compatible with Denali's
+			//	paper form for the time being, also include hidden accordions that are 
+			//	implicitly filled by fields like bear info
+			const $accordions = $('.accordion.form-item-list:not(.collapse:not(.show))')//includes .accordion.hidden
+			for (const el of $accordions) {
 				const $accordion = $(el);
 				const tableName = $accordion.data('table-name');
 				const fieldValueObjects = tableName === 'attachments' ?
@@ -1772,9 +1963,9 @@ function onSubmitButtonClick(event) {
 				if (queryResultString !== 'success') {
 					showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 					return;
-				}
+				} 
 
-				$('#section-10 .submition-confirmation-container')
+				$('.submition-confirmation-container')
 					.removeClass('hidden')
 					.siblings()
 						.addClass('hidden');
@@ -1782,6 +1973,9 @@ function onSubmitButtonClick(event) {
 				// Clear localStorage
 				//FIELD_VALUES = {};
 				//window.localStorage.clear();
+
+				// Second email notification
+				
 			}).fail((xhr, status, error) => {
 				showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 			})

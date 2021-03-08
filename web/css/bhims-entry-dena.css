@@ -1,0 +1,32 @@
+#main-form-container {
+	height: 100%;
+	max-height: 100%;
+	border-radius: unset;
+	background-color: rgba(230, 230, 230);
+    background-image: url(../imgs/bhims_index_bg_blur_1200.jpg);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+    background-size: cover;
+}
+
+.form-section {
+	height: unset;
+	overflow-y: auto;
+}
+
+.section-body {
+	height: unset;
+}
+
+.section-body-content {
+	height: unset;
+}
+
+
+/*.indicator-dot {
+	background: hsl(89deg 28% 86%);
+}
+.indicator-dot.selected {
+	background: hsl(89deg 27% 63%);
+}*/

@@ -2,6 +2,7 @@
 html, body {
 	height: 100%;
 	overflow: hidden;
+	font-family: 'Barlow', sans-serif;
 }
 
 body { 
@@ -116,7 +117,7 @@ body {
 	width: 100%;
 	height: 100%;
 	margin-right: 50px;
-	border-radius: 10px;
+	/*border-radius: 10px;*/
 	position: relative;
 	display: flex;
 	justify-content: center;
@@ -271,19 +272,26 @@ body {
 .input-field:not(textarea):hover {
 	/*background-color: hsla(1, 0%, 100%, 0.3);*/
 	border-bottom: 2px solid rgba(0,0,0,0.5);
-	color: rgba(0,0,0,0.6);
+	/*color: rgba(0,0,0,0.6);*/
 }
 
-.input-field:not(textarea):hover::placeholder {
+/*.input-field:not(textarea):hover::placeholder {
   color: rgba(0,0,0,0.5);
-}
+}*/
 
 .input-field:not(textarea):focus {
 	/*background-color: hsla(1, 0%, 100%, 0.7);
 	box-shadow: inset 0px 1px 6px 0px hsla(1, 0%, 100%, 0.3);*/
-	border-bottom: 2px solid rgba(0,0,0,0.5) !important;
+	border-bottom: 2px solid rgba(0,0,0,0.7) !important;
 	color: black;
+	/*font-size: 15px;*/
 }
+/*input.input-field:focus {
+	font-size: 15px;
+}
+select.input-field:focus::placeholder {
+	font-size: 15px;
+}*/
 
 .input-field.error {
 	border: 2px solid rgba(255, 0, 0, 0.3);
@@ -291,7 +299,8 @@ body {
 }
 
 .input-field.disabled,
-.field-container.disabled {
+.field-container.disabled,
+.field-container.collapse.show.disabled {
 	/*utility class to turn off fields that aren't relevant*/
 	display: none;
 }
@@ -303,6 +312,7 @@ body {
 .field-container {
 	display: flex;
 	justify-content: space-between;
+	align-items: flex-start;
 	width: 100%;
 	flex-wrap: wrap;
 	position: relative;
@@ -315,7 +325,7 @@ body {
 
 .flex-field-container {
     max-width: calc(100% - 90px);
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     display: flex;
     flex-wrap: wrap;
 }
@@ -363,6 +373,7 @@ body {
 	width: auto;
 	margin-right: 20px;
 	line-height: 30px;
+	padding-left: 0;
 }
 
 .input-field:placeholder-shown ~ .field-sub-label, 
@@ -445,7 +456,7 @@ input.input-with-unit-symbol:invalid ~ .unit-symbol {
 	width: 100%;
 	display: flex;
 	justify-content: flex-end;
-	padding: 15px 30px;
+	padding: 25px 30px;
 }
 .add-item-container.collapse {
 	display: none;
@@ -624,7 +635,7 @@ textarea.narrative-field {
 #recorded-text-final {
 	color: black;
 }
-#recored-text-interim {
+#recorded-text-interim {
 	color: rgba(127, 127, 127);
 }
 #recorded-text-final:focus{
@@ -684,6 +695,12 @@ textarea.narrative-field {
 	transition: all 0.1s linear;
 }
 
+.submit-section, .submit-section .section-body-content {
+	height: 100%;
+}
+.submit-section > .section-body {
+	height: calc(100% - 10px);
+}
 .submit-section .section-body-content {
     align-items: center;
     align-content: center;

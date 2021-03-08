@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 	<meta charset='utf-8'>
 	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
@@ -11,7 +11,7 @@
 	
 	<!-- bootstrap -->
 	<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css"/>
-	<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
 
 	<!-- font awesome --> 
 	<link href="packages/fontawesome/css/all.min.css" rel="stylesheet">
@@ -197,7 +197,7 @@
 										<label class="field-label" for="input-human_group_type-1">Type of group</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_human_group_type" placeholder='Description of the "Other" group' id="input-other_human_group_type-1" data-dependent-target="#input-human_group_type-1" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_human_group_type" placeholder='Description of the "Other" group' id="input-other_human_group_type-1" data-dependent-target="#input-human_group_type-1" data-dependent-value="-2" required>
 										<label class="field-label" for="input-other_human_group_type-1">Description of the "Other" group</label>
 									</div>
 								</div>
@@ -209,7 +209,7 @@
 										<label class="field-label" for="input-observation_type-1">Observation type</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_observation_type" placeholder='Description of the "Other" observation type' id="input-other_observation_type-1" data-dependent-target="#input-observation_type-1" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_observation_type" placeholder='Description of the "Other" observation type' id="input-other_observation_type-1" data-dependent-target="#input-observation_type-1" data-dependent-value="-2" required>
 										<label class="field-label" for="input-other_observation_type-1">Description of the "Other" observation type</label>
 									</div>
 								</div>
@@ -235,7 +235,7 @@
 										<label class="field-label" for="input-general_human_activity-1">General group activity</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_general_human_activity" placeholder='Description of the "Other" activity' id="input-other_general_human_activity-1" data-dependent-target="#input-general_human_activity-1" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_general_human_activity" placeholder='Description of the "Other" activity' id="input-other_general_human_activity-1" data-dependent-target="#input-general_human_activity-1" data-dependent-value="-2" required>
 										<label class="field-label" for="input-other_general_human_activity-1">Description of the "Other" activity</label>
 									</div>
 								</div>
@@ -254,7 +254,7 @@
 										<label class="field-label" for="input-safety_info_source-1">Safety information source</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_safety_info_source" placeholder='Description of the "Other" information source' id="input-other_safety_info_source-1" data-dependent-target="#input-safety_info_source-1" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_safety_info_source" placeholder='Description of the "Other" information source' id="input-other_safety_info_source-1" data-dependent-target="#input-safety_info_source-1" data-dependent-value="-2" required>
 										<label class="field-label" for="input-other_safety_info_source-1">Description of the "Other" safety information source</label>
 									</div>
 								</div>
@@ -312,7 +312,7 @@
 										<div class="field-container small-field">
 											<input class="input-field centered-text" type="time" name="start_time" placeholder="Start time of the encounter" id="input-start_time-2" required>
 											<span class="required-indicator">*</span>
-											<label class="field-label" for="input-start_date-2">Time the encounter started</label>
+											<label class="field-label" for="input-start_time-2">Time the encounter started</label>
 										</div>
 									</div>
 									<div class="field-container small-field">
@@ -382,12 +382,12 @@
 								<!-- food present -->
 								<div class="field-container">
 									<div class="field-container small-field">
-										<select class="input-field default" type="text" name="food_present_code" placeholder="Was food present?" id="input-food_present_code-2" required></select>
+										<select class="input-field default" type="text" name="food_present_code" placeholder="Was human food present?" id="input-food_present_code-2" required></select>
 										<span class="required-indicator">*</span>
-										<label class="field-label" for="input-safety_info_source-2">Was food present?</label>
+										<label class="field-label" for="input-safety_info_source-2">Was human food present during the encounter?</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_food_present" placeholder='Description of the "Other" food present' id="input-other_food_present-2" data-dependent-target="#input-food_present_code-2" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_food_present" placeholder='Description of the "Other" food present' id="input-other_food_present-2" data-dependent-target="#input-food_present_code-2" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_food_present-2">Description of the "Other" food present</label>
 									</div>
@@ -406,7 +406,7 @@
 										<label class="field-label" for="input-consumed_food_description-2">Description of the consumed food</label>
 									</div>
 								</div>
-
+								
 								<!-- bear charged -->
 								<div class="field-container">
 									<div class="field-container small-field">
@@ -414,23 +414,25 @@
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-bear_charged-2">Did the bear charge?</label>
 									</div>
-									<div class="collapse field-container small-field">
-										<input class="input-field default" type="number" min=1 name="charge_count" placeholder="How many times did the bear charge?" id="input-charge_count-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1">
-										<label class="field-label" for="input-charge_count-2">How many times did the bear charge?</label>
-									</div>
 								</div>
 								<!-- furtherst charge distance -->
 								<div class="collapse field-container">
-									<div class="field-container flex-field-container">
-										<input class="input-field text-right-when-valid" type="number" name="greatest_charge_distance_m" placeholder="What was the farthest distance the bear charged from?" id="input-greatest_charge_distance_m-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1" required>
-										<span class="required-indicator">*</span>
-										<label class="field-label" for="input-greatest_charge_distance_m-2">What was the farthest distance the bear charged from?</label>
+									<div class="field-container small-field">
+										<div class="field-container flex-field-container">
+											<input class="input-field text-right-when-valid" type="number" name="greatest_charge_distance_m" placeholder="Greatest distance the bear charged from" id="input-greatest_charge_distance_m-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1" required>
+											<span class="required-indicator">*</span>
+											<label class="field-label" for="input-greatest_charge_distance_m-2">Greatest distance the bear charged from</label>
+										</div>
+										<div class="units-field-container">
+											<select class="input-field centered-text" id="input-closest_distance_units-2" value="ft" required>
+												<option value="ft">feet</option>
+												<option values="m">meters</option>
+											</select>
+										</div>
 									</div>
-									<div class="units-field-container">
-										<select class="input-field centered-text" id="input-closest_distance_units-2" value="ft" required>
-											<option value="ft">feet</option>
-											<option values="m">meters</option>
-										</select>
+									<div class="collapse field-container small-field">
+										<input class="input-field default" type="number" min=1 name="charge_count" placeholder="How many times did the bear charge?" id="input-charge_count-2" data-dependent-target="#input-bear_charged-2" data-dependent-value="1">
+										<label class="field-label" for="input-charge_count-2">How many times did the bear charge?</label>
 									</div>
 								</div>
 
@@ -442,7 +444,7 @@
 										<label class="field-label" for="input-reported_probable_cause-2">What do you think was the probably cause for the encounter?</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_reported_probable_cause" placeholder='Description of the "Other" probable cause' id="input-other_reported_probable_cause-2" data-dependent-value="OTH" data-dependent-target="#input-reported_probable_cause-2" required>
+										<input class="input-field" type="text" name="other_reported_probable_cause" placeholder='Description of the "Other" probable cause' id="input-other_reported_probable_cause-2" data-dependent-value="-2" data-dependent-target="#input-reported_probable_cause-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_reported_probable_cause-2">Description of the "Other" probable cause</label>
 									</div>
@@ -620,7 +622,7 @@
 										<label class="field-label" for="input-relative_location-3">Relative location of the bear</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_relative_location" placeholder='Description of the "Other" relative location' id="input-other_relative_location-3" data-dependent-target="#input-relative_location-3" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_relative_location" placeholder='Description of the "Other" relative location' id="input-other_relative_location-3" data-dependent-target="#input-relative_location-3" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_relative_location-3">Description of the "Other" relative location</label>
 									</div>
@@ -634,7 +636,7 @@
 										<label class="field-label" for="input-habitat_type-3">Habitat type</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_habitat_type" placeholder='Description of the "Other" habitat type' id="input-other_habitat_type-2" data-dependent-target="#input-habitat_type-3" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_habitat_type" placeholder='Description of the "Other" habitat type' id="input-other_habitat_type-2" data-dependent-target="#input-habitat_type-3" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_habitat_type-3">Description of the "Other" habitat type</label>
 									</div>
@@ -655,7 +657,7 @@
 										<label class="field-label" for="input-visibility-3">Visibility description</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_visibility" placeholder='Description of the "Other" visibility' id="input-other_visibility-3" data-dependent-target="#input-visibility-3" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_visibility" placeholder='Description of the "Other" visibility' id="input-other_visibility-3" data-dependent-target="#input-visibility-3" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_visibility-3">Description of the "Other" visibility</label>
 									</div>
@@ -702,7 +704,7 @@
 										<label class="field-label" for="input-bear_cohort-4">Bear group type</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_bear_cohort" placeholder='Description of the "Other" bear group type' id="input-other_bear_cohort-4" data-dependent-target="#input-bear_cohort-4" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_bear_cohort" placeholder='Description of the "Other" bear group type' id="input-other_bear_cohort-4" data-dependent-target="#input-bear_cohort-4" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_bear_cohort-3">Description of the "Other" bear group type</label>
 									</div>
@@ -736,7 +738,7 @@
 													<div class="field-container small-field">
 														<select class="input-field card-label-field default" name="bear_sex_code" placeholder="Bear sex" id="input-bear_sex-4" data-card-label-index="1" data-lookup-table="sex_codes" required></select>
 														<span class="required-indicator">*</span>
-														<label class="field-label" for="input-bear_sex-4">Last name</label>
+														<label class="field-label" for="input-bear_sex-4">Bear sex</label>
 													</div>
 												</div>
 												
@@ -812,7 +814,7 @@
 										<label class="field-label" for="input-initial_human_action-5">What were you doing before you noticed the bear?</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_initial_human_action" placeholder='Description of your "Other" initial action' id="input-other_initial_human_action-5" data-dependent-target="#input-initial_human_action-5" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_initial_human_action" placeholder='Description of your "Other" initial action' id="input-other_initial_human_action-5" data-dependent-target="#input-initial_human_action-5" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_initial_human_action-5">Description of your "Other" initial action</label>
 									</div>
@@ -825,7 +827,7 @@
 										<label class="field-label" for="input-initial_human_action-5">What was the bear primarily doing when you first noticed it?</label>
 									</div>
 									<div class="collapse field-container small-field">
-										<input class="input-field" type="text" name="other_initial_bear_action" placeholder="Description of the bear's &quot;Other&quot; initial action" id="input-other_initial_bear_action-5" data-dependent-target="#input-initial_bear_action-5" data-dependent-value="OTH" required>
+										<input class="input-field" type="text" name="other_initial_bear_action" placeholder="Description of the bear's &quot;Other&quot; initial action" id="input-other_initial_bear_action-5" data-dependent-target="#input-initial_bear_action-5" data-dependent-value="-2" required>
 										<span class="required-indicator">*</span>
 										<label class="field-label" for="input-other_initial_bear_action-5">Description of the bear's "Other" initial action</label>
 									</div>
@@ -900,7 +902,7 @@
 									<div class="field-container small-field">
 										<select class="input-field default" name="was_property_damaged" placeholder="Was any property damaged?" id="input-was_property_damaged-6" data-lookup-table="boolean_response_codes" required></select>
 										<span class="required-indicator">*</span>
-										<label class="field-label" for="input-initial_human_action-6">Was any property damaged?</label>
+										<label class="field-label" for="input-initial_human_action-6">Was any personal property damaged?</label>
 									</div>
 								</div>
 
@@ -1038,7 +1040,7 @@
 														<label class="field-label" for="input-deterrent_type-7">What deterrent was used?</label>
 													</div>
 													<div class="field-container small-field collapse">
-														<input class="input-field" type="text" name="other_deterrent_type" placeholder="Description of the &quot;Other&quot; deterrent type" id="input-other_deterrent_type-7" data-dependent-target="#input-deterrent_type-7" data-dependent-value="OTH" required>
+														<input class="input-field" type="text" name="other_deterrent_type" placeholder="Description of the &quot;Other&quot; deterrent type" id="input-other_deterrent_type-7" data-dependent-target="#input-deterrent_type-7" data-dependent-value="-2" required>
 														<span class="required-indicator">*</span>
 														<label class="field-label" for="input-other_deterrent_type-7">Description of the "Other" deterrent type</label>
 													</div>
@@ -1115,7 +1117,7 @@
 														<label class="field-label" for="input-structure_type-8">What kind of structure was involved?</label>
 													</div>
 													<div class="field-container small-field collapse">
-														<input class="input-field" type="text" name="other_structure_type" placeholder="Description of the &quot;Other&quot; structure type" id="input-other_structure_type-8" data-dependent-target="#input-structure_type-8" data-dependent-value="OTH" required>
+														<input class="input-field" type="text" name="other_structure_type" placeholder="Description of the &quot;Other&quot; structure type" id="input-other_structure_type-8" data-dependent-target="#input-structure_type-8" data-dependent-value="-2" required>
 														<span class="required-indicator">*</span>
 														<label class="field-label" for="input-other_structure_type-8">Description of the "Other" structure type</label>
 													</div>
@@ -1155,7 +1157,7 @@
 					<!--########################## section-9 ############################-->
 					<div class="form-section" id="section-9" data-section-index="9" data-section-name="narrative">
 						
-						<h4 class="section-title">Narrative</h4>
+						<h4 class="section-title">Description of the encounter</h4>
 						<div class="section-body justify-start">
 							<div class="section-body-content validate-field-parent">
 								<!--<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
@@ -1225,7 +1227,7 @@
 																	<div class="attachment-progress-indicator"></div>
 																</div>
 															</div>
-															<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)">
+															<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
 														</div>
 														<div class="attachment-file-input-container">
 															<label class="filename-label"></label>
@@ -1512,6 +1514,9 @@
 			// When an input changes, save the result to the FIELD_VALUES global object so data are persistent
 			$('.input-field').change(onInputFieldChange);
 
+			//When a field with units changes, re-calculate
+			$('.units-field').change(onUnitsFieldChange);
+
 			// When a card is clicked, close any open cards in the same accordion
 			$('.collapsed').click(function() {
 				const $accordion = $(this).closest('.accordion');
@@ -1535,7 +1540,7 @@
 			$('.input-field.card-label-field').change(function() {onCardLabelFieldChange($(this))});
 
 			// When the user types anything in a field, remove the .error class (if it was assigned)
-			$('.input-field').keyup(onInputFieldKeyUp);
+			$('.input-field').on('keyup change', onInputFieldKeyUp);
 
 			// Set up coordinate fields to update eachother and the map
 			$('.coordinates-ddd').change(onDDDFieldChange);
@@ -1550,8 +1555,8 @@
 				center: [63.2, -150.7],
 				zoom: 7
 			});
-			var tilelayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-				attribution: `Tiles &copy; Esri &mdash; Source: Esri, DeLorme, ${new Date().getFullYear()}`
+			var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+				attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
 			}).addTo(ENCOUNTER_MAP);
 			// Make the encounter marker drag/droppable onto the map
 			$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
@@ -1572,10 +1577,16 @@
 					.removeClass('hidden');
 			}
 
-			// When the recorded text changes, set the input val
+			// When the user manually types (rather than dictates) the narrative, 
+			//	set the narrative textarea val
 			$('#recorded-text-final').on('input', (e) => {
-    			$('#input-narrative-9').val($(e.target).text());
+				$('#input-narrative-9')
+					.val($(e.target).text())
+					.change();
 			});
+			/*$('#recorded-text-final').on('input', (e) => {
+    			$('#input-narrative-9').val($(e.target).text());
+			});*/
 
 			//add event listeners for contenteditable and textarea size change: https://stackoverflow.com/questions/1391278/contenteditable-change-events
 			//might have to use resizeobserver: https://stackoverflow.com/questions/6492683/how-to-detect-divs-dimension-changed
@@ -1620,7 +1631,10 @@
 			// Save user input when the user leaves the page
 			$(window).on('beforeunload', function(event) {
 				if (Object.keys(FIELD_VALUES).length) {//FIELD_VALUES is cleared on submit
-					window.localStorage.fieldValues = JSON.stringify(FIELD_VALUES);
+					const pageName = window.location.pathname.split('/').pop();
+					var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}'); 
+					currentStorage.fieldValues = {...FIELD_VALUES};
+					window.localStorage[pageName] = JSON.stringify(currentStorage);
 				}
 			});
 

@@ -444,6 +444,11 @@
 										<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
 										<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
 									</div>
+									<div id="expand-map-button-container">
+										<button id="expand-map-button" class="icon-button">
+											<i class="fas fa-expand-arrows-alt"></i>
+										</button>
+									</div>
 									<div class="map" id="encounter-location-map"></div>
 								</div>
 
@@ -1517,8 +1522,18 @@
 			$(window).on('beforeunload', function(event) {
 				if (Object.keys(FIELD_VALUES).length) {//FIELD_VALUES is cleared on submit
 					const pageName = window.location.pathname.split('/').pop();
-					var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}'); 
+					var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}');
+
+					// Record map extent
+					currentStorage.encounterMapInfo = {
+						center: markerIsOnMap() ? ENCOUNTER_MARKER.getLatLng() : ENCOUNTER_MAP.getCenter(),
+						zoom: ENCOUNTER_MAP.getZoom()
+					}
+					
+					// Record field values
 					currentStorage.fieldValues = {...FIELD_VALUES};
+					
+					// Save
 					window.localStorage[pageName] = JSON.stringify(currentStorage);
 				}
 			});

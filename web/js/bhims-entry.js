@@ -893,12 +893,22 @@ function onCountryPostalCodeChange(event) {
 
 function configureMap() {
 	
+
+	var mapCenter, mapZoom;
+	const pageName = window.location.pathname.split('/').pop();
+	var currentStorage = window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
+	if (currentStorage.encounterMapInfo) {
+		mapCenter = currentStorage.encounterMapInfo.center;
+		mapZoom = currentStorage.encounterMapInfo.zoom;
+	}
+
 	var map = L.map('encounter-location-map', {
 		editable: true,
 		scrollWheelZoom: false,
-		center: [63.2, -150.7],
-		zoom: 7
+		center: mapCenter || [63.2, -150.7],
+		zoom: mapZoom || 7
 	});
+
 	var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
 		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
 	}).addTo(map);

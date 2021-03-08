@@ -1632,8 +1632,18 @@
 			$(window).on('beforeunload', function(event) {
 				if (Object.keys(FIELD_VALUES).length) {//FIELD_VALUES is cleared on submit
 					const pageName = window.location.pathname.split('/').pop();
-					var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}'); 
+					var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}');
+
+					// Record map extent
+					currentStorage.encounterMapInfo = {
+						center: markerIsOnMap() ? ENCOUNTER_MARKER.getLatLng() : ENCOUNTER_MAP.getCenter(),
+						zoom: ENCOUNTER_MAP.getZoom()
+					}
+					
+					// Record field values
 					currentStorage.fieldValues = {...FIELD_VALUES};
+					
+					// Save
 					window.localStorage[pageName] = JSON.stringify(currentStorage);
 				}
 			});

@@ -1534,17 +1534,18 @@
 						.css('width', Math.min(maxWidth, window.innerWidth) + 'px');
 			});
 
-			$('#attachment-modal').on('hidden.bs.modal', function (event) {
+			$('#attachment-modal').on('hidden.bs.modal', e => {
 				// Release resources of video preview when modal closes
 				const $source = $('#modal-video-preview,#modal-audio-preview').not('.hidden').find('source');
 				const currentSrc = $source.attr('src');
 				if (currentSrc != "#") {
+					$source.parent()[0].pause();//pause the video/audio because resetting src doesn't seem to work
 					URL.revokeObjectURL(currentSrc);
 					$source.attr('src', '#');
 				}
 
 				// Remove any inline css to the img/video/audio container element
-				$(event.target).find('.modal-img-body').css('width', '');
+				$(e.target).find('.modal-img-body').css('width', '');
 
 			});
 

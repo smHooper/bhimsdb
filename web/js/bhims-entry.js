@@ -891,7 +891,7 @@ function onCountryPostalCodeChange(event) {
 }
 
 
-function configureMap() {
+function configureMap(divID) {
 	
 
 	var mapCenter, mapZoom;
@@ -902,7 +902,7 @@ function configureMap() {
 		mapZoom = currentStorage.encounterMapInfo.zoom;
 	}
 
-	var map = L.map('encounter-location-map', {
+	var map = L.map(divID, {
 		editable: true,
 		scrollWheelZoom: false,
 		center: mapCenter || [63.2, -150.7],
@@ -1265,6 +1265,46 @@ function onLocationSelectChange(e) {
 }
 
 
+function onExpandMapButtonClick(e) {
+
+	e.preventDefault();
+
+	// Create marker with event listener that does the same thing as ENCOUNTER_MARKER
+	const modalMarker = new L.marker(ENCOUNTER_MARKER.getLatLng(), {
+			draggable: true,
+			autoPan: true,
+		})
+		.on('dragend', () => {
+			// When the modal marker is moved
+			//set the form marker postion
+			ENCOUNTER_MARKER.setLatLng(modalMarker.getLatLng()); 
+			//set coordinate fields
+			setCoordinatesFromMarker();
+		})
+		.addTo(MODAL_ENCOUNTER_MAP);
+
+	$('#map-modal')
+		.on('shown.bs.modal', e => {
+			// When the modal is shown, the map's size is not yet determined so 
+			//	Leaflet thinks it's much smaller than it is. As a result, 
+			//	only a single tile is shown. Reset the size after a delay to prevent this
+			MODAL_ENCOUNTER_MAP.invalidateSize()
+			
+			// Center the map on the marker
+			MODAL_ENCOUNTER_MAP.setView(ENCOUNTER_MARKER.getLatLng(), ENCOUNTER_MAP.getZoom())
+		})
+		.on('hidden.bs.modal', e => {
+			// Remove the marker when the modal is hidden
+			MODAL_ENCOUNTER_MAP.removeLayer(modalMarker);
+
+			//center form map on the marker. Do this here because it's less jarring 
+			//	for the user to see the map move to center when the modal is closed
+			ENCOUNTER_MAP.setView(ENCOUNTER_MARKER.getLatLng(), ENCOUNTER_MAP.getZoom())
+		})
+		.modal() // Show the modal
+}
+
+
 function onBearGroupTypeChange() {
 	/*
 	If the ages/sexes of individual bears doesn't match the cohort selected, warn the user
@@ -1494,7 +1534,10 @@ function showModalImg(src) {
 	const $img = $('#modal-img-preview').attr('src', src).removeClass('hidden');
 	$img.siblings(':not(.modal-header-container)').addClass('hidden');
 	const img = $img.get(0);
-	const imgWidth = window.innerHeight * .8 * img.naturalWidth/img.naturalHeight;//img.height doesn't work because display height not set immediately
+	const imgWidth = Math.min(
+		window.innerHeight * .8 * img.naturalWidth/img.naturalHeight,//img.height doesn't work because display height not set immediately
+		window.innerWidth - 40
+	);
 	$img.closest('.modal').find('.modal-img-body').css('width', imgWidth);
 	
 }
@@ -1529,7 +1572,6 @@ function onThumbnailClick(event) {
 
 		$('#attachment-modal').modal();
 	}
-
 
 }
 

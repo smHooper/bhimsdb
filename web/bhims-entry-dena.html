@@ -444,11 +444,13 @@
 										<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
 										<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
 									</div>
+									
 									<div id="expand-map-button-container">
-										<button id="expand-map-button" class="icon-button">
-											<i class="fas fa-expand-arrows-alt"></i>
+										<button id="expand-map-button" class="icon-button" onclick="onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
+											<img src="imgs/maximize_window_icon_50px.svg"></img>
 										</button>
 									</div>
+									
 									<div class="map" id="encounter-location-map"></div>
 								</div>
 
@@ -1294,19 +1296,41 @@
 
 	</div>
 
+
+	<!-- map modal -->
+	<div class="modal fade lightbox-modal bhims-entry-modal" id="map-modal" tabindex="-1" role="dailog" aria-hidden="true">
+	  <div class="modal-dialog" role="document">
+	    <div class="modal-content">
+	      <div class="modal-body modal-img-body">
+	      	<div class="modal-header-container">
+		      	<div class="modal-img-body-header">
+			        <button type="button" class="close icon-button" data-dismiss="modal" aria-label="Minimize map">
+			          <img src="imgs/minimize_window_icon_50px.svg"></img>
+			        </button>
+		      	</div>
+		    </div>
+		    
+		    <div class="map modal-map" id="modal-encounter-location-map">  
+		    </div>
+	      
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
 	<!--attachment preview modal -->
 	<div class="modal fade lightbox-modal" id="attachment-modal" tabindex="-1" role="dialog" aria-hidden="true">
 	  <div class="modal-dialog" role="document" data-dismiss="modal">
 	    <div class="modal-content" data-dismiss="modal">
-	      <div class="modal-body modal-img-body">
-	      	<div class="modal-header-container">
+	      <div class="modal-body modal-img-body" >
+	      	<div class="modal-header-container" data-dismiss="modal">
 		      	<div class="modal-img-body-header">
 			        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
 			          <span aria-hidden="true">&times;</span>
 			        </button>
 		      	</div>
-		      </div>
-	      	<img class="modal-img hidden" src="#" id="modal-img-preview" data-dismiss="modal" alt="preview of uploaded image">
+		    </div>
+	      	<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
 	      	<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
 	      		<source src="#">
 	      		Sorry, your browser does not support HTML video content
@@ -1331,12 +1355,13 @@
 		//Instantiate global map and marker vars
 		//	The encounter marker isn't added to the map until the user explicitly
 		//	does so, but to instantiate with options it needs a location
-		var ENCOUNTER_MAP;
+		var ENCOUNTER_MAP, MODAL_ENCOUNTER_MAP;
 		var ENCOUNTER_MARKER = new L.marker([0, 0], {
 				draggable: true,
 				autoPan: true,
-		})
+			})
 			.on('dragend', setCoordinatesFromMarker);
+
 		// Other globals
 		var 
 			ATTACHMENT_FILES = {},
@@ -1453,8 +1478,13 @@
 			$('#input-coordinate_format').change(onCoordinateFormatChange);
 
 			// Set up the map
-			ENCOUNTER_MAP = configureMap();
-
+			ENCOUNTER_MAP = configureMap('encounter-location-map');
+			MODAL_ENCOUNTER_MAP = configureMap('modal-encounter-location-map')
+				.on('moveend', e => { // on pan, get center and re-center ENCOUNTER_MAP
+					const modalMap = e.target;
+					ENCOUNTER_MAP.setView(modalMap.getCenter(), modalMap.getZoom())
+				}) 
+			MODAL_ENCOUNTER_MAP.scrollWheelZoom.enable()
 			// Prevent form submission when the user hits the 'Enter' key
 			$('.input-field').keydown((e) => { 
 				//if (event.which == 13) event.returnValue(); 
@@ -1529,7 +1559,7 @@
 						center: markerIsOnMap() ? ENCOUNTER_MARKER.getLatLng() : ENCOUNTER_MAP.getCenter(),
 						zoom: ENCOUNTER_MAP.getZoom()
 					}
-					
+
 					// Record field values
 					currentStorage.fieldValues = {...FIELD_VALUES};
 					

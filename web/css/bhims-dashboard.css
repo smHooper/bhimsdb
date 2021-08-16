@@ -1,0 +1,163 @@
+
+
+
+
+
+.row.short-row {
+	height: 350px;
+}
+.row.tall-row {
+	height: 500px;
+}
+.dashboard-col {
+	height: 100%;
+}
+
+.card.dashboard-card {
+	border-radius: 20px;
+	padding: 20px;
+	box-shadow: 1px 4px 8px rgba(0,0,0,0.4);
+	background-color: rgba(255, 255, 255, 0.3);
+	height: 100%;
+
+	border-radius: 10px;
+	padding: 20px;
+	box-shadow: 1px 4px 8px rgb(0 0 0 / 20%);
+	background-color: rgba(255, 255, 255, 0.5);
+
+}
+.dashboard-card .card-header {
+	border: none;
+	background-color: transparent;
+	display: flex;
+	justify-content: space-around;
+    height: 1.75rem;
+    padding: 0;
+    align-items: center;
+}
+
+
+.huge-text {
+	font-size: 120px;
+	line-height: 100px;
+	white-space: nowrap;
+}
+.large-text {
+	font-size: 50px;
+}
+
+
+.review-bars-container {/*wrapper for both bars*/
+	width: 100%;
+	margin-top: 20px;
+}
+
+.needs-review-bar-container {
+	width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+.needs-review-bar-label {
+	width: 100%;
+	font-size: 18px;
+}
+.needs-review-text {
+	padding-left: 15px;
+	line-height: 40px;
+}
+.needs-review-bar{
+	height: 40px;
+	width: 0px;
+	max-width: calc(100% - 60px) !important;
+	transition: 0.5s all;
+}
+#needs-full-review-bar {
+	background-color: #f56761;
+}
+#needs-partial-review-bar {
+	background-color: #42d6e6;
+}
+
+.scrollable-chart-and-axis-wrapper {
+	position: relative;
+	width: 100%;
+	height: calc(100% - 1.5rem);
+}
+.scrollable-chart-and-axis-wrapper > canvas {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+}
+.scrollable-chart-outer-wrapper {
+    width: calc(100% - 15px);
+    float: right;
+	overflow-x: auto;
+	height: 100%;
+}
+.scrollable-chart-inner-wrapper {
+	height: calc(100% - 20px);
+	position: relative;
+}
+.bhims-chart-tooltip {
+	background: rgba(255, 255, 255, 0.7); 
+	border-radius: 3px; 
+	color: white; 
+	position: absolute; 
+	transform: translate(-50%, 0px); 
+	transition: all 0.2s ease 0s; 
+	padding: 6px;
+}
+.bhims-chart-tooltip .tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -12px;
+  width: 24px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.bhims-chart-tooltip .tooltip-arrow::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 50%;
+  transform: translate(-50%,-50%) rotate(45deg);
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+
+.map-container {
+	display: flex;
+    flex-direction: column;
+	min-height: 365px;
+	width: 100%;
+	padding-right: 20px;
+	margin-bottom: 20px;
+}
+.map {
+    min-height: 350px;
+    flex: 1 1 auto;
+    width: 100%;
+}
+#expand-map-button-container {
+	width: 100%;
+	height: 2rem;
+	display: flex;
+	justify-content: flex-end;
+}
+#expand-map-button {
+	height: 100%;
+}
+
+.leaflet-popup-data-container {
+	max-height: 100px;
+	overflow-y: auto;
+	margin-bottom: 15px;
+}
+.leaflet-popup-data-container p {
+	margin: 0 0 10px;
+}

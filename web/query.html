@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
+	<title>DENA BHIMS query</title>
+	<!--jquery -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+	
+	<!-- bootstrap -->
+	<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css"/>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
+
+	<!--fonts -->
+	<link rel="preconnect" href="https://fonts.gstatic.com">
+	<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+
+	<!-- font awesome --> 
+	<link href="packages/fontawesome/css/all.min.css" rel="stylesheet">
+
+	<!-- Leaflet -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+		crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+		integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+		crossorigin=""></script>
+
+	<link rel="stylesheet" href="css/bhims.css">
+	<link rel="stylesheet" href="css/bhims-entry.css">
+	<link rel="stylesheet" href="css/query.css">
+
+</head>
+
+<body>
+	 <!-- loading indicator should be hidden and will only be shown when loading data -->
+	<div id="loading-indicator-background" class="modal-background modal-background-light hidden" ></div>
+	<div id="loading-indicator" class="hidden"></div>
+
+
+	<nav class="bhims-header-menu">
+		<div class="header-menu-item-group">
+			<a class="home-button" role="button" href="bhims-index.html">
+				<img src="imgs/bhims_icon_50px.svg" alt="home icon">
+			</a>
+			<h4 class="page-tile">BHIMS query</h4>
+		</div>
+		<div class="header-menu-item-group hide" id="show-query-options-container">
+			<button class="text-only-button" onclick="onShowQueryOptionsClick(event);">
+				<h6>query options</h6>
+				<i class="fa fa-chevron-down pull-right"></i>
+			</button>
+		</div>
+		<div class="header-menu-item-group" id="username-container">
+			<img id="username-icon" src="imgs/user_icon_50px.svg" alt="username icon">
+			<label id="username"></label>
+		</div>
+	</nav>
+
+	<main class="dashboard-main">
+
+		<!-- nav sidebar -->
+		<div class="main-container">
+			<nav class="sidebar">
+				<div class="sidebar-sticky">
+					<div class="sidebar-background"></div>
+					<ul class="sidebar-nav-group">
+
+						<li class="nav-item">
+							<a href="bhims-dashboard.html">
+								<img src="imgs/dashboard_icon_50px.svg">
+								<span>dashboard</span>
+							</a>
+						</li>
+
+						<li class="nav-item selected">
+							<a href="query.html">
+								<img src="imgs/query_icon_50px.svg">
+								<span>query data</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="manage-users.html">
+								<img src="imgs/user_icon_50px.svg">
+								<span>manage users</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="config.html">
+								<img src="imgs/settings_icon_50px.svg">
+								<span>configure app</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="bhims-entry-dena.html">
+								<img src="imgs/entry_form_icon_50px.svg">
+								<span>new encounter</span>
+							</a>
+						</li>
+
+					</ul>
+
+				</div>
+			</nav>
+
+			<!--main dashboard content -->
+			<div class="main-content-wrapper">
+				<div id="result-summary-pane" class="query-result-pane col-4">
+					<div id="query-result-list-container" class="result-summary-container">
+						<ul id="query-result-list">
+							<!-- list built dynamically -->
+						</ul>
+					</div>
+					<div id="query-result-map-container" class="result-summary-container">
+						<div id="query-result-map" class="map"></div>
+					</div>
+				</div>
+
+				<div id="row-details-pane" class="query-result-pane col-8">
+					<!-- fields added dynamically-->
+				</div>
+
+			</div> <!--main-content-wrapper-->
+
+		</div> <!--wrapper-->
+	</main>
+
+	<!-- map modal -->
+	<div class="modal fade lightbox-modal bhims-entry-modal" id="map-modal" tabindex="-1" role="dailog" aria-hidden="true">
+	  <div class="modal-dialog" role="document">
+	    <div class="modal-content">
+	      <div class="modal-body modal-img-body">
+	      	<div class="modal-header-container">
+		      	<div class="modal-img-body-header">
+			        <button type="button" class="close icon-button" data-dismiss="modal" aria-label="Minimize map">
+			          <img src="imgs/minimize_window_icon_50px.svg"></img>
+			        </button>
+		      	</div>
+		    </div>
+		    
+		    <div class="map modal-map" id="modal-encounter-location-map">  
+		    </div>
+	      
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<script src="js/bhims.js"></script>
+	<script src="js/bhims-entry.js"></script>
+	<script src="js/query.js"></script>
+
+	<script>
+		/*var ENCOUNTER_MAP, MODAL_ENCOUNTER_MAP;
+		var ENCOUNTER_MARKER = new L.marker([0, 0], {
+				draggable: true,
+				autoPan: true,
+			})
+			.on('dragend', setCoordinatesFromMarker);
+		var QUERY_RESULT = {}, 
+			FIELD_INFO = {},
+			FIELD_VALUES = {},
+			LOOKUP_VALUES = {},
+			JOINED_DATA_TABLES = [];*/
+
+		var entryForm,
+			bhimsQuery;
+		$(document).ready(function(){
+			entryForm = new BHIMSEntryForm();
+
+			bhimsQuery = new BHIMSQuery();
+			bhimsQuery.configureQuery();
+
+		})
+	</script>
+
+</body>
+
+</html>

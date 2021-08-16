@@ -2,14 +2,12 @@
 
 function queryDB(sql) {
 
-	var deferred = $.ajax({
+	return $.ajax({
 		url: 'bhims.php',
 		method: 'POST',
 		data: {action: 'query', queryString: sql, db: 'bhims'},
 		cache: false
 	});
-
-	return deferred;
 }
 
 
@@ -90,4 +88,82 @@ function hideLoadingIndicator(caller) {
 		indicator.addClass('hidden');
 	}
 
+}
+
+
+function showModal(message, title, modalType='alert', footerButtons='') {
+
+	var modalID = title
+		.replace(/[^\w]/g, '-') // replace non-alphanumeric chars with '-'
+		.replace(/^-|-+$/g, '') // remove any hyphens from beginning or end
+
+	if (!footerButtons) {
+		switch(modalType) { 
+			case 'alert': 
+				footerButtons = '<button class="generic-button modal-button close-modal" data-dismiss="modal">Close</button>';
+				break;
+			case 'confirm':
+				footerButtons = `
+					<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">Close</button>';
+					<button class="generic-button modal-button close-modal" data-dismiss="modal">OK</button>
+				`;
+				break;
+		}
+	}
+
+	const innerHTML = `
+	  <div class="modal-dialog" role="document">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <h5 class="modal-title">${title}</h5>
+	        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
+	          <span aria-hidden="true">&times;</span>
+	        </button>
+	      </div>
+	      <div class="modal-body">
+	        <p>${message}</p>
+	      </div>
+	      <div class="modal-footer">
+	      	${footerButtons}
+	      </div>
+	    </div>
+	  </div>
+	`;
+	const $modal = $('#alert-modal').empty()
+		.append($(innerHTML))
+		.modal();
+
+	/*const $modal = $(`
+		<div class="modal fade" id="${modalID}" tabindex="-1" role="dialog" aria-labelledby="${modalID}-label" aria-hidden="true">
+		  <div class="modal-dialog" role="document">
+		    <div class="modal-content">
+		      <div class="modal-header">
+		        <h5 class="modal-title">${title}</h5>
+		        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
+		          <span aria-hidden="true">&times;</span>
+		        </button>
+		      </div>
+		      <div class="modal-body">
+		        <p>${message}</p>
+		      </div>
+		      <div class="modal-footer">
+		      	${footerButtons}
+		      </div>
+		    </div>
+		  </div>
+		</div>
+		`)
+		.appendTo('body')
+		.modal(); //bootstrap modal plugin method to show modal*/
+	
+	$modal.find('.close-modal').click(function() {
+		$modal.modal('hide');
+	})
+}
+
+/*
+Helper function to check a Postgres query result for an error
+*/
+function queryReturnedError(queryResultString) {
+	return queryResultString.trim().startsWith('ERROR') || queryResultString.trim() === '["query returned an empty result"]';
 }

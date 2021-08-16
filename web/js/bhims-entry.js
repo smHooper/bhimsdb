@@ -1,9 +1,7 @@
-
-
 /*Custom jQuery selector for selecting sections and section indicators*/
 $.expr[':'].isSection = function(element, index, meta) {
-	//meta[3] is the param passed in isSection(<section-index>)
-	return $(element).data('section-index') == meta[3];
+	//meta[3] is the param passed in isSection(<page-index>)
+	return $(element).data('page-index') == meta[3];
 }
 
 
@@ -19,524 +17,2611 @@ function isInViewport(el) {
 	);
 }
 
-
-function fillFieldsFromSavedData() {
-
+var BHIMSEntryForm = (function() {
 	
-	var key, index, fieldName;//initialize vars instantiated in for statements
+	/*
+	Main Constructor
+	*/
+	var Constructor = function() {
+		// Map stuff
+		this.encounterMap = null;
+		this.modalEncounterMap = null;
+		this.encounterMarker = new  L.marker(
+			[0, 0], 
+			{
+				draggable: true,
+				autoPan: true,
+			}
+		).on('dragend', this.setCoordinatesFromMarker);
 
-	for (const key in FIELD_VALUES) {
-		const value = FIELD_VALUES[key];
-		
-		 // reactions are set manually below whereas attachment data is never saved
-		if (key === 'reactions' || key === 'attachments') continue;
+		//Other globals
+		this.attachmentFiles = {};
+		this.fieldInfo = {};
+		this.fieldValues = {};
+		this.username = '';
+		this.backcountryUnitCoordinates = {};
+		this.placeNameCoordinates = {};
+		this.acceptedAttachmentExtensions = {};
+	}
 
-		// Value is either a string/number corresponding to a single field or an object 
-		//	containing a series of values corresponding to an accordion with potentially 
-		//	several cards
-		if (typeof(value) === 'object') { // corresponds to an accordion
-			// Loop through each object and add a card/fill fields 
-			const $accordion = $('.accordion:not(.hidden)')
-				.filter((_, el) => {return $(el).data('table-name') === key})
-			if (!$accordion.length) continue;//if the accordion is hidden, ignore it
-			for (const index in value) {
-				const $card = addNewCard($accordion, index);
-				const inputValues = value[index];
-				for (const fieldName in inputValues) {
-					const thisVal = inputValues[fieldName];
-					
-					// Find input where the name === to this field
-					var $input;
-					try {
-						$input = $card
-							.find('.input-field')
-							.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
-					} catch {
-						console.log($card)
-						const a =1;
+
+	/* 
+	Configure the form using meta tables in the database
+	*/
+	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
+
+		var config = {},
+			pages = {},
+			sections = {},
+			accordions = {},
+			fieldContainers = {},
+			fields = {};
+
+		const processQueryResult = (obj, result) => {
+			const queryResult = $.parseJSON(result);
+			if (queryResult) {
+				for (const row of queryResult) {
+					obj[row.id] = {...row};
+				};
+			} 
+		}
+
+		var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
+
+		// Query configuration tables from database
+		var deferred = $.Deferred();
+		$.when(
+			queryDB('SELECT * FROM data_entry_config;')
+				.done(result => {
+					const queryResult = $.parseJSON(result);
+					if (queryResult) {
+						config = {...queryResult[0]};
 					}
-					
-					// If this is a checkbox, set the checked property. Otherwise,
-					//	just set the val directly
-					if ($input.is('.input-checkbox')) {
-						$input.prop('checked', thisVal);
-					} else {
-						$input.val(thisVal);
+				}),
+			queryDB('SELECT * FROM data_entry_pages ORDER BY page_index;')
+				.done(result => {processQueryResult(pages, result)}),
+			queryDB('SELECT * FROM data_entry_sections WHERE is_enabled AND page_id IS NOT NULL ORDER BY display_order;')
+				.done(result => {processQueryResult(sections, result)}),
+			queryDB('SELECT * FROM data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;')
+				.done(result => {processQueryResult(accordions, result)}),
+			queryDB('SELECT * FROM data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;')
+				.done(result => {processQueryResult(fieldContainers, result)}),
+			queryDB('SELECT * FROM data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;')
+				.done(result => {processQueryResult(fields, result)}),
+			// Query accepted file attachment extensions for each file type
+			queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
+				.then(
+					doneFilter=function(queryResultString){
+						if (queryReturnedError(queryResultString)) {
+							throw 'Accepted file extension query failed: ' + queryResultString;
+						} else {
+							const queryResult = $.parseJSON(queryResultString);
+							for (const object of queryResult) {//queryResult.forEach(function(object) {
+								_this.acceptedAttachmentExtensions[object.code] = object.accepted_file_ext;
+							}
+						}
+					},
+					failFilter=function(xhr, status, error) {
+						console.log(`Accepted file extension query failed with status ${status} because ${error} from query:\n${sql}`)
 					}
-					//This will unnecessarily call onInputFieldChange() but this is probably
-					//	the best way to ensure that all change event callbacks are get called
-					$input.change();
+				)
+		).then(() => {
+			if (isNewEntry) {
+				if (Object.keys(config).length) {
+					$('#title-page-title').text(config.entry_form_title);
+					$('#title-page-subtitle').text(config.park_unit_name);
+					$('.form-page.title-page .form-description').html(config.entry_form_description_html);
+					$('#pre-submit-message').text(config.entry_pre_submission_message);
+					$('#post-submit-message').text(config.entry_post_submission_message);
+				} else {
+					alert('Error retrieving data_entry_config');
+					return;
+				}
+
+				// Add all pages
+				if (Object.keys(pages).length) {
+					for (const id in pages) {
+						const pageInfo = pages[id];
+						const index = pageInfo.page_index;
+						$(`
+							<div id="page-${index}" class="${pageInfo.css_class}" data-page-index="${index}" data-page-name="${pageInfo.page_name}"></div>
+						`).insertBefore('.form-page.submit-page');
+						$(`
+							<li>
+								<button class="indicator-dot" type="button" onclick="entryForm.onIndicatorDotClick(event)" data-page-index="${index}" aria-label="${pageInfo.page_name}">
+									<!--<div class="tip">
+										<h6>${pageInfo.page_name}</h6>
+										<i class="tooltip-arrow"></i>
+									</div>-->
+								</button>
+							</li>
+						`).appendTo('.section-indicator.form-navigation')
+					}
+				} else {
+					alert('Error retrieving data_entry_pages');
+					return;
 				}
 			}
-		} else { // it's an input, select, or checkbox
-			// If this is a checkbox, set the checked property. Otherwise,
-			//	just set the val directly
-			const $input = $('.input-field')
-				.filter((_, el) => {
-					return ($(el).attr('name') || '').startsWith(key)})
-				.removeClass('default');
-			if ($input.is('.input-checkbox')) {
-				$input.prop('checked', value);
+
+			// Add sections
+			if (Object.keys(sections).length) {
+				for (const id in sections) {
+					const sectionInfo = sections[id];
+					const pageInfo = pages[sectionInfo.page_id];
+					const titleHTMLTag = sectionInfo.title_html_tag;
+					$(`
+						<section id="section-${id}" class="${sectionInfo.css_class} ${sectionInfo.is_enabled ? '' : 'disabled'}" >
+							<${titleHTMLTag} class="${sectionInfo.title_css_class}">
+								${titleHTMLTag == 'div' ? `<h4>${sectionInfo.section_title}</h4>` : sectionInfo.section_title}
+							</${titleHTMLTag}>
+							<div class="form-section-content"></div>
+						</section>
+					`).appendTo(isNewEntry ? '#page-' + pageInfo.page_index : mainParentID);
+				}
 			} else {
-				$input.val(value);
+				alert('Error retrieving data_entry_sections');
+				return;
 			}
-			$input.change();//call change event callbacks
-		}
-	}
 
-	// Set the text of the contenteditable narrative div
-	if ('narrative' in FIELD_VALUES) $('#recorded-text-final').text(FIELD_VALUES.narrative);
+			// Accumulate accordions and field containers since these are the direct descendants of sections
+			//	Store them with the display order as the key so that these can be sorted and sequentially
+			//	iterated later.
+			var sectionChildren = {};
 
-	// Because the reaction select options are based on the reaction-by select and 
-	//	the order in which inputs are filled is random, the reaction val might be 
-	//	set before the reaction-by val. That makes the reaction val null and also 
-	//	messes up setting the card label. The solution here is just to set each 
-	//	reaction manually.
-	if ('reactions' in FIELD_VALUES) {
-		const $reactionsAccordion = $('#reactions-accordion');
-		const reactions = FIELD_VALUES.reactions;
-		for (index in reactions) {
-			const $card = addNewCard($reactionsAccordion, index);
-			const $reaction = $('#input-reaction-' + index);
-			const $reactionBy = $('#input-reaction_by-' + index)
-				.val(reactions[index].reaction_by)
-				.change();
-			updateReactionsSelect($reactionBy)
-				.then(() => {
-					// For some reason the index var doesn't correspond to the appropriate 
-					//	iteration of the for loop (even though $reaction does). Get the 
-					//index from the id to set the select with the right val
-					const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
-					$reaction
-						.val(reactions[thisIndex].reaction_code)
-						.change();
+			// Accordions
+			if (Object.keys(accordions).length) {
+				for (const id in accordions) {
+					const accordionInfo = accordions[id];
+					const sectionInfo = sections[accordionInfo.section_id];
+					const accordionHTMLID = accordionInfo.html_id;
+					const tableName = accordionInfo.table_name;
+					
+					var accordionAttributes = `id="${accordionHTMLID}" class="${accordionInfo.css_class} ${accordionInfo.is_enabled ? '' : 'disabled'}" data-table-name="${tableName}"`;
+					var dependentAttributes = '';
+					if (accordionInfo.dependent_target) 
+						dependentAttributes = `data-dependent-target="${accordionInfo.dependent_target}" data-dependent-value="${accordionInfo.dependent_value}"`;
+						accordionAttributes += dependentAttributes;
+
+					var cardLinkAttributes = `class="${accordionInfo.card_link_label_css_class}"`;
+					if (accordionInfo.card_link_label_order_column) 
+						cardLinkAttributes += ` data-order-column="${accordionInfo.card_link_label_order_column}"`;
+					if (accordionInfo.card_link_label_separator) 
+						cardLinkAttributes += ` data-label-sep="${accordionInfo.card_link_label_separator}"`;				
+					
+					const $accordion = $(`
+						<div ${accordionAttributes}>
+							<div class="card cloneable hidden" id="cloneable-card-${tableName}">
+								<div class="card-header" id="cardHeader-${tableName}-cloneable">
+									<a class="card-link" data-toggle="collapse" href="#collapse-${tableName}-cloneable" data-target="collapse-${tableName}-cloneable">
+										<div class="card-link-content">
+											<h5 ${cardLinkAttributes}">${accordionInfo.card_link_label_text}</h5>
+										</div>
+										<div class="card-link-content">
+											<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
+												<i class="fas fa-trash fa-lg"></i>
+											</button>
+											<i class="fa fa-chevron-down pull-right"></i>
+										</div>
+									</a>
+								</div>
+								<div id="collapse-${tableName}-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-${tableName}-cloneable" data-parent="#${accordionHTMLID}">
+									<div class="card-body"></div>
+								</div>
+							</div>
+						</div>
+						<div class="${dependentAttributes.length ? 'collapse' : ''} add-item-container">
+							<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="${accordionHTMLID}" ${dependentAttributes}>
+								<strong>+</strong> ${accordionInfo.add_button_label}
+							</button>
+						</div>
+					`);
+					sectionChildren[accordionInfo.display_order] = {
+						element: $accordion, 
+						parentID: `#section-${accordionInfo.section_id} .form-section-content`
+					};
+				}
+			} else {
+				alert('Error retrieving data_entry_accordions');
+				return;
+			}
+
+			// Field containers
+			if (Object.keys(fieldContainers).length) {
+				for (const id in fieldContainers) {
+					const containerInfo = fieldContainers[id];
+					if (containerInfo.is_enabled) {
+						const accordionInfo = accordions[containerInfo.accordion_id];
+						const $container = $(`
+							<div id="field-container-${id}" class="${containerInfo.css_class}${containerInfo.is_enabled ? '' : ' disabled'}"></div>
+						`);
+						sectionChildren[containerInfo.display_order] = {
+							element: $container,
+							parentID: accordionInfo ? `#${accordionInfo.html_id} .card-body` : `#section-${containerInfo.section_id} .form-section-content`
+						};
+					}
+				}
+			} else {
+				alert('Error retrieving data_entry_field_containers');
+				return;
+			}
+
+			// Loop through sequentially and add them to their respective parents.
+			//	
+			for (displayOrder of Object.keys(sectionChildren).sort()) {
+				const child = sectionChildren[displayOrder];
+				// If the parent exists in the DOM, add the child element. It might not exist 
+				//	in the DOM if the parent is disabled
+				if ($(child.parentID).length) child.element.appendTo($(child.parentID));
+			}
+
+			// Add fields
+			if (Object.keys(fields).length) {
+				// Gather and sort field info within their containers
+				var sortedFields = {};
+				for (const id in fields) {
+					const fieldInfo = {...fields[id]};
+					const fieldContainerID = fieldInfo.field_container_id;
+					if (fieldContainerID in sortedFields) {
+						sortedFields[fieldContainerID][fieldInfo.display_order] = fieldInfo;
+					} else {
+						sortedFields[fieldContainerID] = [];
+						sortedFields[fieldContainerID][fieldInfo.display_order] = fieldInfo;
+					}
+				}
+
+				for (const fieldContainerID in sortedFields) {
+					const $parent = $('#field-container-' + fieldContainerID);
+					if ($parent.length) {
+						const childFields = sortedFields[fieldContainerID];
+						for (const displayOrder in childFields) {
+							const fieldInfo = childFields[displayOrder];
+
+							var inputFieldAttributes = `id="${fieldInfo.html_id}" class="${fieldInfo.css_class}" name="${fieldInfo.field_name || ''}" data-table-name="${fieldInfo.table_name || ''}" placeholder="${fieldInfo.placeholder}"`;
+							
+							var fieldLabelHTML = `<label class="field-label" for="${fieldInfo.html_id}">${fieldInfo.label_text || ''}</label>`
+							var inputTag = fieldInfo.html_input_type;
+							if (inputTag !== 'select' && inputTag !== 'textarea'){ 
+								inputFieldAttributes += ` type="${fieldInfo.html_input_type}"`;
+								inputTag = 'input';
+							} else if (inputTag === 'textarea'){
+								fieldLabelHTML = '';
+							}
+							if (fieldInfo.dependent_target) 
+								inputFieldAttributes += ` data-dependent-target="${fieldInfo.dependent_target}" data-dependent-value="${fieldInfo.dependent_value}"`;
+							if (fieldInfo.lookup_table) 
+								inputFieldAttributes += ` data-lookup-table="${fieldInfo.lookup_table}"`;
+							if (fieldInfo.on_change) 
+								inputFieldAttributes += ` onchange="${fieldInfo.on_change}"`;
+							if (fieldInfo.card_label_index) 
+								inputFieldAttributes += ` data-card-label-index="${fieldInfo.card_label_index}"`;
+							if (fieldInfo.calculation_target) 
+								inputFieldAttributes += ` data-calculation-target="${fieldInfo.calculation_target}"`;
+							if (fieldInfo.html_min) 
+								inputFieldAttributes += ` min="${fieldInfo.html_min}"`;
+							if (fieldInfo.html_max) 
+								inputFieldAttributes += ` max="${fieldInfo.html_max}"`;
+							if (fieldInfo.html_step) 
+								inputFieldAttributes += ` step="${fieldInfo.html_step}"`;
+							if (fieldInfo.html_input_type == 'datetime-local') 
+								inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
+							const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
+							$(`
+								<div class="${fieldInfo.parent_css_class}">
+									<${inputTag} ${inputFieldAttributes} ${fieldInfo.required ? 'required' : ''}>${inputTagClosure}
+									${fieldInfo.required ? '<span class="required-indicator">*</span>' : ''}
+									${fieldLabelHTML}
+								</div>
+							`).appendTo($parent);
+						}
+					}
+				}
+			}
+
+			// Remove any field conainters that don't have any enabled fields
+			$('.field-container:empty').remove();
+			$('.units-field-container > .required-indicator, .units-field-container > .field-label').remove();
+
+
+			// Add event handlers
+			//onAddNewItemClick
+			//$('.card-header .delete-button').click(this.onDeleteCardClick)
+
+			// Add stuff that can't easily be automated/stored in the DB
+			// Do stuff with utility flag classes
+			$('.input-field.money-field').before('<span class="unit-symbol unit-symbol-left">$</span>');
+			
+			const lockedSectionTitles = $('.form-section.admin-section.locked').find('.section-title');
+			lockedSectionTitles.append(`
+				<button class="unlock-button icon-button" type="button" onclick="onlockSectionButtonClick(event)" aria-label="Unlock">
+					<i class="fas fa-lock fa-lg"></i>
+				</button>
+			`);
+			lockedSectionTitles.after(`
+				<div class="locked-section-screen">
+					<div>
+						<h5>For administrative use only</h5>
+						<h6>Click lock button to unlock</h6>
+					</div>
+				</div>
+			`);
+
+			// Add "Describe location by" field
+			$(`
+				<div class="field-container col single-line-field">
+					<label class="field-label inline-label" for="input-location_type">Describe location by:</label>
+					<select class="input-field no-option-fill" id="input-location_type" value="Place name" name="location_type">
+						<option value="Place name">Place name</option>
+						<option value="Backcountry unit">Backcountry unit</option>
+						<option value="Road mile">Road mile</option>
+						<option value="GPS coordinates">GPS coordinates</option>
+					</select>
+				</div>
+			`).prependTo('#section-4 .form-section-content');
+
+			// Configure map and GPS fields
+			$(`
+				<!-- lat/lon fields -->
+				<div class="field-container col">
+					<div class="field-container col-6">
+						<select class="input-field no-option-fill coordinates-select" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
+							<option value="ddd">Decimal degrees (dd.ddd&#176)</option>
+							<option value="ddm">Degrees decimal minutes (dd&#176 mm.mmm)</option>
+							<option value="dms">Degrees minutes seconds (dd&#176 mm' ss")</option>
+						</select>
+						<label class="field-label" for="input-coordinate_format">Coordinate format</label>
+					</div>
+				</div>
+				<!--<div class="field-container">-->
+				<!-- dd.ddd -->
+				<div class="collapse show field-container col-6 inline">
+					<div class="field-container col-6">
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude_dec_deg" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
+						<span class="required-indicator">*</span>
+						<span class="unit-symbol">&#176</span>
+						<label class="field-label" for="input-lat_dec_deg">Latitude</label>
+					</div>
+					<div class="field-container col-6">
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude_dec_deg" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
+						<span class="required-indicator">*</span>
+						<span class="unit-symbol">&#176</span>
+						<label class="field-label" for="input-lon_dec_deg">Longitude</label>
+					</div>
+				</div>
+				<!--dd mm.mmm-->
+				<div class="collapse field-container col-6 inline">
+					<div class="field-container col-6 justify-content-start">
+						<div class="flex-field-container flex-nowrap">
+							<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_ddm" required>
+							<span class="required-indicator">*</span>
+							<span class="unit-symbol">&#176</span>
+						</div>
+						<div class="flex-field-container flex-nowrap">
+							<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mm" id="input-lat_dec_min" required>
+							<span class="unit-symbol">'</span>
+						</div>
+						<label class="field-label">Latitude</label>
+					</div>
+					<div class="field-container col-6 justify-content-start">
+						<div class="flex-field-container flex-nowrap">
+							<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-180" max="180" placeholder="ddd" id="input-lon_deg_ddm" required>
+							<span class="required-indicator">*</span>
+							<span class="unit-symbol">&#176</span>
+						</div>
+						<div class="flex-field-container flex-nowrap">
+							<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mmm" id="input-lon_dec_min" required>
+							<span class="unit-symbol">'</span>
+						</div>
+						<label class="field-label">Longitude</label>
+					</div>
+				</div>
+				<!--dd mm ss-->
+				<div class="collapse field-container col-6 inline">
+					<div class="field-container col-6">
+						<div class="field-container degree-field-container">
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_dms" required>
+								<span class="required-indicator">*</span>
+								<span class="unit-symbol">&#176</span>
+							</div>
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lat_min_dms" required>
+								<span class="unit-symbol">'</span>
+							</div>
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lat_dec_sec" required>
+								<span class="unit-symbol">"</span>
+							</div>
+						</div>
+						<label class="field-label">Latitude</label>
+					</div>
+					<div class="field-container col-6">
+						<div class="field-container degree-field-container">
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-180" max="180" placeholder="dd" id="input-lon_deg_dms" required>
+								<span class="required-indicator">*</span>
+								<span class="unit-symbol">&#176</span>
+							</div>
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lon_min_dms" required>
+								<span class="unit-symbol">'</span>
+							</div>
+							<div class="flex-field-container flex-nowrap">
+								<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lon_dec_sec" required>
+								<span class="unit-symbol">"</span>
+							</div>
+						</div>
+						<label class="field-label">Longitude</label>
+					</div>
+				</div>
+
+				<div class="field-container col-6 inline">
+					<div class="field-container col-6">
+						<select class="input-field" name="datum_code" id="input-datum" value="1"></select>
+						<label class="field-label" for="input-datum">Datum</label>
+					</div>
+					<div class="field-container col-6">
+						<select class="input-field default" name="location_accuracy_code" id="input-location_accuracy" placeholder="GPS coordinate accuracy"></select>
+						<label class="field-label" for="input-location_accuracy">GPS coordinate accuracy</label>
+					</div>
+				</div>
+				<div class="field-container map-container">
+					<div class="marker-container" id="encounter-marker-container">
+						<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
+						<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
+					</div>
+					
+					<div id="expand-map-button-container">
+						<button id="expand-map-button" class="icon-button" onclick="entryForm.onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
+							<img src="imgs/maximize_window_icon_50px.svg"></img>
+						</button>
+					</div>
+					
+					<div class="map" id="encounter-location-map"></div>
+				</div>
+			`).appendTo('#section-4 .form-section-content');//map section
+
+			// Configure attachments
+			// Attachment stuff
+			$('#input-file_type')
+				.parent()
+				.after(`
+					<div class="collapse field-container col-6 inline">
+						<div class="collapse field-container col-6 file-preview-container">
+							<div class="attachment-progress-bar-container">
+								<div class="attachment-progress-bar">
+									<div class="attachment-progress-indicator"></div>
+								</div>
+							</div>
+							<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
+						</div>
+						<div class="attachment-file-input-container col-6">
+							<label class="filename-label"></label>
+							<label class="generic-button text-center file-input-label" for="attachment-upload">select file</label>
+							<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="entryForm.onAttachmentInputChange(event)" required>
+						</div>
+					</div>
+				`);
+			const $attachmentsAccordion = $('#attachements-accordion');
+			/*if ($attachmentsAccordion.length && !$attachmentsAccordion.is('.disabled')) {
+				$(`
+					<div class="field-container align-items-center">
+						<div class="field-container col-6 inline">
+							<select class="input-field default" name="file_type_code" placeholder="What type of file are you uploading?" id="input-file_type" onchange="onAttachmentTypeChange(event)" required></select>
+							<span class="required-indicator">*</span>
+							<label class="field-label" for="input-file_type_code">What kind of file are you uploading?</label>
+						</div>
+						<div class="collapse field-container col-6 inline">
+							<div class="collapse field-container col-6 file-preview-container">
+								<div class="attachment-progress-bar-container">
+									<div class="attachment-progress-bar">
+										<div class="attachment-progress-indicator"></div>
+									</div>
+								</div>
+								<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
+							</div>
+							<div class="attachment-file-input-container col-6">
+								<label class="filename-label"></label>
+								<label class="generic-button text-center file-input-label" for="attachment-upload">select file</label>
+								<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="onAttachmentInputChange(event)" required>
+							</div>
+						</div>
+					</div>
+
+					<div class="field-container col">
+						<input class="input-field" type="text" min="1" name="file_description" placeholder="What does this file depict?" id="input-file_description" required>
+						<span class="required-indicator">*</span>
+						<label class="field-label" for="input-file_description">What does this file depict?</label>
+					</div>
+				`).appentTo($attachmentsAccordion.find('.card.cloneable .card-body'))
+			}*/
+
+			// Configure narrative field
+			const $narrativeField = $('#input-narrative');
+			if (isNewEntry) {
+				if ($narrativeField.length) {
+					$(`
+						<div class="recorded-text-container">
+							<span id="recorded-text-final" contenteditable="true"></span>
+							<span id="recorded-text-interim"></span>
+						</div>
+						<div class="mic-button-container">
+							<label class="recording-status-message" id="recording-status-message"></label>
+							<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
+								<!--<span class="record-on-indicator"></span>-->
+								<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
+								<!--<div class="tip tip-left">
+									<h6>Start dictation</h6>
+									<i class="tooltip-arrow"></i>
+								</div>-->
+							</button>
+						</div>
+					`).appendTo($narrativeField.closest('.field-container'));
+				}
+
+				// Add page indicator for submit page
+				$(`
+					<li>
+						<button class="indicator-dot" type="button" onclick="entryForm.onIndicatorDotClick(event)" data-page-index="4" aria-label="Submission page">
+							<!--<div class="tip">
+								<h6>Submit</h6>
+								<i class="tooltip-arrow"></i>
+							</div>-->
+						</button>
+					</li>
+				`).appendTo('.section-indicator.form-navigation');
+
+				// Set on click for continue button (shown only in title section).
+				//	In addition to going to next section, show required indicator explanation
+				$('#title-page-continue-button').click((e) => {
+					_this.onPreviousNextButtonClick(e, 1);
+					$('.required-indicator-explanation').removeClass('hidden');
+				})
+
+			}
+
+			// Do all other configuration stuff
+			// Get field info
+			this.getFieldInfo();
+			hideLoadingIndicator();
+
+			// Some accordions might be permanetnely hidden because the form is simplified, 
+			//	but the database still needs to respect the one-to-many relationship. In 
+			//	these cases, make sure the add-item-container is also hidden
+			$('.accordion.form-item-list.hidden:not(.collapse)')
+				.siblings('.add-item-container')
+				.addClass('hidden');
+
+			// fill selects
+			let deferreds = $('select').map( (_, el) => {
+				const $el = $(el);
+				const placeholder = $el.attr('placeholder');
+				const lookupTable = $el.data('lookup-table');
+				const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
+				const id = el.id;
+				if (id == 'input-location_accuracy') {
+					a=1;
+				}
+				if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
+					if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
+					if (!$el.is('.no-option-fill')) {
+						return fillSelectOptions(id, `SELECT code AS value, name FROM ${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`);
+					}
+				}
+			})
+
+			$.when(
+				...deferreds
+			).then(function() {
+				if (isNewEntry) {
+					_this.fillFieldValues(_this.fieldValues);
+					// If the user does not have previous data saved, add the first card here in 
+					//	case this same form is used for data viewing. If there is saved data, the 
+					//	form and all inputs will be restored from the previous session
+					$('.accordion.form-item-list').each((_, el) => {
+						const tableName = $(el).data('table-name');
+						if (!(tableName in _this.fieldValues)) _this.addNewCard($(el));
+					});
+				}
+				// Indicate that configuring form finished
+				deferred.resolve();
+			});
+
+			$('select').change(this.onSelectChange);
+			
+			// Add distance measurement units to unit selects
+			$('.short-distance-select')
+				.empty()
+				.append(`
+					<option value="ft">feet</option>
+					<option value="m">meters</option>
+				`).val('ft');
+
+			// Set additional change event for initial action selects
+			$('#input-initial_human_action, #input-initial_bear_action').change(this.onInitialActionChange);
+
+			// When an input changes, save the result to the this.fieldValues global object so data are persistent
+			$('.input-field').change(this.onInputFieldChange);
+
+			//When a field with units changes, re-calculate
+			$('.units-field').change(onUnitsFieldChange);
+
+			// When a card is clicked, close any open cards in the same accordion
+			$('.collapsed').click(function() {
+				const $accordion = $(this).closest('.accordion');
+				$accordion.find('.card:not(.cloneable) .collapse.show')
+					.removeClass('show')
+					.siblings()
+						.find('.card-header')
+						.addClass('collapsed');
+			});
+
+			// Make sure the hidden class is added/removed when bootstrap collapse events fire
+			$('.collapse.field-container, .collapse.accordion')
+				.on('hidden.bs.collapse', function () {
+					$(this).addClass('hidden');
+				})
+				.on('show.bs.collapse', function () {
+					$(this).removeClass('hidden');
 				});
 
+			// When any card-label-fields change, try to set the parent card label
+			$('.input-field.card-label-field').change(e => {this.onCardLabelFieldChange($(e.target))});
+
+			// When the user types anything in a field, remove the .error class (if it was assigned)
+			$('.input-field').on('keyup change', this.onInputFieldKeyUp);
+
+			// Set up coordinate fields to update eachother and the map
+			$('.coordinates-ddd').change(this.onDDDFieldChange);
+			$('.coordinates-ddm').change(this.onDMMFieldChange);
+			$('.coordinates-dms').change(this.onDMSFieldChange);
+			$('#input-coordinate_format').change(this.onCoordinateFormatChange);
+
+			// Set up the map
+			this.encounterMap = this.configureMap('encounter-location-map');
+			this.modalEncounterMap = this.configureMap('modal-encounter-location-map')
+				.on('moveend', e => { // on pan, get center and re-center this.encounterMap
+					const modalMap = e.target;
+					this.encounterMap.setView(modalMap.getCenter(), modalMap.getZoom());
+				}) 
+			this.modalEncounterMap.scrollWheelZoom.enable();
+
+			// Prevent form submission when the user hits the 'Enter' key
+			$('.input-field').keydown((e) => { 
+				//if (event.which == 13) event.returnValue(); 
+				e = e || event;
+				var txtArea = /textarea/i.test((e.target || e.srcElement).tagName);
+				return txtArea || (e.keyCode || e.which || e.charCode || 0) !== 13;
+			});
+
+			var recognition = initSpeechRecognition();
+			if (recognition) {
+				$('#record-narrative-button')
+					.click(onMicIconClick)
+					.removeClass('hidden');
+			}
+
+			// When the user manually types (rather than dictates) the narrative, 
+			//	set the narrative textarea val
+			$('#recorded-text-final').on('input', (e) => {
+				$('#input-narrative')
+					.val($(e.target).text())
+					.change();
+			})
+
+			//add event listeners for contenteditable and textarea size change: https://stackoverflow.com/questions/1391278/contenteditable-change-events
+			//might have to use resizeobserver: https://stackoverflow.com/questions/6492683/how-to-detect-divs-dimension-changed
+
+			// resize modal video preview when new video is loaded
+			$('#modal-video-preview').on('loadedmetadata', function(e){
+				const el = e.target;
+				const aspectRatio = el.videoHeight / el.videoWidth;
+				
+			});
+			
+			$('#modal-audio-preview').on('loadedmetadata', function(e){
+				// Set width so close button is on the right edge of video/audio
+				const $el = $(e.target);
+				
+				var maxWidth;
+				try {
+					maxWidth = $el.css('max-width').match(/\d+/)[0];
+				} catch {
+					return
+				}
+
+				$el.closest('.modal')
+					.find('.modal-img-body')
+						.css('width', Math.min(maxWidth, window.innerWidth) + 'px');
+			});
+
+			$('#attachment-modal').on('hidden.bs.modal', e => {
+				// Release resources of video preview when modal closes
+				const $source = $('#modal-video-preview,#modal-audio-preview').not('.hidden').find('source');
+				const currentSrc = $source.attr('src');
+				if ($source.length && currentSrc != "#") {
+					$source.parent()[0].pause();//pause the video/audio because resetting src doesn't seem to work
+					URL.revokeObjectURL(currentSrc);
+					$source.attr('src', '#');
+				}
+
+				// Remove any inline css to the img/video/audio container element
+				$(e.target).find('.modal-img-body').css('width', '');
+
+			});
+
+
+			// Save user input when the user leaves the page
+			$(window).on('beforeunload', (e) => {
+				if (isNewEntry) {
+					if (Object.keys(_this.fieldValues).length) {//this.fieldValues is cleared on submit
+						const pageName = window.location.pathname.split('/').pop();
+						var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}');
+
+						// Record map extent
+						currentStorage.encounterMapInfo = {
+							center: _this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.encounterMap.getCenter(),
+							zoom: _this.encounterMap.getZoom()
+						}
+
+						// Record field values
+						currentStorage.fieldValues = {..._this.fieldValues};
+						
+						// Save
+						window.localStorage[pageName] = JSON.stringify(currentStorage);
+					}
+				} else {
+					// Check if editing and warn the user if there are unsaved edits
+				}
+			});
+
+			// Get username and store for INSERTing data in addition to filling the entered_by field
+			this.getUsername();
+
+			// Fill datetime_entered field
+			const datetimeEnteredField = $('#input-datetime_entered');
+			if (datetimeEnteredField.length) { // could be disabled
+				const now = new Date();
+				//	calculate as a numberic timestamp with the appropiate timezone offset
+				//		* 60000 because .getTimezoneOffset() returns offset in minutes
+				//		but the numeric timestamp needs to be in miliseconds 
+				// Also round to the nearest minute
+				const nowLocalTimestamp = Math.round((now.getTime() - (now.getTimezoneOffset() * 60000)) / 60000) * 60000;
+				datetimeEnteredField[0].valueAsNumber = nowLocalTimestamp;
+			}
+
+			// Get coordinates for BC units and place names
+			queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+				.then(
+					doneFilter=function(queryResultString){
+						if (queryReturnedError(queryResultString)) {
+							throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+						} else {
+							const queryResult = $.parseJSON(queryResultString);
+							queryResult.forEach(function(object) {
+								_this.backcountryUnitCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
+							})
+						}
+					},
+					failFilter=function(xhr, status, error) {
+						console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+					}
+				);
+			queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+				.then(
+					doneFilter=function(queryResultString){
+						if (queryReturnedError(queryResultString)) {
+							throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+						} else {
+							const queryResult = $.parseJSON(queryResultString);
+							queryResult.forEach(function(object) {
+								_this.placeNameCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
+							})
+						}
+					},
+					failFilter=function(xhr, status, error) {
+						console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+					}
+				);
+
+			customizeConfiguration();
+
+		})
+		
+		return deferred;
+	}
+
+
+	/* 
+	Fill data entry fields from saved (window.storage) or loaded (from the DB) data 
+	*/
+	Constructor.prototype.fillFieldValues = function(fieldValues) {
+
+		var key, index, fieldName;//initialize vars instantiated in for statements
+
+		for (const key in fieldValues) {
+			const value = fieldValues[key];
+			
+			 // reactions are set manually below whereas attachment data is never saved
+			if (key === 'reactions' || key === 'attachments') continue;
+
+			// Value is either a string/number corresponding to a single field or an object 
+			//	containing a series of values corresponding to an accordion with potentially 
+			//	several cards
+			if (typeof(value) === 'object') { // corresponds to an accordion
+				// Loop through each object and add a card/fill fields 
+				const $accordion = $('.accordion:not(.hidden)')
+					.filter((_, el) => {return $(el).data('table-name') === key})
+				if (!$accordion.length) continue;//if the accordion is hidden, ignore it
+				for (const index in value) {
+					const $card = this.addNewCard($accordion, index);
+					const inputValues = value[index];
+					for (const fieldName in inputValues) {
+						const thisVal = inputValues[fieldName];
+						
+						// Find input where the name === to this field
+						var $input;
+						try {
+							$input = $card
+								.find('.input-field')
+								.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
+						} catch {
+							console.log($card)
+							const a =1;
+						}
+						
+						// If this is a checkbox, set the checked property. Otherwise,
+						//	just set the val directly
+						if ($input.is('.input-checkbox')) {
+							$input.prop('checked', thisVal);
+						} else {
+							$input.val(thisVal);
+						}
+						//This will unnecessarily call onInputFieldChange() but this is probably
+						//	the best way to ensure that all change event callbacks are get called
+						$input.change();
+					}
+				}
+			} else { // it's an input, select, or checkbox
+				// If this is a checkbox, set the checked property. Otherwise,
+				//	just set the val directly
+				const $input = $('.input-field')
+					.filter((_, el) => {
+						return ($(el).attr('name') || '').startsWith(key)})
+					.removeClass('default');
+				if ($input.is('.input-checkbox')) {
+					$input.prop('checked', value);
+				} else {
+					$input.val(value);
+				}
+				$input.change();//call change event callbacks
+			}
+		}
+
+		// Set the text of the contenteditable narrative div
+		if ('narrative' in fieldValues) $('#recorded-text-final').text(fieldValues.narrative);
+
+		// Because the reaction select options are based on the reaction-by select and 
+		//	the order in which inputs are filled is random, the reaction val might be 
+		//	set before the reaction-by val. That makes the reaction val null and also 
+		//	messes up setting the card label. The solution here is just to set each 
+		//	reaction manually.
+		if ('reactions' in fieldValues) {
+			const $reactionsAccordion = $('#reactions-accordion');
+			const reactions = fieldValues.reactions;
+			for (index in reactions) {
+				const $card = this.addNewCard($reactionsAccordion, index);
+				const $reaction = $('#input-reaction-' + index);
+				const $reactionBy = $('#input-reaction_by-' + index)
+					.val(reactions[index].reaction_by)
+					.change();
+				this.updateReactionsSelect($reactionBy)
+					.then(() => {
+						// For some reason the index var doesn't correspond to the appropriate 
+						//	iteration of the for loop (even though $reaction does). Get the 
+						//index from the id to set the select with the right val
+						const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
+						$reaction
+							.val(reactions[thisIndex].reaction_code)
+							.change();
+					});
+
+			}
 		}
 	}
-}
 
 
-function getFieldInfo() {
+	/* 
+	Get info from the database about each field 
+	*/
+	Constructor.prototype.getFieldInfo = function() {
+		const pageName = window.location.pathname.split('/').pop();
+		const fieldValueString = window.localStorage[pageName] ? window.localStorage[pageName] : null;
+		if (fieldValueString) this.fieldValues = $.parseJSON(fieldValueString).fieldValues;
 
-	// Check if the user has a field values from a saved session
-	const pageName = window.location.pathname.split('/').pop();
-	const fieldValueString = window.localStorage[pageName] ? window.localStorage[pageName] : null;
-	if (fieldValueString) FIELD_VALUES = $.parseJSON(fieldValueString).fieldValues;
+		const sql = `
+			SELECT 
+				fields.* 
+			FROM data_entry_fields fields 
+				JOIN data_entry_field_containers containers 
+				ON fields.field_container_id=containers.id 
+			WHERE 
+				fields.is_enabled 
+			ORDER BY 
+				containers.display_order,
+				fields.display_order
+			;
+		`;
 
-	// Determine which table each column belongs to
-	const sql = `
-		SELECT 
-			table_name,
-			column_name,
-			data_type 
-		FROM information_schema.columns 
-		WHERE 
-			table_schema='public' AND 
-			table_name NOT LIKE '%_codes' AND 
-			column_name NOT IN ('encounter_id', 'id')
-		;
-	`;
-	queryDB(sql)
-		.done(
+		queryDB(sql).done(
 			queryResultString => {
 				const queryResult = $.parseJSON(queryResultString);
 				if (queryResult) {
-					const hasSavedSession = Object.keys(FIELD_VALUES).length;
-					queryResult.forEach( (row) => {
-						const columnName = row.column_name;
-						FIELD_INFO[columnName] = {};
-						FIELD_INFO[columnName].tableName = row.table_name;
-						FIELD_INFO[columnName].dataType = row.data_type;
-					});
+					for (const row of queryResult) {
+						const columnName = row.field_name;
+						this.fieldInfo[columnName] = {};
+						for (const property in row) {
+							this.fieldInfo[columnName][property] = row[property];
+						}
+					};
 				}
 			}
 		).fail(
 			(xhr, status, error) => {
 			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
 		});
-
-}
-
-
-function onInputFieldChange(event) {
-
-	const $input = $(event.target);
-	if ($input.closest('.cloneable').length) return;//triggered manually and should be ignored
-
-	const $accordion = $input.closest('.accordion');
-
-	// Don't save any attachments data. window.localStorage limit for most browsers 
-	//	is 5mb which is probably too small to save the attachment data. Since the 
-	//	attachment, therefore, can't reliably be loaded, it doesn't make sense to 
-	//	save any other data about attachments
-	if ($accordion.attr('id') === 'attachments-accordion') return;
-
-	// Get the name attribute from the field, which should be the corresponding column name
-	const fieldName = ($input.attr('name') || '')
-		.replace(/\-\d+$/g, '');//fields in accordions have the accordion index appended
-	if (!fieldName) {
-		console.log(`name attribute for ${$input.attr('id')} not defined`);
-		return;
-	}
-	
-	const val = $input.is('.input-checkbox') ? +$input.prop('checked') : $input.val();
-
-	const fieldInfo = FIELD_INFO[fieldName];
-	if (!fieldInfo) {
-		console.log(`${fieldName} not in FIELD_INFO. ID: ${$input.attr('id')}`);
-		FIELD_VALUES[fieldName] = val;
-		//return;
-	} 
-	
-	// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
-	//	there could, therefore, be multiple objects with this column. In that case,
-	//	append it to the appropriate object (as IDed by the index of the card)
-	if ($accordion.length) {
-
-		const tableName = $accordion.data('table-name');//fieldInfo.tableName;
-
-		// If this is the first time a field has been changed in this 
-		//	accordion, FIELD_VALUES[tableName] will be undefined
-		if (!FIELD_VALUES[tableName]) FIELD_VALUES[tableName] = {};
-		const tableRows = FIELD_VALUES[tableName];
-		
-		// Get the index of this card within the accordion
-		const index = $input.attr('id').match(/\d+$/)[0];
-		if (!tableRows[index]) tableRows[index] = {};
-		tableRows[index][fieldName] = val;
-	} else {
-		FIELD_VALUES[fieldName] = val;
-	}
-}
+		/*// Check if the user has a field values from a saved session
 
 
-function validateFields($parent, focusOnField=true) {
-
-
-	const $fields = $parent
-		.find('.field-container:not(.disabled)')
-		.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
-		(_, el) => {
-			const $el = $(el);
-			const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable, .field-container.disabled');
-			if (!$el.val() && $hiddenParent.length === 0) {
-				$el.addClass('error');
-			} else {
-				$el.removeClass('error');
-			}
-	});
-
-	if ($fields.filter('.error').length) {
-		// Search the parent(s) for any .collapse elements that aren't shown. 
-		//	If one is found, show it
-		$parent.each(function() {
-			const $el = $(this);
-			if ($el.hasClass('collapse') && !$el.hasClass('show')) {
-				$el.siblings('.card-header')
-					.find('.card-link')
-					.click();
-				return false;
-			}
-		});
-		if (focusOnField) $fields.first().focus();
-		return false;
-	} else {
-		return true;
+		// Determine which table each column belongs to
+		const sql = `
+			SELECT 
+				table_name,
+				column_name,
+				data_type 
+			FROM information_schema.columns 
+			WHERE 
+				table_schema='public' AND 
+				table_name NOT LIKE '%_codes' AND 
+				column_name NOT IN ('encounter_id', 'id')
+			;
+		`;
+		queryDB(sql)
+			.done(
+				queryResultString => {
+					const queryResult = $.parseJSON(queryResultString);
+					if (queryResult) {
+						const hasSavedSession = Object.keys(this.fieldValues).length;
+						queryResult.forEach( (row) => {
+							const columnName = row.column_name;
+							this.fieldInfo[columnName] = {};
+							this.fieldInfo[columnName].tableName = row.table_name;
+							this.fieldInfo[columnName].dataType = row.data_type;
+						});
+					}
+				}
+			).fail(
+				(xhr, status, error) => {
+				showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
+			});*/
 	}
 
-}
 
-
-function goToSection(movement=1) {
-	
 	/* 
 	Skip to the section of the form.
 	@param movement: number of sections to jump to (positive=right or negative=left)
 	*/
-
-	const $currentSection = $('.form-section.selected');
-	const currentIndex = parseInt($currentSection.data('section-index'));
-	const nextIndex = currentIndex + movement;
-	const nextElementID = `#section-${nextIndex}`;
-	const $nextSection = $(nextElementID);
-
-	// Set style/selection on sections
-	$currentSection.removeClass('selected');
-	$nextSection.addClass('selected');
-
-	$(`.indicator-dot:isSection(${currentIndex})`).removeClass('selected');
-	$(`.indicator-dot:isSection(${nextIndex})`).addClass('selected');
-
-	// If there's an accordion in the new section, find any shown cards and
-	//	collapse them, then show them again after a delay
-	const $shown = $nextSection.find('.card:not(.cloneable) .card-collapse.show')
-		.filter('.show')
-		.removeClass('show');
-	if ($shown.length) {
-		setTimeout(function() {
-			$shown.siblings('.card-header')
-				.find('.card-link')
-				.click()
-		}, 800);
-	}
-
+	Constructor.prototype.goToPage = function(movement=1) {
 	
-	// if user settings prefer no motion, go directly to the section. 
-	//	Otherwise, scroll to it
-	const preventMotion = window.matchMedia('(prefers-reduced-motion)').matches
-	if (preventMotion) {
-		window.location.hash = nextElementID;
-		// Prevent jump link from appearing in URL (so user can't reload or 
-		//	use back button to go directly to a section, presumably by accident)
-		window.history.replaceState(null, document.title, document.URL.split('#')[0])
-	} else {
-		document.getElementById(nextElementID.replace('#', '')).scrollIntoView();
-		//window.location.hash = nextElementID;
+		const $currentPage = $('.form-page.selected');
+		const currentIndex = parseInt($currentPage.data('page-index'));
+		const nextIndex = currentIndex + movement;
+		const nextElementID = `#page-${nextIndex}`;
+		const $nextPage = $(nextElementID);
+
+		// Set style/selection on pages
+		$currentPage.removeClass('selected');
+		$nextPage.addClass('selected');
+
+		$(`.indicator-dot:isSection(${currentIndex})`).removeClass('selected');
+		$(`.indicator-dot:isSection(${nextIndex})`).addClass('selected');
+
+		// If there's an accordion in the new section, find any shown cards and
+		//	collapse them, then show them again after a delay
+		const $shown = $nextPage.find('.card:not(.cloneable) .card-collapse.show')
+			.filter('.show')
+			.removeClass('show');
+		if ($shown.length) {
+			setTimeout(function() {
+				$shown.siblings('.card-header')
+					.find('.card-link')
+					.click()
+			}, 800);
+		}
+
+		
+		// if user settings prefer no motion, go directly to the section. 
+		//	Otherwise, scroll to it
+		const preventMotion = window.matchMedia('(prefers-reduced-motion)').matches
+		if (preventMotion) {
+			window.location.hash = nextElementID;
+			// Prevent jump link from appearing in URL (so user can't reload or 
+			//	use back button to go directly to a section, presumably by accident)
+			window.history.replaceState(null, document.title, document.URL.split('#')[0])
+		} else {
+			document.getElementById(nextElementID.replace('#', '')).scrollIntoView();
+			//window.location.hash = nextElementID;
+		}
+		
+		if ($nextPage.is('.submit-page')) {
+			$('.required-indicator-explanation').addClass('hidden');
+		} else {
+			$('.required-indicator-explanation').removeClass('hidden');
+		}
+
+		return nextIndex;
+
 	}
-	
-	if ($nextSection.is('.submit-section')) {
-		$('.required-indicator-explanation').addClass('hidden');
-	} else {
-		$('.required-indicator-explanation').removeClass('hidden');
-	}
-
-	return nextIndex;
-
-}
 
 
-function setPreviousNextButtonState(nextIndex) {
 	/* 
 	Toggle the disabled attribute on the next or previous button 
 	if the user is at the first or last section
 
 	@param nextIndex [integer]: the section index that the user is moving to
-	
 	*/
+	Constructor.prototype.setPreviousNextButtonState = function(nextIndex) {
+		$('#previous-button').prop('disabled', nextIndex === 0)
+		$('#next-button').prop('disabled', nextIndex === $('.form-page:not(.title-page)').length - 1)
+	}
 
-	$('#previous-button').prop('disabled', nextIndex === 0)
-	$('#next-button').prop('disabled', nextIndex === $('.form-section:not(.title-section)').length - 1)
-}
+
+	/*
+	Event handler for the previous and next buttons
+	*/
+	Constructor.prototype.onPreviousNextButtonClick = function(e, movement) {
+
+		e.preventDefault();//prevent form from reloading
+		const $button = $(e.target);
+		if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
+
+		if ($button.attr('id') !== 'title-page-continue-button') {
+			const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
+				.filter((_, el) => {
+					let $closestCollapse = $(el).closest('.collapse');
+					while ($closestCollapse.length) {
+						if (!$closestCollapse.is('.show')) return false;
+						$closestCollapse = $closestCollapse.parent().closest('.collapse');
+					}
+					
+					return true;
+				});
+			const allFieldsValid = $parents
+				.map(
+					(_, el) => this.validateFields($(el))
+				).get()
+				.every((isValid) => isValid);
+			if (!allFieldsValid) {
+				showModal('There is at least one field on this page that is not valid or is not filled in. You must fill all required fields (has <span style="color:#b70606;">* </span> to the left of the field) before continuing to the next page. You can hover over each field for more information.', 'Invalid/incomplete fields')
+				return;
+			}
+		}
+
+		const nextIndex = this.goToPage(movement);
+
+		// The form navigation is initially hidden (other than the continue button) 
+		//	so show it once that button is clicked and hide the 'continue' button
+		if ($button.attr('id') === 'title-page-continue-button') {
+			$('.form-footer .form-navigation').removeClass('hidden');
+			$button.addClass('hidden');
+		} else {
+			// Enable/disable nav buttons
+			this.setPreviousNextButtonState(nextIndex);
+		}
+
+	}
 
 
-function onPreviousNextButtonClick(event, movement) {
+	/*
+	Event handler for click events on the progress indicator dots
+	*/
+	Constructor.prototype.onIndicatorDotClick = function(e) {
+	
+		e.preventDefault();
+		$dot = $(e.target);
+		if ($dot.hasClass('selected')) return;
 
-	event.preventDefault();//prevent form from reloading
-	const $button = $(event.target);
-	if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
-
-	if ($button.attr('id') !== 'title-section-continue-button') {
-		const $parents = $('.form-section.selected .validate-field-parent:not(.cloneable)')
-			.filter((_, el) => {
-				let $closestCollapse = $(el).closest('.collapse');
-				while ($closestCollapse.length) {
-					if (!$closestCollapse.is('.show')) return false;
-					$closestCollapse = $closestCollapse.parent().closest('.collapse');
-				}
-				
-				return true;
-			});
-		const allFieldsValid = $parents
-			.map(
-				(_, el) => validateFields($(el))
-			).get()
+		// validate fields for the currently selected section
+		/*const allFieldsValid = $('.form-page.selected .validate-field-parent')
+			.map(function() {
+				return this.validateFields($(this))
+			}).get()
 			.every((isValid) => isValid);
-		if (!allFieldsValid) {
-			showModal('There is at least one field on this page that is not valid or is not filled in. You must fill all required fields (has <span style="color:#b70606;">* </span> to the left of the field) before continuing to the next page. You can hover over each field for more information.', 'Invalid/incomplete fields')
+		if (!allFieldsValid) return;*/
+
+		const currentIndex = parseInt($('.indicator-dot.selected').data('page-index'));
+		const nextIndex = parseInt($dot.data('page-index'));
+
+		entryForm.goToPage(nextIndex - currentIndex);
+
+		entryForm.setPreviousNextButtonState(nextIndex);
+
+	}
+
+
+	/*
+	Handle entry field change events
+	*/
+	Constructor.prototype.onInputFieldChange = function(e) {
+		
+		const $input = $(e.target);
+		if ($input.closest('.cloneable').length) return;//triggered manually and should be ignored
+
+		const $accordion = $input.closest('.accordion');
+
+		// Don't save any attachments data. window.localStorage limit for most browsers 
+		//	is 5mb which is probably too small to save the attachment data. Since the 
+		//	attachment, therefore, can't reliably be loaded, it doesn't make sense to 
+		//	save any other data about attachments
+		if ($accordion.attr('id') === 'attachments-accordion') return;
+
+		// Get the name attribute from the field, which should be the corresponding column name
+		const fieldName = ($input.attr('name') || '')
+			.replace(/\-\d+$/g, '');//fields in accordions have the accordion index appended
+		if (!fieldName) {
+			console.log(`name attribute for ${$input.attr('id')} not defined`);
 			return;
 		}
+		
+		const val = $input.is('.input-checkbox') ? +$input.prop('checked') : $input.val();
+
+		const fieldInfo = entryForm.fieldInfo[fieldName];
+		if (!fieldInfo) {
+			console.log(`${fieldName} not in this.fieldInfo. ID: ${$input.attr('id')}`);
+			entryForm.fieldValues[fieldName] = val;
+			//return;
+		} 
+		
+		// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
+		//	there could, therefore, be multiple objects with this column. In that case,
+		//	append it to the appropriate object (as IDed by the index of the card)
+		if ($accordion.length) {
+
+			const tableName = $accordion.data('table-name');//fieldInfo.tableName;
+
+			// If this is the first time a field has been changed in this 
+			//	accordion, this.fieldValues[tableName] will be undefined
+			if (!entryForm.fieldValues[tableName]) entryForm.fieldValues[tableName] = {};
+			const tableRows = entryForm.fieldValues[tableName];
+			
+			// Get the index of this card within the accordion
+			const index = $input.attr('id').match(/\d+$/)[0];
+			if (!tableRows[index]) tableRows[index] = {};
+			tableRows[index][fieldName] = val;
+		} else {
+			entryForm.fieldValues[fieldName] = val;
+		}
 	}
 
-	const nextIndex = goToSection(movement);
 
-	// The form navigation is initially hidden (other than the continue button) 
-	//	so show it once that button is clicked and hide the 'continue' button
-	if ($button.attr('id') === 'title-section-continue-button') {
-		$('.form-footer .form-navigation').removeClass('hidden');
-		$button.addClass('hidden');
-	} else {
-		// Enable/disable nav buttons
-		setPreviousNextButtonState(nextIndex);
-	}
+	/*
+	Validate all fields currently in view
+	*/
+	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
+		const $fields = $parent
+			.find('.field-container:not(.disabled)')
+			.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
+			(_, el) => {
+				const $el = $(el);
+				const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable, .field-container.disabled, .hidden');
+				if (!$el.val() && $hiddenParent.length === 0) {
+					$el.addClass('error');
+				} else {
+					$el.removeClass('error');
+				}
+		});
 
-}
-
-
-function onIndicatorDotClick(event) {
-	
-	event.preventDefault();
-	$dot = $(event.target);
-	if ($dot.hasClass('selected')) return;
-
-	// validate fields for the currently selected section
-	/*const allFieldsValid = $('.form-section.selected .validate-field-parent')
-		.map(function() {
-			return validateFields($(this))
-		}).get()
-		.every((isValid) => isValid);
-	if (!allFieldsValid) return;*/
-
-	const currentIndex = parseInt($('.indicator-dot.selected').data('section-index'));
-	const nextIndex = parseInt($dot.data('section-index'));
-
-	goToSection(nextIndex - currentIndex);
-
-	setPreviousNextButtonState(nextIndex);
-
-}
-
-
-function toggleDependentFields($select) {
-	/*Helper function to recursively hide/show fields with data-dependent-target attribute*/
-
-	const selectID = '#' + $select.attr('id');
-	// Get all the elements with a data-dependent-target 
-	const dependentElements = $(`
-		.collapse.field-container .input-field, 
-		.collapse.accordion, 
-		.collapse.add-item-container .add-item-button
-		`).filter((_, el) => {return $(el).data('dependent-target') === selectID});
-	//const dependentIDs = $select.data('dependent-target');
-	//var dependentValues = $select.data('dependent-value');
-	dependentElements.each((_, el) => {
-		const $thisField = $(el);
-		var dependentValues = $thisField.data('dependent-value').toString();
-		if (dependentValues) {
-			var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container');
-			
-			// If there's a ! at the beginning, 
-			const notEqualTo = dependentValues.startsWith('!');
-			dependentValues = dependentValues
-				.toString()
-				.replace('!', '')
-				.split(',').map((s) => {return s.trim()});
-			
-			var selectVal = ($select.val() || '').toString().trim();
-
-			var show = notEqualTo ? 
-				!dependentValues.includes(selectVal) :
-				dependentValues.includes(selectVal);
-			if (!dependentValues[0] === '<blank>') {
-				show = show || selectVal !== '';
+		if ($fields.filter('.error').length) {
+			// Search the parent(s) for any .collapse elements that aren't shown. 
+			//	If one is found, show it
+			for (const el of $parent) {//.each(function() {
+				const $el = $(el);
+				if ($el.hasClass('collapse') && !$el.hasClass('show')) {
+					$el.siblings('.card-header')
+						.find('.card-link')
+						.click();
+					return false;
+				}
 			}
+			if (focusOnField) $fields.first().focus();
+			return false;
+		} else {
+			return true;
+		}
+	}
 
-			if (show) {
-				//$thisContainer.removeClass('hidden');
-				$thisContainer.collapse('show');
-				toggleDependentFields($thisField, hide=false)
-			} else {
-				$thisContainer.collapse('hide');
-				//$thisContainer.addClass('hidden');
-				toggleDependentFields($thisField, hide=true)
+
+	/*
+	Helper function to recursively hide/show fields with data-dependent-target attribute
+	*/
+	Constructor.prototype.toggleDependentFields = function($select) {
+
+		const selectID = '#' + $select.attr('id');
+		// Get all the elements with a data-dependent-target 
+		const dependentElements = $(`
+			.collapse.field-container .input-field, 
+			.collapse.accordion, 
+			.collapse.add-item-container .add-item-button
+			`).filter((_, el) => {return $(el).data('dependent-target') === selectID});
+		//const dependentIDs = $select.data('dependent-target');
+		//var dependentValues = $select.data('dependent-value');
+		dependentElements.each((_, el) => {
+			const $thisField = $(el);
+			if (el.id == 'input-input-recovered_value-0') {
+				let a=0;
+			}
+			var dependentValues = $thisField.data('dependent-value').toString();
+			if (dependentValues) {
+				var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container');
+				
+				// If there's a ! at the beginning, 
+				const notEqualTo = dependentValues.startsWith('!');
+				dependentValues = dependentValues
+					.toString()
+					.replace('!', '')
+					.split(',').map((s) => {return s.trim()});
+				
+				var selectVal = ($select.val() || '').toString().trim();
+
+				var show = notEqualTo ? 
+					!dependentValues.includes(selectVal) :
+					dependentValues.includes(selectVal);
+				if (!dependentValues[0] === '<blank>') {
+					show = show || selectVal !== '';
+				}
+
+				if (show) {
+					//$thisContainer.removeClass('hidden');
+					$thisContainer.collapse('show');
+					entryForm.toggleDependentFields($thisField, hide=false)
+				} else {
+					$thisContainer.collapse('hide');
+					//$thisContainer.addClass('hidden');
+					entryForm.toggleDependentFields($thisField, hide=true)
+				}
+			}
+		});
+	}
+
+
+	/*
+	Event handler for selects
+	*/
+	Constructor.prototype.onSelectChange = function(e) {
+		// Set style depending on whether the default option is selected
+		const $select = $(e.target);
+
+		if ($select.val() === '') {
+			$select.addClass('default');
+
+		} else {
+			$select.removeClass('default error');
+			// the user selected an actual option so remove the empty default option
+			for (const el of $select.find('option')) {//.each(function(){
+				const $option = $(el);
+				if ($option.val() == '') {
+					$option.remove();
+				}
 			}
 		}
-	});
-	/*const $dependentFields = $($select.data('dependent-target'));
-	if ($dependentFields.length) {
-		$dependentFields.each((i, el) => {
-			const $dependentField = $(el);
-			const $dependentContainer = $dependentField.closest('.collapse.field-container');
-			if (hide) {
-				$dependentContainer.collapse('hide');
-				$dependentField.addClass('hidden');
-				toggleDependentField($dependentField, hide=true);
-			} else if ($dependentField.hasClass('has-dependent-value')) {
-				$dependentField.removeClass('hidden');
-				$dependentContainer.collapse('show');
-				toggleDependentField($dependentField, hide=false)
-			}
-		});
-	}*/
 
-}
-
-function onSelectChange() {
-
-	// Set style depending on whether the default option is selected
-	const $select = $(this);
-
-	if ($select.val() === '') {
-		$select.addClass('default');
-
-	} else {
-		$select.removeClass('default error');
-		// the user selected an actual option so remove the empty default option
-		$select.find('option').each(function(){
-			const $option = $(this);
-			if ($option.val() == '') {
-				$option.remove();
-			}
-		})
+		// If there are any dependent fields that should be shown/hidden, 
+		//	toggle its visibility as necessary
+		entryForm.toggleDependentFields($select);
 	}
 
-	// If there are any dependent fields that should be shown/hidden, 
-	//	toggle its visibility as necessary
-	toggleDependentFields($select);
-	/*const dependentIDs = $select.data('dependent-target');
-	var dependentValues = $select.data('dependent-value');
-	if (dependentIDs && dependentValues) {
-		dependentIDs.split(',').map((s) => {return s.trim()}).forEach((id, i) => {
-			const $dependentField = $(id);
-			dependentValues = dependentValues.toString().split(',').map((s) => {return s.trim()});
-			if (dependentValues.includes($select.val().toString())) {
-				$dependentField.addClass('has-dependent-value')
-				toggleDependentField($select, hide=false)
-			} else {
-				$dependentField.removeClass('has-dependent-value')
-				toggleDependentField($select, hide=true)
-			}
-		});
-	}*/
 
-}
-
-function onInitialActionChange() {
 	/*
 	Rather than using the dependent-target/value attributes, the interactions 
 	accordion should only be shown when both inital action fields are filled
 	*/
-	var fieldsFull;
-	$('#input-initial_human_action, #input-initial_bear_action').each((_, el) => {
-		fieldsFull = !!$(el).val(); //if it hasn't been filled yet it'll be '' (empty string)
-		return fieldsFull;//if false, this will break out of .each() loop
-	})
+	Constructor.prototype.onInitialActionChange = function() {
 
-	if (fieldsFull) {
-		$('#reactions-accordion')
-			.collapse('show')
-			.siblings('.add-item-container')
-				.collapse('show');
+		var fieldsFull;
+		$('#input-initial_human_action, #input-initial_bear_action').each((_, el) => {
+			fieldsFull = !!$(el).val(); //if it hasn't been filled yet it'll be '' (empty string)
+			return fieldsFull;//if false, this will break out of .each() loop
+		})
+
+		if (fieldsFull) {
+			$('#reactions-accordion')
+				.collapse('show')
+				.siblings('.add-item-container')
+					.collapse('show');
+		}
 	}
-}
 
 
-function onCoordinateFormatChange(event) {
 	/*
 	Rather than using the dependent-target/value attributes, the previous 
 	coordinate fields should be hidden immediately to avoid the brief but 
 	disorienting moment when 2 sets of coordinate fields are visible
 	*/
+	Constructor.prototype.onCoordinateFormatChange = function(e) {
 
-	const $select = $(event.target);
-	const format = $select.val();
+		const $select = $(e.target);
+		const format = $select.val();
 
-	// Get the collapse to show. If this already shown, that means this function 
-	//	was triggerred manually with .change(), and shouldn't actually be hidden
-	const $currentCollapse = $('.coordinates-' + format).closest('.collapse');
-	if ($currentCollapse.is('.show')) return;
+		// Get the collapse to show. If this already shown, that means this function 
+		//	was triggerred manually with .change(), and shouldn't actually be hidden
+		const $currentCollapse = $('.coordinates-' + format).closest('.collapse');
+		if ($currentCollapse.is('.show')) return;
 
-	// Hide all coordinate fields (which is really just the currently visible one)
-	$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').each((_, el) => {
-		$(el).closest('.collapse')
-			.addClass('hidden')//add hidden class first
-			.collapse('hide');
-	})
+		// Hide all coordinate fields (which is really just the currently visible one)
+		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').each((_, el) => {
+			$(el).closest('.collapse')
+				.addClass('hidden')//add hidden class first
+				.collapse('hide');
+		})
+			
+		// Show the one that corresponds to the selected format
+		$currentCollapse.collapse('show');
+	}
+
+
+	/* 
+	Add a new card to the accordion. There needs to be a card with the class "cloneable", 
+	which should be hidden and only used to add a new item
+	*/
+	Constructor.prototype.addNewCard = function($accordion, cardIndex=null) {
+
+		const $dummyCard = $accordion.find('.card.cloneable');
+		if ($dummyCard.length === 0) {
+			console.log('No dummy card found');
+			return;
+		}
+
+		// Close any open cards
+		$accordion.find('.card:not(.cloneable) .collapse.show').each(
+			function() {$(this).siblings('.card-header').find('.card-link').click()}
+		);
+
+		// Get ID suffix for all children elements. Suffix is the 
+		//	<element_identifier>-<section_index>-<card_index>.
+		//	This is necessary to distinguish elements from others in 
+		//	other form sections and other cards within the section
+		/*const sectionIndex = $accordion.closest('.form-page')
+			.data('page-index');*/
+		const tableName = $accordion.data('table-name');
+		if (!cardIndex) {
+			var cardIndex = $accordion.find('.card').length - 1;// - 1 because cloneable is 0th
+			while ($(`#card-${tableName}-${cardIndex}`).length) {
+				cardIndex++;
+			}
+		}
+
+		const idSuffix = `${tableName}-${cardIndex}`;//`${sectionIndex}-${cardIndex}`;
+
+		const $newCard = $dummyCard.clone(withDataAndEvents=true)
+			.removeClass('cloneable hidden')
+			.attr('id', `card-${idSuffix}`);
 		
-	// Show the one that corresponds to the selected format
-	$currentCollapse.collapse('show');
-}
+		//Set attributes of children
+		const $newHeader = $newCard.find('.card-header');
+		$newHeader
+			.attr('id', `cardHeader-${idSuffix}`)
+			.find('.card-link')
+				.attr('href', `#collapse-${idSuffix}`)
+				.attr('data-target', `#collapse-${idSuffix}`);
 
+		const $newCollapse = $newCard.find('.card-collapse')
+			.attr('id', `collapse-${idSuffix}`)
+			.attr('aria-labelledby', `cardHeader-${idSuffix}`)
+			.addClass('validate-field-parent');
+
+		$newCollapse.find('.card-body')
+			.find('.input-field')
+			.each(function() {
+				const $el = $(this);
+				const newID = `${$el.attr('id')}-${cardIndex}`;
+				$el.data('dependent-target', `${$el.data('dependent-target')}-${cardIndex}`);
+				$el.attr('id', newID)
+					.siblings()
+					.find('.field-label')
+						.attr('for', newID);
+			})
+			.filter('.error')
+				.removeClass('error');
+		$newCollapse.find('.field-container .file-input-label')
+			.attr('for', `attachment-upload-${cardIndex}`);
+		
+		// Add to the accordion
+		$newCard.appendTo($accordion).fadeIn();
+
+		// Open the card after a brief delay
+		//$newCard.find('.collapse:not(.show)').click();
+		setTimeout(function(){
+			$newCard.find('.collapse:not(.show)').siblings('.card-header').find('.card-link').click();
+		}, 500);
+
+		return $newCard;
+	}
+
+
+	/*
+	Handle click events on any "Add Item" buttons
+	*/
+	Constructor.prototype.onAddNewItemClick = function(e) {
+		e.preventDefault();
+		const $accordion = $('#' + $(e.target).data('target'));
+
+		const itemName = $accordion.find('.delete-button').first().data('item-name');
+		var isValid = true;
+		$accordion.find('.card:not(.cloneable) .card-collapse').each((_, el) => {
+			isValid = entryForm.validateFields($(el));
+			if (!isValid) {
+
+				showModal(`You have to finish filling details of all existing ${itemName ?  itemName : 'item'}s before you can add a new one.`, 'Incomplete item');
+				return;
+			}
+		})
+
+		if (isValid) entryForm.addNewCard($accordion);
+	}
+
+
+	/*
+	Helper function to handle card deletions from an accordion
+	*/
+	Constructor.prototype.onConfirmDeleteCardClick = function(cardID) {
+		const $card = $('#' + cardID);
+
+		$card.fadeOut(500, function(){
+			const cardIndex = cardID.match(/\d+$/)[0];
+			const tableName = $card.closest('.accordion').data('table-name');
+			const $siblings = $card.siblings('.card:not(.cloneable)');
+			
+			$card.remove();
+
+			const fieldValues = entryForm.fieldValues[tableName];
+			if (fieldValues) {
+				if (Object.keys(fieldValues).length >= cardIndex) delete fieldValues[cardIndex];
+			}
+
+			$siblings.each((_, card) => {entryForm.onCardLabelFieldChange($(card).find('.card-label-field').first())});
+		})
+	}
+
+
+	/*
+	Actual handler for card deletions from an accordion
+	*/
+	Constructor.prototype.onDeleteCardClick = function(e) {
+
+		e.preventDefault();
+		e.stopPropagation();
+
+		var $button = $(e.target);
+		if ($button.hasClass('fas')) 
+			$button = $button.closest('.delete-button');//if the actual target clicked was the icon, bubble up to the button
+		
+		const itemName = $button.data('item-name');
+		const $card = $button.closest('.card');
+		const cardID = $card.attr('id');
+
+		const dependentInputID = $card.closest('.accordion')
+			.data('dependent-target');
+		const isLastCard = $card.siblings('.card').length === 1;
+
+		if (isLastCard && !dependentInputID) {
+			showModal(`This is the only ${itemName} listed thus far, and you must enter at least one.`, `Invalid operation`);
+		} else {
+			// If the user confirms the delete, fade it out after .5 sec then reset the remaining card labels
+			const onConfirmClick = isLastCard && dependentInputID ? `$('${dependentInputID}').val(0).change();` : `entryForm.onConfirmDeleteCardClick('${cardID}');`
+			const footerButtons = `
+				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
+				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
+			`;
+			showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
+		}
+	}
+
+
+	/*
+	Helper function to set the label on a card
+	*/
+	Constructor.prototype.setCardLabel = function($card, names, defaultText, joinCharacter=' ') {
+		var labelComponents = {};
+		$card.find('.input-field.card-label-field').each(function() {
+			const $el = $(this);
+			const thisValue = $el.is('select') && ($el.val() || '').trim() != '' ? 
+				$el.find('option').filter((_, option) => {return $(option).val() === $el.val()}).html() : 
+				$el.val();
+			if (!thisValue && thisValue !== '') {
+				console.log($el.attr('id'))
+			}
+			const thisName = $el.attr('name');
+			if (names.includes(thisName) && (thisValue || '').length && thisValue != ' ') {
+				// If the 
+				let index = $el.data('card-label-index');
+				index = index == undefined ? names.indexOf(thisName) : index;
+				// Make sure a component isn't overwritten if the card-label-index 
+				//	property is inconsistently set
+				while (Object.keys(labelComponents).includes(index)) { 
+					index ++;
+				}
+				labelComponents[index] = thisValue;
+			}
+		})
+
+		// Sort the indices in case the card-label-index properties were set and 
+		//	don't match the natural order of the card-label-component elements
+		var sortedComponents = [];
+		Object.keys(labelComponents).sort().forEach((k, i) => {
+		    sortedComponents[i] = labelComponents[k];
+		});
+
+		$cardLabel = $card.find('.card-link-label');
+
+		// If the data-label-sep attribute is defined, use that. Otherwise, use the default
+		const cardHeaderSeparator = $cardLabel.data('label-sep');
+		joinCharacter = cardHeaderSeparator != undefined ? cardHeaderSeparator : joinCharacter;
+
+
+		const indexText = $cardLabel.is('.label-with-index') ? //if true, add the index to the label
+			`${$card.index()} - ` : '';//`${parseInt($card.attr('id').match(/\d+$/)) + 1} - ` : ''
+		const joinedText = indexText + sortedComponents.join(joinCharacter);
+
+		if (sortedComponents.length === names.length) {
+			$cardLabel.fadeOut(250).fadeIn(250).delay(300).text(joinedText);
+		} else if ($cardLabel.text() !== defaultText) {
+			$cardLabel.fadeOut(250).fadeIn(250).delay(300).text(defaultText);
+		}
+	}
+
+
+	/*
+	Handler for when a .card-label-field changes -> updates the card header text
+	*/
+	Constructor.prototype.onCardLabelFieldChange = function($field) {
+
+		const $card = $field.closest('.card');
+		
+		var names = $card.find('.card-label-field')
+			.map(function(_, el) {
+	    		return $(el).attr('name');
+			})
+			.get(); // get returns the underlying array
+
+		//const defaultText = $card.closest('.accordion').find('.card.cloneable.hidden .card-link-label').text();
+		const defaultText = $card.find('.card-link-label').text();
+
+		entryForm.setCardLabel($card, names, defaultText);
+	}
+
+
+	/*
+	When a user types anything in a text field, remove the error class
+	*/
+	Constructor.prototype.onInputFieldKeyUp = function(e) {
+		$(e.target).removeClass('error');
+	}
+
+
+	/*
+	Call zipstatic API to get city and state from postal code
+	*/
+	Constructor.prototype.getCityAndState = function(countryCode, postalCode) {
+
+		const deferred = $.ajax({
+			url: `https://zip.getziptastic.com/v2/${countryCode}/${postalCode}`, //http://api.zippopotam.us
+			cache: false,
+			dataType: "json",
+			type: "GET"
+		})
+
+		return deferred;
+	}
+
+	/*
+	Event handler for postal code field change
+	*/
+	Constructor.prototype.onCountryPostalCodeChange = function(e) {
+
+		e.preventDefault();
+
+		const $el = $(e.target);
+		const $cardBody = $el.closest('.card-body');
+		const $country = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-country')});
+		const $zipcode = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-zip_code')});
+		const countryCode = $country.val();
+		const postalCode = $zipcode.val();
+
+		if (countryCode && postalCode) {
+			this.getCityAndState(countryCode, postalCode)
+				.then(function(jsonResponse) {
+					if (jsonResponse.city && jsonResponse.state_short) {
+						$city = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-city')});
+						$state = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-state')});
+						$city.val(jsonResponse.city);
+						$state.val(jsonResponse.state_short).change();
+					}
+				});
+
+		}
+	}
+
+
+	/*
+	Configure a Leaflet map given a div HTML ID
+	*/
+	Constructor.prototype.configureMap = function(divID) {
+		
+		var mapCenter, mapZoom;
+		const pageName = window.location.pathname.split('/').pop();
+		var currentStorage = window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
+		if (currentStorage.encounterMapInfo) {
+			mapCenter = currentStorage.encounterMapInfo.center;
+			mapZoom = currentStorage.encounterMapInfo.zoom;
+		}
+
+		var map = L.map(divID, {
+			editable: true,
+			scrollWheelZoom: false,
+			center: mapCenter || [63.2, -150.7],
+			zoom: mapZoom || 7
+		});
+
+		var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+		}).addTo(map);
+
+		const deferred = $.ajax({url: 'resources/dena_bc_units.json'})
+			.done(geojson => {
+				const defaultGeojsonStyle = {
+					color: '#000',
+					opacity: 0.2,
+					fillColor: '#000',
+					fillOpacity: 0.15 
+				}
+				const hoverGeojsonStyle = {
+					color: '#000',
+					opacity: 0.4,
+					fillColor: '#000',
+					fillOpacity: 0.15 
+				}
+
+				const onMouseover = (e) => {
+					let layer = e.target;
+
+					layer.setStyle(hoverGeojsonStyle)
+
+					if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+						layer.bringToFront();
+					}
+				}
+				const onMouseout = (e) => {
+					bcUnitsLayer.resetStyle(e.target);
+				}
+				const onEachFeature = (feature, layer) => {
+					layer.on({
+						mouseover: onMouseover,
+						mouseout: onMouseout
+					})
+				}
+
+				var bcUnitsLayer; // define before calling L.geoJSON() so onMouseout event can reference
+				bcUnitsLayer = L.geoJSON(
+					geojson, 
+					{
+						style: {
+							color: '#000',
+							opacity: 0.2,
+							fillColor: '#000',
+							fillOpacity: 0.15 
+						},
+						onEachFeature: onEachFeature //add mouseover and mouseout listeners
+					}
+				).bindTooltip(
+					layer => layer.feature.properties.Unit + ': ' + layer.feature.properties.Name,
+					{
+						sticky: true
+					}
+				).addTo(map);
+
+			}).fail((xhr, error, status) => {
+				console.log('BC unit geojson read failed: ' + error);
+			})
+
+		// Make the encounter marker drag/droppable onto the map
+		$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
+		$('#encounter-location-map').droppable({drop: this.markerDroppedOnMap});
+
+		return map;
+	}
+
+
+	/*
+	Convert coordinates from decimal degrees to degrees decimal 
+	minutes and degrees minutes seconds and fill in the respective fields
+	*/
+	Constructor.prototype.fillCoordinateFields = function(latDDD, lonDDD) {
+
+		// Set ddd fields
+		const $latDDDField = $('#input-lat_dec_deg').val(latDDD);
+		const $lonDDDField = $('#input-lon_dec_deg').val(lonDDD);
+
+		// Fill global this.fieldValues in case this function was called by dragging 
+		//	and dropping the marker, which won't trigger the onInputFieldChange() event
+		this.fieldValues[$latDDDField.attr('name')] = latDDD;
+		this.fieldValues[$lonDDDField.attr('name')] = lonDDD;
+
+		// Set ddm fields
+		const minuteStep = $('#input-lat_dec_min').attr('step');
+		const minuteRounder = Math.round(1 / (minuteStep ? minuteStep : 0.001));
+		const latSign = latDDD / Math.abs(latDDD)
+		const latDegrees = Math.floor(Math.abs(latDDD)) * latSign
+		const latDecimalMinutes = Math.round((Math.abs(latDDD) - Math.abs(latDegrees)) * 60 * minuteRounder) / minuteRounder;
+		const lonSign = lonDDD/Math.abs(lonDDD)
+		const lonDegrees = Math.floor(Math.abs(lonDDD)) * lonSign;
+		const lonDecimalMinutes = Math.round((Math.abs(lonDDD) - Math.abs(lonDegrees)) * 60 * minuteRounder) / minuteRounder;
+		$('#input-lat_deg_ddm').val(latDegrees);
+		$('#input-lat_dec_min').val(latDecimalMinutes);
+		$('#input-lon_deg_ddm').val(lonDegrees);
+		$('#input-lon_dec_min').val(lonDecimalMinutes);
+
+		// Set dms fields
+		const secondStep = $('#input-lat_dec_sec').attr('step');
+		const secondRounder = Math.round(1 / (secondStep ? secondStep : 0.1));
+		const latMinutes = Math.floor(latDecimalMinutes);
+		const latDecimalSeconds = Math.round((latDecimalMinutes - latMinutes) * 60 * secondRounder) / secondRounder;
+		const lonMinutes = Math.floor(lonDecimalMinutes);
+		const lonDecimalSeconds = Math.round((lonDecimalMinutes - lonMinutes) * 60 * secondRounder) / secondRounder;
+		$('#input-lat_deg_dms').val(latDegrees);
+		$('#input-lat_min_dms').val(latMinutes);
+		$('#input-lat_dec_sec').val(latDecimalSeconds);
+		$('#input-lon_deg_dms').val(lonDegrees);
+		$('#input-lon_min_dms').val(lonMinutes);
+		$('#input-lon_dec_sec').val(lonDecimalSeconds);
+
+		// Remove error class from coordinate fields
+		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').removeClass('error');
+
+	}
+
+	/* 
+	Helper function to check if the encounter Marker has 
+	already been added to the encounter location map
+	*/
+	Constructor.prototype.markerIsOnMap = function() {
+
+		var isOnMap = false;
+		this.encounterMap.eachLayer((layer) => {
+			if (layer === this.encounterMarker) isOnMap = true;
+		});
+
+		return isOnMap;
+	}
+
+	/*
+	Add or move the encounter Marker on the encounter location map. 
+	Also update the coordinate fields accordingly. The only argument
+	is an object with properties "lat" and "lng" to mirror the 
+	Leaflet.event.latlng object.
+
+	lat: latitude in decimal degrees
+	lng: longitude in decimal degrees.
+	*/
+	Constructor.prototype.placeEncounterMarker = function({lat=0, lng=0}={}) {
+
+
+		this.encounterMarker.setLatLng({lat: lat, lng: lng});//, options={draggable: true});
+		
+		if (!this.markerIsOnMap()) {
+			this.encounterMarker.addTo(this.encounterMap);
+			this.removeDraggableMarker();
+		}
+
+		// If the marker is outside the map bounds, zoom to it
+		if (!this.encounterMap.getBounds().contains(this.encounterMarker.getLatLng())) {
+			this.encounterMap.setView(this.encounterMarker.getLatLng(), this.encounterMap.getZoom());
+		}
+		
+		// Make sure the coords for fields are appropriately rounded
+		var [latDDD, lonDDD] = getRoundedDDD(lat, lng);
+
+		// Fill DMM and DMS fields
+		this.fillCoordinateFields(latDDD, lonDDD);
+	}
+
+
+	/* 
+	helper function to remove the draggable marker and the label 
+	*/
+	Constructor.prototype.removeDraggableMarker = function() {
+	
+		$('#encounter-marker-img').remove();
+		$('#encounter-marker-container').slideUp(500, (_, el) => {$(el).remove()});
+	}
+
+	/*
+	Place the marker when the user drops the draggable marker img on the map
+	*/
+	Constructor.prototype.markerDroppedOnMap = function(e) {
+
+		e.preventDefault()
+		
+		// Convert pixel coordinates of the drop event to lat/lon map coordinates.
+		//	Adjust for the offset of where the user grabbed the marker. It should be
+		//	the distance to the center-bottom of the marger img. The underlying Leaflet
+		//	API uses either .pageX or .clientX so just reset both (see
+		//	https://github.com/Leaflet/Leaflet/blob/e64743f741e6d13e36dea26f494d52e960a3274e/src/dom/DomEvent.js#L141
+		//	for source code)
+		var originalEvent = e.originalEvent;
+		const $target = $(originalEvent.target);
+		originalEvent.pageX -= originalEvent.offsetX - ($target.width() / 2);
+		originalEvent.pageY -= originalEvent.offsetY - $target.height();
+		originalEvent.clientX -= originalEvent.offsetX - ($target.width() / 2); 
+		originalEvent.clientY -= originalEvent.offsetY - $target.height();
+		const latlng = entryForm.encounterMap.mouseEventToLatLng(originalEvent);
+		
+		entryForm.placeEncounterMarker(latlng);
+
+		entryForm.removeDraggableMarker();
+
+		$('#input-location_accuracy').val(3).change();//== < 5km
+
+	}
+
+	/*
+	Use encounter Merker to reset coordinate fields
+	*/
+	Constructor.prototype.setCoordinatesFromMarker = function() {
+		
+
+		const latlng = this.encounterMarker.getLatLng();
+		var [latDDD, lonDDD] = getRoundedDDD(latlng.lat, latlng.lng);
+		this.fillCoordinateFields(latDDD, lonDDD);
+
+		$('#input-location_accuracy').val(3).change();//== < 5km
+	}
+
+
+	/* 
+	If the encounter Marker is already on the map, ask the user
+	(with a modal dialog) if they want to move it to [lat, lon]. 
+	Otherwise, just place it at [lat, lon].
+	*/ 
+	Constructor.prototype.confirmMoveEncounterMarker = function(lat, lon, confirmJSCodeString='') {
+
+		
+		const onConfirmClick = `entryForm.placeEncounterMarker({lat: ${lat}, lng: ${lon}});${confirmJSCodeString}`;
+		const footerButtons = `
+			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="entryForm.setCoordinatesFromMarker()">No</button>
+			<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
+		`;
+		const message = `You've already placed the encounter location marker on the map. Are you sure you want to move it to a new location? Click 'No' to keep it in the current location.`
+		showModal(message, `Move the encounter location?`, 'confirm', footerButtons);
+	}
+
+
+	/*
+	Event handler for when a decimal degree field is changed
+	*/
+	Constructor.prototype.onDDDFieldChange = function() {
+	
+		const latDDD = $('#input-lat_dec_deg').val();
+		const lonDDD = $('#input-lon_dec_deg').val();
+
+		if (latDDD && lonDDD) {
+			if (entryForm.markerIsOnMap()) { 
+				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			} else {
+				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+			}
+		}
+	}
+
+	/*
+	Event handler for when a degree decimal minute field is changed
+	*/
+	Constructor.prototype.onDMMFieldChange = function() {
+
+		const latDegrees = $('#input-lat_deg_ddm').val();
+		const lonDegrees = $('#input-lon_deg_ddm').val();
+		const latDecimalMinutes = $('#input-lat_dec_min').val();
+		const lonDecimalMinutes = $('#input-lon_dec_min').val();
+
+		if (latDegrees && lonDegrees && latDecimalMinutes && lonDecimalMinutes) {
+			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latDecimalMinutes, lonDecimalMinutes);
+			if (entryForm.markerIsOnMap()) { 
+				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			} else {
+				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+			}
+		}
+
+	}
+
+
+	/*
+	Event handler for when a degree decimal minute field is changed
+	*/
+	Constructor.prototype.onDMSFieldChange = function() {
+
+		const latDegrees = $('#input-lat_deg_dms').val();
+		const lonDegrees = $('#input-lon_deg_dms').val();
+		const latMinutes = $('#input-lat_min_dms').val();
+		const lonMinutes = $('#input-lon_min_dms').val();
+		const latDecimalSeconds = $('#input-lat_dec_sec').val();
+		const lonDecimalSeconds = $('#input-lon_dec_sec').val();
+
+		if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
+			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
+			if (entryForm.markerIsOnMap()) { 
+				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			} else {
+				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+			}
+		}
+
+	}
+
+
+	/*
+	Helper function to make sure appropriate actions are triggered when
+	coordinates are set from the user selecting a location
+	*/
+	Constructor.prototype.confirmSetMarkerFromLocationSelect = function() {
+		// Set datum code to WGS84 since the coordinates stored in the DB are WGS84
+		$('#input-datum').val(1).change(); //WGS84
+		$('#input-location_accuracy').val(4).change(); // == < 20km
+	}
+
+
+	/*
+	Event handler for when either the place name or BC unit select changes. 
+	try to update the location coordinates and marker from coordinates stored 
+	in the DB
+	*/
+	Constructor.prototype.onLocationSelectChange = function(e) {
+
+
+		// If the element isn't in the viewport, this function is likely being manually 
+		//	triggered with .change() (when data are loaded from localStorage). In that 
+		//	case, nothing should happen
+		const el = e.target;
+		if (!isInViewport(el)) return;
+
+		const latDDD = $('#input-lat_dec_deg').val();
+		const lonDDD = $('#input-lon_dec_deg').val();
+
+		const code = el.value;
+		const coordinates = $('#input-location_type').val() === 'Place name' ? 
+			entryForm.placeNameCoordinates :
+			entryForm.backcountryUnitCoordinates;
+
+		if (code in coordinates) {
+			const latlon = coordinates[code];
+			if (latDDD && lonDDD) {
+				const onConfirm = 'entryForm.confirmSetMarkerFromLocationSelect();';
+				entryForm.confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
+			} else {
+				entryForm.placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
+				entryForm.confirmSetMarkerFromLocationSelect();
+			}
+		}
+	}
+
+
+	/*
+	Handler for expand map button click
+	*/
+	Constructor.prototype.onExpandMapButtonClick = function(e) {
+
+		e.preventDefault();
+
+		// Create marker with event listener that does the same thing as this.encounterMarker
+		const modalMarker = new L.marker(entryForm.encounterMarker.getLatLng(), {
+				draggable: true,
+				autoPan: true,
+			})
+			.on('dragend', () => {
+				// When the modal marker is moved
+				//set the form marker postion
+				entryForm.encounterMarker.setLatLng(modalMarker.getLatLng()); 
+				//set coordinate fields
+				entryForm.setCoordinatesFromMarker();
+			})
+			.addTo(entryForm.modalEncounterMap);
+
+		$('#map-modal')
+			.on('shown.bs.modal', e => {
+				// When the modal is shown, the map's size is not yet determined so 
+				//	Leaflet thinks it's much smaller than it is. As a result, 
+				//	only a single tile is shown. Reset the size after a delay to prevent this
+				entryForm.modalEncounterMap.invalidateSize()
+				
+				// Center the map on the marker
+				entryForm.modalEncounterMap.setView(entryForm.encounterMarker.getLatLng(), entryForm.encounterMap.getZoom())
+			})
+			.on('hidden.bs.modal', e => {
+				// Remove the marker when the modal is hidden
+				entryForm.modalEncounterMap.removeLayer(modalMarker);
+
+				//center form map on the marker. Do this here because it's less jarring 
+				//	for the user to see the map move to center when the modal is closed
+				entryForm.encounterMap.setView(entryForm.encounterMarker.getLatLng(), entryForm.encounterMap.getZoom())
+			})
+			.modal() // Show the modal
+	}
+
+
+	/*
+	The reactions select options and label need to change depending on the 
+	user's selection of the "action-by" select. This helper function handles those updates.
+	*/
+	Constructor.prototype.updateReactionsSelect = function($actionBySelect) {
+
+		const actionBy = $actionBySelect.val();
+		const cardIndex = $actionBySelect.attr('id').match(/\d+$/);
+		const reactionSelectID = `input-reaction-${cardIndex}`;
+		const $reactionSelect = $('#' + reactionSelectID).empty();
+
+
+		const $label = $reactionSelect.siblings('.field-label');
+		var labelText = '';
+		switch (parseInt(actionBy)) {
+			case 1://human
+				labelText = 'What did you/another person do?';
+				break;
+			case 2://bear
+				labelText = 'What did the bear do?';
+				break;
+			case 3://dog
+				labelText = 'What did the dog do?';
+				break;
+			case 4: //stock animal
+				labelText = 'What did the stock animal do?';
+				break;
+		}
+		$label.text(labelText);
+		$reactionSelect.attr('placeholder', labelText)
+			.addClass('default')
+			.append(`<option class="" value="">${labelText}</option>`);
+		
+		// Return the deferred object so other functions can be triggered 
+		//	after the select is filled
+		return fillSelectOptions(reactionSelectID, 
+			`
+			SELECT code AS value, name 
+			FROM reaction_codes 
+			WHERE 
+				sort_order IS NOT NULL AND 
+				action_by=${actionBy} 
+			ORDER BY sort_order
+			`
+		);
+	}
+
+
+	/*
+	Helper function to update the "accept" attribute of the attachment file input when 
+	the user selects the type of file to upload. The acceptedAttachmentExtensions 
+	property gets set from the database when the page is loaded
+	*/
+	Constructor.prototype.updateAttachmentAcceptString = function(fileTypeSelectID) {
+		
+		const $fileTypeSelect = $('#' + fileTypeSelectID);
+		const extensions = this.acceptedAttachmentExtensions[$fileTypeSelect.val()];
+		const suffix = $fileTypeSelect.attr('id').match(/\d+$/);
+		$(`#attachment-upload-${suffix}`).attr('accept', extensions);
+
+		// Get the current value so onAttachmentType change knows whether to ask to confirm
+		//	a user's selection of a new file
+		$fileTypeSelect.data('previous-value', $fileTypeSelect.val());
+	}
+
+
+	/*
+	Handler for when the user changes the attachment type
+	*/
+	Constructor.prototype.onAttachmentTypeChange = function(e) {
+
+		const $fileTypeSelect = $(e.target);
+		const fileTypeSelectID = $fileTypeSelect.attr('id');
+		const previousFileType = $fileTypeSelect.data('previous-value');//should be undefined if this is the first time this function has been called
+		const $fileInput = $fileTypeSelect.closest('.card-body').find('.file-input-label ~ input[type=file]');
+		const fileInputID = $fileInput.attr('id');
+
+		// If the data-previous-value attribute has been set and there's already a file uploaded, that means the user has already selected a file
+		if (previousFileType && $fileInput.get(0).files[0]) {
+			const onConfirmClick = `
+				entryForm.updateAttachmentAcceptString('${fileTypeSelectID}');
+				$('#${fileInputID}').click();
+			`;
+			const footerButtons = `
+				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="$('#${fileTypeSelectID}').val('${previousFileType}');">No</button>
+				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
+			`;
+			const fileTypeCode = $fileTypeSelect.val();
+			const fileType = $fileTypeSelect.find('option')
+				.filter((_, option) => {return option.value === fileTypeCode})
+				.html()
+				.toLowerCase();
+			showModal(`You already selected a file. Do you want to upload a new <strong>${fileType}</strong> file instead?`, `Upload a new file?`, 'confirm', footerButtons);
+		} else {
+			entryForm.updateAttachmentAcceptString($fileTypeSelect.attr('id'));
+		}
+	}
+
+
+	/*
+	Read an image, video, or audio file
+	*/
+	Constructor.prototype.readAttachment = function(sourceInput, $destinationImg, $progressBar) {
+
+		const $barContainer = $progressBar.closest('.attachment-progress-bar-container');
+	 	const file = sourceInput.files[0];
+		if (sourceInput.files && file) {
+			var reader = new FileReader();
+			const fileName = file.name;
+
+			reader.onprogress = function(e) {
+				// Show progress
+				if (e.lengthComputable) {
+					const progress = e.loaded / e.total;
+					$progressBar.css('width', `${$barContainer.width() * progress}px`)
+				}
+			}
+
+			reader.onerror = function(e) {
+				// Hide preview and progress bar and notify the user
+				$progressBar.closest('.collapse').hide();
+				showModal(`The file '${fileName}' failed to upload correctly. Make sure your internet connection is consistent and try again.`, 'Upload failed');
+			}
+
+			reader.onload = function(e) {
+				// Show the thumbnail and hide the progress bar
+				const fileType = $barContainer.closest('.card').find('select').val();
+				setAttachmentThumbnail(fileType, $destinationImg, reader, file);
+				$barContainer.addClass('hidden');
+				$destinationImg.closest('.card')
+					.find('.card-link-label')
+						.fadeOut(250)
+						.fadeIn(250)
+						.delay(300)
+						.text(fileName);
+				entryForm.attachmentFiles[sourceInput.id] = sourceInput.files;
+				$progressBar.css('width', '0px');
+			}
+
+			if (file.type.match('image')) {
+				reader.readAsDataURL(file); 
+			} else {
+				reader.readAsArrayBuffer(file);
+			}
+		}
+	}
+
+
+	/*
+	Event handler for attachment input
+	*/
+	Constructor.prototype.onAttachmentInputChange = function(e) {
+		
+		const el = e.target; 
+		const $parent = $(el).closest('.field-container');
+
+		// If the user cancels, it resets the input files attribute to null 
+		//	which is dumb. Reset it to the previous file and exit
+		if (el.files.length === 0) {
+			el.files = entryForm.attachmentFiles[el.id];
+			return
+		}
+
+		$parent.find('.filename-label')
+			.text(el.files[0].name);
+		const $thumbnail = $parent.find('.file-thumbnail')
+			.addClass('hidden'); // hide thumbnail to show progress bar
+		const $progressBar = $parent.find('.attachment-progress-indicator')
+		$progressBar.closest('.attachment-progress-bar-container').removeClass('hidden');// Show progress bar
+		$progressBar.closest('.collapse')
+				.show();// make sure the collapse that contains both is open
+		
+		entryForm.readAttachment(el, $thumbnail, $progressBar);
+	}
+
+
+	/*
+	Denali's BHIMS form doesn't collect info on each bear, but the 
+	database does, so map the selections to a list of bears
+	*/
+	Constructor.prototype.onDENABearFieldChange = function(e) {
+		
+		e.preventDefault();
+
+		var values = {};
+		for (const bearField of $('.dena-bear-field')) {
+			// If the field hasn't been filled, exit
+			if (!bearField.value) return;
+			values[bearField.name] = bearField.value;
+		}
+
+		const bearsAgeSexCodes = {
+			'1':  [	//single bear of unknown age/sex
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ], 			
+			'2':  [ // bear with 1 cub of unknown age
+					{bear_age_code: 4, bear_sex_code: 1}, 
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ], 			
+			'3':  [ // bear with 2 cubs of unknown age
+					{bear_age_code: 4, bear_sex_code: 1}, 
+					{bear_age_code: -1, bear_sex_code: -1}, 
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ], 		
+			'4':  [ // bear with 3 cubs of unknown age
+					{bear_age_code: 4, bear_sex_code: 1},  
+					{bear_age_code: -1, bear_sex_code: -1}, 
+					{bear_age_code: -1, bear_sex_code: -1}, 
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ], 	
+			'5':  [ // 2 adults
+					{bear_age_code: 4, bear_sex_code: 1}, 
+					{bear_age_code: 4, bear_sex_code: 1}
+				  ],			
+			'-1': [ // unknown
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ],				
+			'-2': [ // other (so unknown)
+					{bear_age_code: -1, bear_sex_code: -1}
+				  ]				
+		};
+		const ageAndSex = bearsAgeSexCodes[values.bear_cohort_code];
+		
+		const $accordion = $('#bears-accordion');
+		
+		// Clear cards
+		$accordion.find('.card:not(.cloneable)').remove();
+
+		// For each individual bear, add a card
+		entryForm.fieldValues.bears = [];
+
+		// Bear cohort code is a field in the encounters table, not the bears table
+		delete values.bear_cohort_code;
+
+		for (const i in ageAndSex) {
+			const $card = entryForm.addNewCard($accordion);
+			const $inputs = $card.find('.input-field');
+			const bear = {...ageAndSex[i], ...values};
+			bear.bear_number = parseInt(i) + 1;
+
+			// Fill values for this card
+			for (name in bear) {
+				$inputs.filter((_, el) => {return el.name == name})
+					.val(bear[name])
+					.change();
+			}
+
+			entryForm.fieldValues.bears[i] = {...bear};
+		
+		}
+
+	}
+
+
+	/*
+	AJAX call to the PHP script to retrieve user's AD username
+	*/
+	Constructor.prototype.getUsername = function() {
+		return $.ajax({
+			url: 'bhims.php',
+			method: 'POST',
+			data: {action: 'getUser'},
+			cache: false
+		}).done(function(resultString) {
+				resultString = resultString.trim();
+				if (resultString)  {
+					entryForm.username = resultString.toLowerCase();
+					$('#input-entered_by').val(entryForm.username);	
+				} else {
+					console.log('username query failed. result: ' + resultString)
+				}
+		});
+	}
+
+
+	/*
+	Helper function to convert unordered parameters 
+	into pre-prepared SQL statement and params
+	*/
+	Constructor.prototype.valuesToSQL = function(values, tableName, timestamp) {
+
+		
+		var sortedFields = Object.keys(values).sort();
+		var parameters = sortedFields.map(f => values[f]);
+		
+
+		var returningClause = '', 
+			currvalClause = '',
+			parametized = '';
+
+		if (tableName === 'encounters') {
+			// Need to add RETURNING clause to get the encounter_id
+			returningClause = ' RETURNING id';
+			
+			sortedFields = sortedFields.concat(['entered_by', 'datetime_entered', 'last_edited_by', 'datetime_last_edited']);
+			parameters = parameters.concat([this.username, timestamp, this.username, timestamp]);
+			parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $'); //$1, $2, ...
+		} else {
+			// Need to add a parameter placeholder for the encounter_id for 
+			//	all tables other than encounters 
+			//parametized += ', $' + (sortedFields.length + 1);
+			// get parametized string before adding enconter_id since currvalClause will take the place of a param
+			parametized ='$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
+			currvalClause = `, currval(pg_get_serial_sequence('encounters', 'id'))`;
+			sortedFields.push('encounter_id');
+		}
+
+		
+		
+		const statement = `
+			INSERT INTO ${tableName}
+				(${sortedFields.join(', ')})
+			VALUES
+				(${parametized}${currvalClause})
+			${returningClause};
+		`;
+		
+
+		return [statement, parameters];
+
+	}
+
+//** make method of form obj
+	Constructor.prototype.onSubmitButtonClick = function(e) {
+
+		e.preventDefault();
+
+		showLoadingIndicator('onSubmitButtonClick');
+
+		// Validate all fields. This shouldn't be necessary since the user can't move 
+		//	to a new section with invalid fields, but better safe than sorry
+		for (const page of $('.form-page:not(.title-page)')) {
+			const $page = $(page);
+			const allFieldsValid = $page.find('.validate-field-parent')
+				.map((_, parent) => {
+					return entryForm.validateFields($(parent), focusOnField=false);
+				}).get()
+				.every((isValid) => isValid);
+			if (!allFieldsValid) {
+				hideLoadingIndicator();
+				const onClick = `			
+					const pageIndex = entryForm.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
+					entryForm.setPreviousNextButtonState(pageIndex);
+				`;
+				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
+				const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onClick}">OK</button>`
+				showModal(modalMessage, 'Missing or invalid information', 'alert', buttonHTML);
+				return;
+			}
+		}	
+
+		// Save attachments
+		const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
+		var deferreds = [];
+		var uploadedFiles = {};
+		var failedFiles = [];
+		const timestamp = getFormattedTimestamp();
+		for (const fileInput of $attachmentInputs) {
+			if (fileInput.files.length) {
+				const thisFile = fileInput.files[0]
+				const fileName = thisFile.name;
+				deferreds.push(saveAttachment(fileInput)
+					.then(
+						doneFilter=(resultString) => {
+							console.log(resultString)
+							if (resultString.trim().startsWith('ERROR')) {
+								failedFiles.push(fileName);
+							} else {
+								const $card = $(fileInput).closest('.card');
+								const filePath = resultString.trim().replace(/\//g, '\\');//replace forward slashes with backslash
+								const fileInfo = {
+									client_file_name: fileName,
+									file_path: filePath,//should be the saved filepath (with UUID)
+									file_size_kb: Math.floor(thisFile.size / 1000),
+									mime_type: thisFile.type,
+									attached_by: entryForm.username,//retrieved in window.onload()
+									datetime_attached: timestamp,
+									last_changed_by: entryForm.username,
+									datetime_last_changed: timestamp
+								};
+
+								for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
+									const fieldName = inputField.name;
+									// Get input values for all input fields except file input (which has 
+									//	the name "uploadedFile" used by php script)
+									if (fieldName in entryForm.fieldInfo) {
+										fileInfo[fieldName] = inputField.value; 
+									}
+								}
+								uploadedFiles[Object.keys(uploadedFiles).length] = fileInfo;
+							}
+						
+						},
+						failFilter=function(xhr, status, error) {
+							console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
+							failedFiles.push(fileName);
+						}
+					)
+				);
+
+			}
+		}
+
+		// When all of the uploads have finished (or failed), check if any failed. 
+		//	If they all succeeded, then insert data
+		$.when(
+			...deferreds
+		).then(function() {
+			if (failedFiles.length) {
+
+				const message = `
+					The following files could not be saved to the server:<br>
+					<ul>
+						<li>${failedFiles.join('</li><li>')}</li>
+					</ul>
+					<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
+				hideLoadingIndicator();
+				showModal(message, 'File uploads failed');
+				return;
+			} else {
+				
+				// Insert data
+				var sqlStatements = [];
+				var sqlParameters = [];
+
+				// Handle all fields in tables with 1:1 relationship to 
+				var unorderedParameters = {};
+				const inputsWithData = $('.input-field:not(.ignore-on-insert)')
+					.filter((_, el) => {
+						return $(el).data('table-name') != null && $(el).data('table-name') != ''
+					});
+				for (const input of inputsWithData) {
+					
+					const fieldName = input.name;
+
+					//if this field isn't stored in the DB or then skip it 
+					if (!(fieldName in entryForm.fieldInfo)) continue;
+
+					const fieldInfo = entryForm.fieldInfo[fieldName];
+					const tableName = fieldInfo.table_name;
+
+					//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
+					if ((!(fieldName in entryForm.fieldValues) || typeof(entryForm.fieldValues[tableName]) === 'object')) continue;
+
+					if (!(tableName in unorderedParameters)) {
+						unorderedParameters[tableName] = {}
+					}
+					
+					unorderedParameters[tableName][fieldName] = entryForm.fieldValues[fieldName];
+				}
+
+
+				// Make sure that encounters is the first insert since everything references it
+				const [encountersSQL, encountersParams] = entryForm.valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
+				sqlStatements.push(encountersSQL);
+				sqlParameters.push(encountersParams);
+
+				// loop through each table and add statements and params
+				for (tableName in unorderedParameters) {
+					if (tableName !== 'encounters' && tableName != null) {
+						const [statement, params] = entryForm.valuesToSQL(unorderedParameters[tableName], tableName)
+						sqlStatements.push(statement);
+						sqlParameters.push(params);
+					} 
+				}
+
+				// Handle accordions with 1-to-many relationships to encounters
+				//	Select only accordions that are visible (all accordions that aren't 
+				//	collapsed .collapse-s). Because this has to be compatible with Denali's
+				//	paper form for the time being, also include hidden accordions that are 
+				//	implicitly filled by fields like bear info
+				const $accordions = $('.accordion.form-item-list:not(.collapse:not(.show))')//includes .accordion.hidden
+				for (const el of $accordions) {
+					const $accordion = $(el);
+					const tableName = $accordion.data('table-name');
+					const fieldValueObjects = tableName === 'attachments' ?
+						uploadedFiles :
+						entryForm.fieldValues[tableName];
+
+					if (!fieldValueObjects) {
+						console.log(`No entryForm.fieldValues for ${tableName} (${$accordion.attr('id')})`);
+						continue;
+					}
+
+					// For some accordions, the order of the items matters (i.e., reactions and bears). 
+					//	Look for the class .label-with-index and get the index from the id of each card
+					const indexCardLinks = $accordion.find('.card:not(.cloneable) .card-link-label.label-with-index');
+					let cardIndices = indexCardLinks
+						.map((i, el) => {
+							return parseInt(
+								$(el).closest('.card')
+									.attr('id')
+									.match(/\d+$/)
+								);
+						}).get(); // returns array like [0, 2, 3] where array items are keys of fieldValueObjects
+
+					for (const i in fieldValueObjects) {
+						let fieldValues = {...fieldValueObjects[i]};
+						
+						// Remove any fields aren't stored in the DB
+						for (const fieldName in fieldValues) {
+							if (!(fieldName in entryForm.fieldInfo)) {
+								// If it's not in fieldInfo, it doesn't belong in the DB
+								delete fieldValues[fieldName];
+							} else {
+								// If it's in fieldInfo but the table_name is blank or otherwise doesn't 
+								//	match the accordion's table-name attribute, it doesn't belong either
+								if (entryForm.fieldInfo[fieldName].table_name != tableName) delete fieldValues[fieldName];
+							}
+						}
+
+						// Record the order of the items if necessary
+						if (indexCardLinks.length) {
+							// i is the persistent key of this card whereas cardIndices.indexOf(i) 
+							//	gives the sequential order
+							const order = cardIndices.indexOf(parseInt(i));
+							const orderField = $(indexCardLinks[order]).data('order-column');
+							fieldValues[orderField] = order + 1;
+						}
+
+						const [statement, params] = entryForm.valuesToSQL(fieldValues, tableName);
+						sqlStatements.push(statement);
+						sqlParameters.push(params);
+					}
+				}
+
+				$.ajax({
+					url: 'bhims.php',
+					method: 'POST',
+					data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
+					cache: false
+				}).done((queryResultString) => {
+					queryResultString = queryResultString.trim();
+
+					hideLoadingIndicator();
+
+					if (queryResultString !== 'success') {
+						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+						return;
+					} 
+
+					$('.submition-confirmation-container')
+						.removeClass('hidden')
+						.siblings()
+							.addClass('hidden');
+
+					// Clear localStorage
+					//entryForm.fieldValues = {};
+					//window.localStorage.clear();
+
+					// Second email notification
+					
+				}).fail((xhr, status, error) => {
+					showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+				})
+			}
+		});
+	}
+
+
+	// *** BHIMSEntryForm end ***
+	return Constructor;
+})(); // run module code immediately
+
+
+//** make method of form obj
 function onUnitsFieldChange(e) {
 
 	const $select = $(e.target);
@@ -544,499 +2629,29 @@ function onUnitsFieldChange(e) {
 
 }
 
-function addNewCard($accordion, cardIndex=null) {
-	/* 
-	Add a new card to the accordion. There needs to be a card with the class "cloneable", 
-	which should be hidden and only used to add a new item
+
+function onBearGroupTypeChange() {
+	/*
+	If the ages/sexes of individual bears doesn't match the cohort selected, warn the user
 	*/
 
-	const $dummyCard = $accordion.find('.card.cloneable');
-	if ($dummyCard.length === 0) {
-		console.log('No dummy card found');
-		return;
-	}
-
-	// Close any open cards
-	$accordion.find('.card:not(.cloneable) .collapse.show').each(
-		function() {$(this).siblings('.card-header').find('.card-link').click()}
-	);
-
-	// Get ID suffix for all children elements. Suffix is the 
-	//	<element_identifier>-<section_index>-<card_index>.
-	//	This is necessary to distinguish elements from others in 
-	//	other form sections and other cards within the section
-	/*const sectionIndex = $accordion.closest('.form-section')
-		.data('section-index');*/
-	const tableName = $accordion.data('table-name');
-	if (!cardIndex) {
-		var cardIndex = $accordion.find('.card').length - 1;// - 1 because cloneable is 0th
-		while ($(`#card-${tableName}-${cardIndex}`).length) {
-			cardIndex++;
-		}
-	}
-	//if (cardIndex < 0) cardIndex = 0;
-	/*	const $lastCard = $accordion.find('.card:not(.cloneable):last-child');
-	const cardIndex = $lastCard.length ? 
-		parseInt($lastCard.attr('id').match(/\d+$/)) + 1 :
-		0;
-		*/
-	const idSuffix = `${tableName}-${cardIndex}`;//`${sectionIndex}-${cardIndex}`;
-
-	const $newCard = $dummyCard.clone(withDataAndEvents=true)
-		.removeClass('cloneable hidden')
-		.attr('id', `card-${idSuffix}`);
-	
-	//Set attributes of children
-	const $newHeader = $newCard.find('.card-header');
-	$newHeader
-		.attr('id', `cardHeader-${idSuffix}`)
-		.find('.card-link')
-			.attr('href', `#collapse-${idSuffix}`)
-			.attr('data-target', `#collapse-${idSuffix}`);
-
-	const $newCollapse = $newCard.find('.card-collapse')
-		.attr('id', `collapse-${idSuffix}`)
-		.attr('aria-labelledby', `cardHeader-${idSuffix}`)
-		.addClass('validate-field-parent');
-
-	$newCollapse.find('.card-body')
-		.find('.input-field')
-		.each(function() {
-			const $el = $(this);
-			const newID = `${$el.attr('id')}-${cardIndex}`;
-			$el.data('dependent-target', `${$el.data('dependent-target')}-${cardIndex}`);
-			$el.attr('id', newID)
-				.siblings()
-				.find('.field-label')
-					.attr('for', newID);
-		})
-		.filter('.error')
-			.removeClass('error');
-	$newCollapse.find('.field-container .file-input-label')
-		.attr('for', `attachment-upload-${cardIndex}`);
-	
-	// Add to the accordion
-	$newCard.appendTo($accordion).fadeIn();
-
-	// Open the card after a brief delay
-	//$newCard.find('.collapse:not(.show)').click();
-	setTimeout(function(){
-		$newCard.find('.collapse:not(.show)').siblings('.card-header').find('.card-link').click();
-	}, 500);
-
-	// If this a a card in the interactions section (5), remove options from the 
-	//	reaction select because they get filled when the user selects a reaction_by
-	/*if ($newCollapse.attr('id').startsWith('collapse-5')) {
-		const $reactionSelect = $newCollapse.find('select.input-field').filter((_, el) => {return el.id.startsWith('input-reaction')})
-		$reactionSelect.find('option:not([value=""])').remove();
-		
-	}*/
-
-	return $newCard;
-}
-
-
-function onAddNewItemClick(event) {
-	event.preventDefault();
-	const $accordion = $('#' + $(event.target).data('target'));
-
-	const itemName = $accordion.find('.delete-button').first().data('item-name');
-	var isValid = true;
-	$accordion.find('.card:not(.cloneable) .card-collapse').each(function() {
-		isValid = validateFields($(this));
-		if (!isValid) {
-
-			showModal(`You have to finish filling details of all existing ${itemName ?  itemName : 'item'}s before you can add a new one.`, 'Incomplete item');
-			return;
-		}
-	})
-
-	if (isValid) addNewCard($accordion);
-}
-
-
-function showModal(message, title, modalType='alert', footerButtons='') {
-
-	var modalID = title
-		.replace(/[^\w]/g, '-') // replace non-alphanumeric chars with '-'
-		.replace(/^-|-+$/g, '') // remove any hyphens from beginning or end
-
-	if (!footerButtons) {
-		switch(modalType) { 
-			case 'alert': 
-				footerButtons = '<button class="generic-button modal-button close-modal" data-dismiss="modal">Close</button>';
-				break;
-			case 'confirm':
-				footerButtons = `
-					<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">Close</button>';
-					<button class="generic-button modal-button close-modal" data-dismiss="modal">OK</button>
-				`;
-				break;
-		}
-	}
-
-	const innerHTML = `
-	  <div class="modal-dialog" role="document">
-	    <div class="modal-content">
-	      <div class="modal-header">
-	        <h5 class="modal-title">${title}</h5>
-	        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
-	          <span aria-hidden="true">&times;</span>
-	        </button>
-	      </div>
-	      <div class="modal-body">
-	        <p>${message}</p>
-	      </div>
-	      <div class="modal-footer">
-	      	${footerButtons}
-	      </div>
-	    </div>
-	  </div>
-	`;
-	const $modal = $('#alert-modal').empty()
-		.append($(innerHTML))
-		.modal();
-
-	/*const $modal = $(`
-		<div class="modal fade" id="${modalID}" tabindex="-1" role="dialog" aria-labelledby="${modalID}-label" aria-hidden="true">
-		  <div class="modal-dialog" role="document">
-		    <div class="modal-content">
-		      <div class="modal-header">
-		        <h5 class="modal-title">${title}</h5>
-		        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
-		          <span aria-hidden="true">&times;</span>
-		        </button>
-		      </div>
-		      <div class="modal-body">
-		        <p>${message}</p>
-		      </div>
-		      <div class="modal-footer">
-		      	${footerButtons}
-		      </div>
-		    </div>
-		  </div>
-		</div>
-		`)
-		.appendTo('body')
-		.modal(); //bootstrap modal plugin method to show modal*/
-	
-	$modal.find('.close-modal').click(function() {
-		$modal.modal('hide');
-	})
-}
-
-
-function onConfirmDeleteCardClick(cardID) {
-	
-	const $card = $('#' + cardID);
-
-	$card.fadeOut(500, function(){
-		const cardIndex = cardID.match(/\d+$/)[0];
-		const tableName = $card.closest('.accordion').data('table-name');
-		const $siblings = $card.siblings('.card:not(.cloneable)');
-		
-		$card.remove();
-
-		const fieldValues = FIELD_VALUES[tableName];
-		if (fieldValues) {
-			if (Object.keys(fieldValues).length >= cardIndex) delete fieldValues[cardIndex];
-		}
-
-		$siblings.each((_, card) => {onCardLabelFieldChange($(card).find('.card-label-field').first())});
-	})
-}
-
-
-function onDeleteCardClick(event) {
-
-	event.preventDefault();
-	event.stopPropagation();
-
-	var $button = $(event.target);
-	if ($button.hasClass('fas')) 
-		$button = $button.closest('.delete-button');//if the actual target clicked was the icon, bubble up to the button
-	
-	const itemName = $button.data('item-name');
-	const $card = $button.closest('.card');
-	const cardID = $card.attr('id');
-
-	const dependentInputID = $card.closest('.accordion')
-		.data('dependent-target');
-	const isLastCard = $card.siblings('.card').length === 1;
-
-	if (isLastCard && !dependentInputID) {
-		showModal(`This is the only ${itemName} listed thus far, and you must enter at least one.`, `Invalid operation`);
-	} else {
-		// If the user confirms the delete, fade it out after .5 sec then reset the remaining card labels
-		const onConfirmClick = isLastCard && dependentInputID ? `$('${dependentInputID}').val(0).change();` : `onConfirmDeleteCardClick('${cardID}');`
-		const footerButtons = `
-			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
-			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
-		`;
-		showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
-	}
 
 }
 
 
-function setCardLabel($card, names, defaultText, joinCharacter=' ') {
-
-	var labelComponents = {};
-	$card.find('.input-field.card-label-field').each(function() {
-		const $el = $(this);
-		const thisValue = $el.is('select') && ($el.val() || '').trim() != '' ? 
-			$el.find('option').filter((_, option) => {return $(option).val() === $el.val()}).html() : 
-			$el.val();
-		if (!thisValue && thisValue !== '') {
-			console.log($el.attr('id'))
-		}
-		const thisName = $el.attr('name');
-		if (names.includes(thisName) && (thisValue || '').length && thisValue != ' ') {
-			// If the 
-			let index = $el.data('card-label-index');
-			index = index == undefined ? names.indexOf(thisName) : index;
-			// Make sure a component isn't overwritten if the card-label-index 
-			//	property is inconsistently set
-			while (Object.keys(labelComponents).includes(index)) { 
-				index ++;
-			}
-			labelComponents[index] = thisValue;
-		}
-	})
-
-	// Sort the indices in case the card-label-index properties were set and 
-	//	don't match the natural order of the card-label-component elements
-	var sortedComponents = [];
-	Object.keys(labelComponents).sort().forEach((k, i) => {
-	    sortedComponents[i] = labelComponents[k];
-	});
-
-	$cardLabel = $card.find('.card-link-label');
-
-	// If the data-label-sep attribute is defined, use that. Otherwise, use the default
-	const cardHeaderSeparator = $cardLabel.data('label-sep');
-	joinCharacter = cardHeaderSeparator != undefined ? cardHeaderSeparator : joinCharacter;
 
 
-	const indexText = $cardLabel.is('.label-with-index') ? //if true, add the index to the label
-		`${$card.index()} - ` : '';//`${parseInt($card.attr('id').match(/\d+$/)) + 1} - ` : ''
-	const joinedText = indexText + sortedComponents.join(joinCharacter);
-
-	if (sortedComponents.length === names.length) {
-		$cardLabel.fadeOut(250).fadeIn(250).delay(300).text(joinedText);
-	} else if ($cardLabel.text() !== defaultText) {
-		$cardLabel.fadeOut(250).fadeIn(250).delay(300).text(defaultText);
-	}
-}
 
 
-function onCardLabelFieldChange($field) {
-
-	const $card = $field.closest('.card');
-	
-	var names = $card.find('.card-label-field')
-		.map(function() {
-    		return $(this).attr('name');
-		})
-		.get(); // get returns the underlying array
-
-	//const defaultText = $card.closest('.accordion').find('.card.cloneable.hidden .card-link-label').text();
-	const defaultText = $card.find('.card-link-label').text();
-
-	setCardLabel($card, names, defaultText);
-}
 
 
-function onInputFieldKeyUp(event) {
-	$(event.target).removeClass('error');
-}
 
 
-function getCityAndState(countryCode, postalCode) {
-
-	const deferred = $.ajax({
-		url: `https://zip.getziptastic.com/v2/${countryCode}/${postalCode}`, //http://api.zippopotam.us
-		cache: false,
-		dataType: "json",
-		type: "GET"
-	})
-
-	return deferred;
-}
 
 
-function onCountryPostalCodeChange(event) {
 
-	event.preventDefault();
-
-	const $el = $(event.target);
-	const $cardBody = $el.closest('.card-body');
-	const $country = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-country')});
-	const $zipcode = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-zip_code')});
-	const countryCode = $country.val();
-	const postalCode = $zipcode.val();
-
-	if (countryCode && postalCode) {
-		getCityAndState(countryCode, postalCode)
-			.then(function(jsonResponse) {
-				if (jsonResponse.city && jsonResponse.state_short) {
-					$city = $cardBody.find('input.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-city')});
-					$state = $cardBody.find('select.input-field').filter((_, el) => {return $(el).attr('id').startsWith('input-state')});
-					$city.val(jsonResponse.city);
-					$state.val(jsonResponse.state_short).change();
-				}
-			});
-
-	}
-}
-
-
-function configureMap(divID) {
-	
-
-	var mapCenter, mapZoom;
-	const pageName = window.location.pathname.split('/').pop();
-	var currentStorage = window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
-	if (currentStorage.encounterMapInfo) {
-		mapCenter = currentStorage.encounterMapInfo.center;
-		mapZoom = currentStorage.encounterMapInfo.zoom;
-	}
-
-	var map = L.map(divID, {
-		editable: true,
-		scrollWheelZoom: false,
-		center: mapCenter || [63.2, -150.7],
-		zoom: mapZoom || 7
-	});
-
-	var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
-		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
-	}).addTo(map);
-
-	const deferred = $.ajax({url: 'resources/dena_bc_units.json'})
-		.done(geojson => {
-			const defaultGeojsonStyle = {
-				color: '#000',
-				opacity: 0.2,
-				fillColor: '#000',
-				fillOpacity: 0.15 
-			}
-			const hoverGeojsonStyle = {
-				color: '#000',
-				opacity: 0.4,
-				fillColor: '#000',
-				fillOpacity: 0.15 
-			}
-
-			const onMouseover = (e) => {
-				let layer = e.target;
-
-				layer.setStyle(hoverGeojsonStyle)
-
-				if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-					layer.bringToFront();
-				}
-			}
-			const onMouseout = (e) => {
-				bcUnitsLayer.resetStyle(e.target);
-			}
-			const onEachFeature = (feature, layer) => {
-				layer.on({
-					mouseover: onMouseover,
-					mouseout: onMouseout
-				})
-			}
-
-			var bcUnitsLayer; // define before calling L.geoJSON() so onMouseout event can reference
-			bcUnitsLayer = L.geoJSON(
-				geojson, 
-				{
-					style: {
-						color: '#000',
-						opacity: 0.2,
-						fillColor: '#000',
-						fillOpacity: 0.15 
-					},
-					onEachFeature: onEachFeature //add mouseover and mouseout listeners
-				}
-			).bindTooltip(
-				layer => layer.feature.properties.Unit + ': ' + layer.feature.properties.Name,
-				{
-					sticky: true
-				}
-			).addTo(map);
-
-		}).fail((xhr, error, status) => {
-			console.log('BC unit geojson read failed: ' + error);
-		})
-
-	// Make the encounter marker drag/droppable onto the map
-	$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
-	$('#encounter-location-map').droppable({drop: markerDroppedOnMap});
-
-	return map;
-}
-
-
-function fillCoordinateFields(latDDD, lonDDD) {
-	/*Convert coordinates from decimal degrees to degrees decimal 
-	minutes and degrees minutes seconds and fill in the respective fields*/
-
-	// Set ddd fields
-	const $latDDDField = $('#input-lat_dec_deg').val(latDDD);
-	const $lonDDDField = $('#input-lon_dec_deg').val(lonDDD);
-
-	// Fill global FIELD_VALUES in case this function was called by dragging 
-	//	and dropping the marker, which won't trigger the onInputFieldChange() event
-	FIELD_VALUES[$latDDDField.attr('name')] = latDDD;
-	FIELD_VALUES[$lonDDDField.attr('name')] = lonDDD;
-
-	// Set ddm fields
-	const minuteStep = $('#input-lat_dec_min').attr('step');
-	const minuteRounder = Math.round(1 / (minuteStep ? minuteStep : 0.001));
-	const latSign = latDDD / Math.abs(latDDD)
-	const latDegrees = Math.floor(Math.abs(latDDD)) * latSign
-	const latDecimalMinutes = Math.round((Math.abs(latDDD) - Math.abs(latDegrees)) * 60 * minuteRounder) / minuteRounder;
-	const lonSign = lonDDD/Math.abs(lonDDD)
-	const lonDegrees = Math.floor(Math.abs(lonDDD)) * lonSign;
-	const lonDecimalMinutes = Math.round((Math.abs(lonDDD) - Math.abs(lonDegrees)) * 60 * minuteRounder) / minuteRounder;
-	$('#input-lat_deg_ddm').val(latDegrees);
-	$('#input-lat_dec_min').val(latDecimalMinutes);
-	$('#input-lon_deg_ddm').val(lonDegrees);
-	$('#input-lon_dec_min').val(lonDecimalMinutes);
-
-	// Set dms fields
-	const secondStep = $('#input-lat_dec_sec').attr('step');
-	const secondRounder = Math.round(1 / (secondStep ? secondStep : 0.1));
-	const latMinutes = Math.floor(latDecimalMinutes);
-	const latDecimalSeconds = Math.round((latDecimalMinutes - latMinutes) * 60 * secondRounder) / secondRounder;
-	const lonMinutes = Math.floor(lonDecimalMinutes);
-	const lonDecimalSeconds = Math.round((lonDecimalMinutes - lonMinutes) * 60 * secondRounder) / secondRounder;
-	$('#input-lat_deg_dms').val(latDegrees);
-	$('#input-lat_min_dms').val(latMinutes);
-	$('#input-lat_dec_sec').val(latDecimalSeconds);
-	$('#input-lon_deg_dms').val(lonDegrees);
-	$('#input-lon_min_dms').val(lonMinutes);
-	$('#input-lon_dec_sec').val(lonDecimalSeconds);
-
-	// Remove error class from coordinate fields
-	$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').removeClass('error');
-
-}
-
-
-function markerIsOnMap() {
-	/* 
-	Helper function to check if the encounter Marker has 
-	already been added to the encounter location map
-	*/
-
-	var isOnMap = false;
-	ENCOUNTER_MAP.eachLayer((layer) => {
-		if (layer === ENCOUNTER_MARKER) isOnMap = true;
-	});
-
-	return isOnMap;
+function customizeConfiguration(){
+	/*Dummy function that can be overloaded in bhims-custom.js*/
 }
 
 
@@ -1051,85 +2666,6 @@ function getRoundedDDD(lat, lon) {
 }
 
 
-function placeEncounterMarker({lat=0, lng=0}={}) {
-	/*
-	Add or move the encounter Marker on the encounter location map. 
-	Also update the coordinate fields accordingly. The only argument
-	is an object with properties "lat" and "lng" to mirror the 
-	Leaflet.event.latlng object.
-
-	lat: latitude in decimal degrees
-	lng: longitude in decimal degrees.
-	*/
-
-	ENCOUNTER_MARKER.setLatLng({lat: lat, lng: lng});//, options={draggable: true});
-	
-	if (!markerIsOnMap()) {
-		ENCOUNTER_MARKER.addTo(ENCOUNTER_MAP);
-		removeDraggableMarker();
-	}
-
-	// If the marker is outside the map bounds, zoom to it
-	if (!ENCOUNTER_MAP.getBounds().contains(ENCOUNTER_MARKER.getLatLng())) {
-		ENCOUNTER_MAP.setView(ENCOUNTER_MARKER.getLatLng(), ENCOUNTER_MAP.getZoom());
-	}
-	
-	// Make sure the coords for fields are appropriately rounded
-	var [latDDD, lonDDD] = getRoundedDDD(lat, lng);
-
-	// Fill DMM and DMS fields
-	fillCoordinateFields(latDDD, lonDDD);
-}
-
-
-function removeDraggableMarker() {
-	/* helper function to remove the draggable marker and the label */
-
-	$('#encounter-marker-img').remove();
-	$('#encounter-marker-container').slideUp(500, (_, el) => {$(el).remove()});
-}
-
-
-function markerDroppedOnMap(event) {
-	/*
-	Place the marker when the user drops the draggable marker img on the map
-	*/
-	event.preventDefault()
-	
-	// Convert pixel coordinates of the drop event to lat/lon map coordinates.
-	//	Adjust for the offset of where the user grabbed the marker. It should be
-	//	the distance to the center-bottom of the marger img. The underlying Leaflet
-	//	API uses either .pageX or .clientX so just reset both (see
-	//	https://github.com/Leaflet/Leaflet/blob/e64743f741e6d13e36dea26f494d52e960a3274e/src/dom/DomEvent.js#L141
-	//	for source code)
-	var originalEvent = event.originalEvent;
-	const $target = $(originalEvent.target);
-	originalEvent.pageX -= originalEvent.offsetX - ($target.width() / 2);
-	originalEvent.pageY -= originalEvent.offsetY - $target.height();
-	originalEvent.clientX -= originalEvent.offsetX - ($target.width() / 2); 
-	originalEvent.clientY -= originalEvent.offsetY - $target.height();
-	const latlng = ENCOUNTER_MAP.mouseEventToLatLng(originalEvent);
-	
-	placeEncounterMarker(latlng);
-
-	removeDraggableMarker();
-
-	$('#input-location_accuracy').val(3).change();//== < 5km
-
-}
-
-
-function setCoordinatesFromMarker() {
-	/*Use encounter Merker to reset coordinate fields*/
-
-	const latlng = ENCOUNTER_MARKER.getLatLng();
-	var [latDDD, lonDDD] = getRoundedDDD(latlng.lat, latlng.lng);
-	fillCoordinateFields(latDDD, lonDDD);
-
-	$('#input-location_accuracy').val(3).change();//== < 5km
-}
-
-
 function coordinatesToDDD(latDegrees=0, lonDegrees=0, latMinutes=0, lonMinutes=0, latSeconds=0, lonSeconds=0) {
 	/*Convert coordinates to decimal degrees*/
 
@@ -1139,262 +2675,6 @@ function coordinatesToDDD(latDegrees=0, lonDegrees=0, latMinutes=0, lonMinutes=0
 	var lonDDD = parseInt(lonDegrees) + (parseInt(lonMinutes) / 60 * lonSign) + (parseInt(lonSeconds / 60 ** 2) * lonSign);
 
 	return [latDDD, lonDDD];
-}
-
-
-function confirmMoveEncounterMarker(lat, lon, confirmJSCodeString='') {
-	/* 
-	If the encounter Marker is already on the map, ask the user
-	(with a modal dialog) if they want to move it to [lat, lon]. 
-	Otherwise, just place it at [lat, lon].
-	*/ 
-	
-	const onConfirmClick = `placeEncounterMarker({lat: ${lat}, lng: ${lon}});${confirmJSCodeString}`;
-	const footerButtons = `
-		<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="setCoordinatesFromMarker()">No</button>
-		<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
-	`;
-	const message = `You've already placed the encounter location marker on the map. Are you sure you want to move it to a new location? Click 'No' to keep it in the current location.`
-	showModal(message, `Move the encounter location?`, 'confirm', footerButtons);
-}
-
-
-function onDDDFieldChange() {
-	/*Event handler for when a decimal degree field is changed*/
-
-	const latDDD = $('#input-lat_dec_deg').val();
-	const lonDDD = $('#input-lon_dec_deg').val();
-
-	if (latDDD && lonDDD) {
-		if (markerIsOnMap()) { 
-			confirmMoveEncounterMarker(latDDD, lonDDD);
-		} else {
-			placeEncounterMarker({lat: latDDD, lng: lonDDD})
-		}
-	}
-}
-
-
-function onDMMFieldChange() {
-	/*Event handler for when a degree decimal minute field is changed*/
-
-	const latDegrees = $('#input-lat_deg_ddm').val();
-	const lonDegrees = $('#input-lon_deg_ddm').val();
-	const latDecimalMinutes = $('#input-lat_dec_min').val();
-	const lonDecimalMinutes = $('#input-lon_dec_min').val();
-
-	if (latDegrees && lonDegrees && latDecimalMinutes && lonDecimalMinutes) {
-		var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latDecimalMinutes, lonDecimalMinutes);
-		if (markerIsOnMap()) { 
-			confirmMoveEncounterMarker(latDDD, lonDDD);
-		} else {
-			placeEncounterMarker({lat: latDDD, lng: lonDDD})
-		}
-	}
-
-}
-
-
-function onDMSFieldChange() {
-	/*Event handler for when a degree decimal minute field is changed*/
-
-	const latDegrees = $('#input-lat_deg_dms').val();
-	const lonDegrees = $('#input-lon_deg_dms').val();
-	const latMinutes = $('#input-lat_min_dms').val();
-	const lonMinutes = $('#input-lon_min_dms').val();
-	const latDecimalSeconds = $('#input-lat_dec_sec').val();
-	const lonDecimalSeconds = $('#input-lon_dec_sec').val();
-
-	if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
-		var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
-		if (markerIsOnMap()) { 
-			confirmMoveEncounterMarker(latDDD, lonDDD);
-		} else {
-			placeEncounterMarker({lat: latDDD, lng: lonDDD})
-		}
-	}
-
-}
-
-
-function confirmSetMarkerFromLocationSelect() {
-	/*
-	Helper function to make sure appropriate actions are triggered when
-	coordinates are set from the user selecting a location
-	*/
-
-	// Set datum code to WGS84 since the coordinates stored in the DB are WGS84
-	$('#input-datum').val(1).change(); //WGS84
-	$('#input-location_accuracy').val(4).change(); // == < 20km
-}
-
-
-function onLocationSelectChange(e) {
-	/*
-	Event handler for when either the place name or BC unit select changes. 
-	try to update the location coordinates and marker from coordinates stored 
-	in the DB
-	*/
-
-	// If the element isn't in the viewport, this function is likely being manually 
-	//	triggered with .change() (when data are loaded from localStorage). In that 
-	//	case, nothing should happen
-	const el = e.target;
-	if (!isInViewport(el)) return;
-
-	const latDDD = $('#input-lat_dec_deg').val();
-	const lonDDD = $('#input-lon_dec_deg').val();
-
-	const code = el.value;
-	const coordinates = $('#input-location_type').val() === 'Place name' ? 
-		PLACE_NAME_COORDINATES :
-		BACKCOUNTRY_UNIT_COORDINATES;
-
-	if (code in coordinates) {
-		const latlon = coordinates[code];
-		if (latDDD && lonDDD) {
-			const onConfirm = 'confirmSetMarkerFromLocationSelect();';
-			confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
-		} else {
-			placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
-			confirmSetMarkerFromLocationSelect();
-		}
-
-
-	}
-}
-
-
-function onExpandMapButtonClick(e) {
-
-	e.preventDefault();
-
-	// Create marker with event listener that does the same thing as ENCOUNTER_MARKER
-	const modalMarker = new L.marker(ENCOUNTER_MARKER.getLatLng(), {
-			draggable: true,
-			autoPan: true,
-		})
-		.on('dragend', () => {
-			// When the modal marker is moved
-			//set the form marker postion
-			ENCOUNTER_MARKER.setLatLng(modalMarker.getLatLng()); 
-			//set coordinate fields
-			setCoordinatesFromMarker();
-		})
-		.addTo(MODAL_ENCOUNTER_MAP);
-
-	$('#map-modal')
-		.on('shown.bs.modal', e => {
-			// When the modal is shown, the map's size is not yet determined so 
-			//	Leaflet thinks it's much smaller than it is. As a result, 
-			//	only a single tile is shown. Reset the size after a delay to prevent this
-			MODAL_ENCOUNTER_MAP.invalidateSize()
-			
-			// Center the map on the marker
-			MODAL_ENCOUNTER_MAP.setView(ENCOUNTER_MARKER.getLatLng(), ENCOUNTER_MAP.getZoom())
-		})
-		.on('hidden.bs.modal', e => {
-			// Remove the marker when the modal is hidden
-			MODAL_ENCOUNTER_MAP.removeLayer(modalMarker);
-
-			//center form map on the marker. Do this here because it's less jarring 
-			//	for the user to see the map move to center when the modal is closed
-			ENCOUNTER_MAP.setView(ENCOUNTER_MARKER.getLatLng(), ENCOUNTER_MAP.getZoom())
-		})
-		.modal() // Show the modal
-}
-
-
-function onBearGroupTypeChange() {
-	/*
-	If the ages/sexes of individual bears doesn't match the cohort selected, warn the user
-	*/
-
-
-}
-
-
-function updateReactionsSelect($actionBySelect) {
-
-	const actionBy = $actionBySelect.val();
-	const cardIndex = $actionBySelect.attr('id').match(/\d+$/);
-	const reactionSelectID = `input-reaction-${cardIndex}`;
-	const $reactionSelect = $('#' + reactionSelectID).empty();
-
-
-	const $label = $reactionSelect.siblings('.field-label');
-	var labelText = '';
-	switch (parseInt(actionBy)) {
-		case 1://human
-			labelText = 'What did you/another person do?';
-			break;
-		case 2://bear
-			labelText = 'What did the bear do?';
-			break;
-		case 3://dog
-			labelText = 'What did the dog do?';
-			break;
-		case 4: //stock animal
-			labelText = 'What did the stock animal do?';
-			break;
-	}
-	$label.text(labelText);
-	$reactionSelect.attr('placeholder', labelText)
-		.addClass('default')
-		.append(`<option class="" value="">${labelText}</option>`);
-	
-	// Return the deferred object so other functions can be triggered 
-	//	after the select is filled
-	return fillSelectOptions(reactionSelectID, 
-		`
-		SELECT code AS value, name 
-		FROM reaction_codes 
-		WHERE 
-			sort_order IS NOT NULL AND 
-			action_by=${actionBy} 
-		ORDER BY sort_order`
-	);
-}
-
-
-function updateAttachmentAcceptString(fileTypeSelectID) {
-	
-	const $fileTypeSelect = $('#' + fileTypeSelectID);
-	const extensions = ACCEPTED_ATTACHMENT_EXT[$fileTypeSelect.val()];
-	const suffix = $fileTypeSelect.attr('id').match(/\d+$/);
-	$(`#attachment-upload-${suffix}`).attr('accept', extensions);
-
-	$fileTypeSelect.data('previous-value', $fileTypeSelect.val());
-}
-
-
-function onAttachmentTypeChange(event) {
-
-	const $fileTypeSelect = $(event.target);
-	const fileTypeSelectID = $fileTypeSelect.attr('id');
-	const previousFileType = $fileTypeSelect.data('previous-value');//should be undefined if this is the first time this function has been called
-	const $fileInput = $fileTypeSelect.closest('.card-body').find('.file-input-label ~ input[type=file]');
-	const fileInputID = $fileInput.attr('id');
-
-	// If the data-previous-value attribute has been set and , that means the user has already selected a file
-	if (previousFileType && $fileInput.get(0).files[0]) {
-		const onConfirmClick = `
-			updateAttachmentAcceptString('${fileTypeSelectID}');
-			$('#${fileInputID}').click();
-		`;
-		const footerButtons = `
-			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal" onclick="$('#${fileTypeSelectID}').val('${previousFileType}');">No</button>
-			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
-		`;
-		const fileTypeCode = $fileTypeSelect.val();
-		const fileType = $fileTypeSelect.find('option')
-			.filter((_, option) => {return option.value === fileTypeCode})
-			.html()
-			.toLowerCase();
-		showModal(`You already selected a file. Do you want to upload a new <strong>${fileType}</strong> file instead?`, `Upload a new file?`, 'confirm', footerButtons);
-	} else {
-		updateAttachmentAcceptString($fileTypeSelect.attr('id'));
-	}
 }
 
 
@@ -1456,78 +2736,6 @@ function setAttachmentThumbnail(fileType, $thumbnail, fileReader, file) {
 }
 
 
-function readAttachment(sourceInput, $destinationImg, $progressBar) {
-  	
-  	const $barContainer = $progressBar.closest('.attachment-progress-bar-container');
-  	const file = sourceInput.files[0];
-	if (sourceInput.files && file) {
-		var reader = new FileReader();
-		const fileName = file.name;
-
-		reader.onprogress = function(event) {
-			// Show progress
-			if (event.lengthComputable) {
-				const progress = event.loaded / event.total;
-				$progressBar.css('width', `${$barContainer.width() * progress}px`)
-			}
-		}
-
-		reader.onerror = function(event) {
-			// Hide preview and progress bar and notify the user
-			$progressBar.closest('.collapse').hide();
-			showModal(`The file '${fileName}' failed to upload correctly. Make sure your internet connection is consistent and try again.`, 'Upload failed');
-		}
-
-		reader.onload = function(event) {
-			// Show the thumbnail and hide the progress bar
-			const fileType = $barContainer.closest('.card').find('select').val();
-			setAttachmentThumbnail(fileType, $destinationImg, reader, file);
-			$barContainer.addClass('hidden');
-			$destinationImg.closest('.card')
-				.find('.card-link-label')
-					.fadeOut(250)
-					.fadeIn(250)
-					.delay(300)
-					.text(fileName);
-			ATTACHMENT_FILES[sourceInput.id] = sourceInput.files;
-			$progressBar.css('width', '0px');
-		}
-
-		if (file.type.match('image')) {
-			reader.readAsDataURL(file); 
-		} else {
-			reader.readAsArrayBuffer(file);
-		}
-	}
-}
-
-
-function onAttachmentInputChange(event) {
-	
-	const el = event.target; 
-	const $parent = $(el).closest('.field-container');
-
-	// If the user cancels, it resets the input files attribute to null 
-	//	which is dumb. Reset it to the previous file and exit
-	if (el.files.length === 0) {
-		el.files = ATTACHMENT_FILES[el.id];
-		return
-	}
-
-	$parent.find('.filename-label')
-		.text(el.files[0].name);
-	const $thumbnail = $parent.find('.file-thumbnail')
-		.addClass('hidden'); // hide thumbnail to show progress bar
-	const $progressBar = $parent.find('.attachment-progress-indicator')
-	$progressBar.closest('.attachment-progress-bar-container').removeClass('hidden');// Show progress bar
-	$progressBar.closest('.collapse')
-			.show();// make sure the collapse that contains both is open
-	
-
-	readAttachment(el, $thumbnail, $progressBar);
-}
-
-
 function showModalImg(src) {
 	/*Configure a lightbox-style modal image preview*/
 
@@ -1553,9 +2761,9 @@ function showModalVideoAudio($el, objectURL) {
 }
 
 
-function onThumbnailClick(event) {
+function onThumbnailClick(e) {
 
-	const $thumbnail = $(event.target);
+	const $thumbnail = $(e.target);
 	const fileInput = $thumbnail.closest('.card').find('input[type=file]').get(0);
 	if (fileInput.files.length) { // this should always be the case but better safe than sorry
 		const file = fileInput.files[0];
@@ -1602,7 +2810,8 @@ function initSpeechRecognition() {
 		var finalTranscript = $('#recorded-text-final').text() || '';
 		for (let result of e.results) {
 			if (result.isFinal) {
-				finalTranscript += result[0].transcript;
+				let transcript = result[0].transcript
+				finalTranscript += transcript.charAt(0).toUpperCase() + transcript.slice(1);
 			} else {
 				interimTranscript += result[0].transcript;
 				$('#recorded-text-interim').text(interimTranscript);
@@ -1681,77 +2890,16 @@ function saveAttachment(fileInput) {
 }
 
 
-function onDENABearFieldChange(e) {
-	
-	e.preventDefault();
 
-	var values = {};
-	for (const bearField of $('.dena-bear-field')) {
-		// If the field hasn't been filled, exit
-		if (!bearField.value) return;
-		values[bearField.name] = bearField.value;
-	}
-
-	const bearsAgeSexCodes = {
-		'1':  [	//single bear of unknown age/sex
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ], 			
-		'2':  [ // bear with 1 cub of unknown age
-				{bear_age_code: 4, bear_sex_code: 1}, 
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ], 			
-		'3':  [ // bear with 2 cubs of unknown age
-				{bear_age_code: 4, bear_sex_code: 1}, 
-				{bear_age_code: -1, bear_sex_code: -1}, 
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ], 		
-		'4':  [ // bear with 3 cubs of unknown age
-				{bear_age_code: 4, bear_sex_code: 1},  
-				{bear_age_code: -1, bear_sex_code: -1}, 
-				{bear_age_code: -1, bear_sex_code: -1}, 
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ], 	
-		'5':  [ // 2 adults
-				{bear_age_code: 4, bear_sex_code: 1}, 
-				{bear_age_code: 4, bear_sex_code: 1}
-			  ],			
-		'-1': [ // unknown
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ],				
-		'-2': [ // other (so unknown)
-				{bear_age_code: -1, bear_sex_code: -1}
-			  ]				
-	};
-	const ageAndSex = bearsAgeSexCodes[values.bear_cohort_code];
-	
-	const $accordion = $('#bear-info-accordion');
-	
-	// Clear cards
-	$accordion.find('.card:not(.cloneable)').remove();
-
-	// For each individual bear, add a card
-	FIELD_VALUES.bears = [];
-
-	for (const i in ageAndSex) {
-		const $card = addNewCard($accordion);
-		const $inputs = $card.find('.input-field');
-		const bear = {...ageAndSex[i], ...values};
-		bear.bear_number = parseInt(i) + 1;
-		//values.bear_age_code = bear.age;
-		//values.bear_sex_code = bear.sex;
-		// Fill values for this card
-		for (name in bear) {
-			$inputs.filter((_, el) => {return el.name == name})
-				.val(bear[name])
-				.change();
-		}
-
-		FIELD_VALUES.bears[i] = {...bear};
-	
-	}
-
+function onlockSectionButtonClick(e) {
+	// Traverse up to the button, then down to the icon to make sure selector grabs icon
+	// 	since the click event can occur on either
+	const $targetIcon = $(e.target).closest('.icon-button').find('i');
+	const isLocked = $targetIcon.hasClass('fa-lock');
+	$targetIcon.closest('.form-section').toggleClass('locked', !isLocked);
+	$targetIcon.toggleClass('fa-lock', !isLocked);
+	$targetIcon.toggleClass('fa-unlock', isLocked);
 }
-
 
 function getFormattedTimestamp(date) {
 
@@ -1761,283 +2909,5 @@ function getFormattedTimestamp(date) {
 	const minutes = ('0' + date.getMinutes()).slice(-2)
 
 	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${minutes}`;
-
-}
-
-
-function valuesToSQL(values, tableName, timestamp) {
-	/*
-	Helper function to convert unordered parameters 
-	into pre-prepared SQL statement and params
-	*/
-	
-	var sortedFields = Object.keys(values).sort();
-	var parameters = sortedFields.map(f => values[f]);
-	
-
-	var returningClause = '', 
-		currvalClause = '',
-		parametized = '';
-
-	if (tableName === 'encounters') {
-		// Need to add RETURNING clause to get the encounter_id
-		returningClause = ' RETURNING id';
-		
-		sortedFields = sortedFields.concat(['entered_by', 'datetime_entered', 'last_edited_by', 'datetime_last_edited']);
-		parameters = parameters.concat([USERNAME, timestamp, USERNAME, timestamp]);
-		parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $'); //$1, $2, ...
-	} else {
-		// Need to add a parameter placeholder for the encounter_id for 
-		//	all tables other than encounters 
-		//parametized += ', $' + (sortedFields.length + 1);
-		// get parametized string before adding enconter_id since currvalClause will take the place of a param
-		parametized ='$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
-		currvalClause = `, currval(pg_get_serial_sequence('encounters', 'id'))`;
-		sortedFields.push('encounter_id');
-	}
-
-	
-	
-	const statement = `
-		INSERT INTO ${tableName}
-			(${sortedFields.join(', ')})
-		VALUES
-			(${parametized}${currvalClause})
-		${returningClause};
-	`;
-	
-
-	return [statement, parameters];
-
-}
-
-
-function onSubmitButtonClick(event) {
-
-	event.preventDefault();
-
-	showLoadingIndicator('onSubmitButtonClick');
-
-	// Validate all fields. This shouldn't be necessary since the user can't move 
-	//	to a new section with invalid fields, but better safe than sorry
-	for (const section of $('.form-section:not(.title-section)')) {
-		const $section = $(section);
-		const allFieldsValid = $section.find('.validate-field-parent')
-			.map((_, parent) => {
-				return validateFields($(parent), focusOnField=false);
-			}).get()
-			.every((isValid) => isValid);
-		if (!allFieldsValid) {
-			hideLoadingIndicator();
-			const onClick = `			
-				const sectionIndex = goToSection(${$section.data('section-index') - $('.form-section.selected').data('section-index')});
-				setPreviousNextButtonState(sectionIndex);
-			`;
-			const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
-			const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onClick}">OK</button>`
-			showModal(modalMessage, 'Missing or invalid information', 'alert', buttonHTML);
-			return;
-		}
-	}	
-
-	// Save attachments
-	const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
-	var deferreds = [];
-	var uploadedFiles = {};
-	var failedFiles = [];
-	const timestamp = getFormattedTimestamp();
-	for (const fileInput of $attachmentInputs) {
-		if (fileInput.files.length) {
-			const thisFile = fileInput.files[0]
-			const fileName = thisFile.name;
-			deferreds.push(saveAttachment(fileInput)
-				.then(
-					doneFilter=(resultString) => {
-						console.log(resultString)
-						if (resultString.trim().startsWith('ERROR')) {
-							failedFiles.push(fileName);
-						} else {
-							const $card = $(fileInput).closest('.card');
-							const filePath = resultString.trim().replace(/\//g, '\\');//replace forward slashes with backslash
-							const fileInfo = {
-								client_file_name: fileName,
-								file_path: filePath,//should be the saved filepath (with UUID)
-								file_size_kb: Math.floor(thisFile.size / 1000),
-								mime_type: thisFile.type,
-								attached_by: USERNAME,//retrieved in window.onload()
-								datetime_attached: timestamp,
-								last_changed_by: USERNAME,
-								datetime_last_changed: timestamp
-							};
-
-							for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
-								const fieldName = inputField.name;
-								// Get input values for all input fields except file input (which has 
-								//	the name "uploadedFile" used by php script)
-								if (fieldName in FIELD_INFO) {
-									fileInfo[fieldName] = inputField.value; 
-								}
-							}
-							uploadedFiles[Object.keys(uploadedFiles).length] = fileInfo;
-						}
-					
-					},
-					failFilter=function(xhr, status, error) {
-						console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
-						failedFiles.push(fileName);
-					}
-				)
-			);
-
-		}
-	}
-
-	// When all of the uploads have finished (or failed), check if any failed. 
-	//	If they all succeeded, then insert data
-	$.when(...deferreds).then(function() {
-		if (failedFiles.length) {
-
-			const message = `
-				The following files could not be saved to the server:<br>
-				<ul>
-					<li>${failedFiles.join('</li><li>')}</li>
-				</ul>
-				<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
-			hideLoadingIndicator();
-			showModal(message, 'File uploads failed');
-			return;
-		} else {
-			
-			// Insert data
-			var sqlStatements = [];
-			var sqlParameters = [];
-
-			// Handle all fields in tables with 1:1 relationship to 
-			var unorderedParameters = {};
-			for (const input of $('.input-field:not(.ignore-on-insert)')) {
-				
-				const fieldName = input.name;
-
-				//if this field isn't stored in the DB or then skip it 
-				if (!(fieldName in FIELD_INFO)) continue;
-
-				const fieldInfo = FIELD_INFO[fieldName];
-				const tableName = fieldInfo.tableName;
-
-				//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
-				if ((!(fieldName in FIELD_VALUES) || typeof(FIELD_VALUES[tableName]) === 'object')) continue;
-
-				if (!(tableName in unorderedParameters)) {
-					unorderedParameters[tableName] = {}
-				}
-				
-				unorderedParameters[tableName][fieldName] = FIELD_VALUES[fieldName];
-			}
-
-
-			// Make sure that encounters is the first insert since everything references it
-			const [encountersSQL, encountersParams] = valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
-			sqlStatements.push(encountersSQL);
-			sqlParameters.push(encountersParams);
-
-			// loop through each table and add statements and params
-			for (tableName in unorderedParameters) {
-				if (tableName !== 'encounters') {
-					const [statement, params] = valuesToSQL(unorderedParameters[tableName], tableName)
-					sqlStatements.push(statement);
-					sqlParameters.push(params);
-				} 
-			}
-
-			// Handle accordions with 1-to-many relationships to encounters
-			//	Select only accordions that are visible (all accordions that aren't 
-			//	collapsed .collapse-s). Because this has to be compatible with Denali's
-			//	paper form for the time being, also include hidden accordions that are 
-			//	implicitly filled by fields like bear info
-			const $accordions = $('.accordion.form-item-list:not(.collapse:not(.show))')//includes .accordion.hidden
-			for (const el of $accordions) {
-				const $accordion = $(el);
-				const tableName = $accordion.data('table-name');
-				const fieldValueObjects = tableName === 'attachments' ?
-					uploadedFiles :
-					FIELD_VALUES[tableName];
-
-				if (!fieldValueObjects) {
-					console.log(`No FIELD_VALUES for ${tableName} (${$accordion.attr('id')})`);
-					continue;
-				}
-
-				// For some accordions, the order of the items matters (i.e., reactions and bears). 
-				//	Look for the class .label-with-index and get the index from the id of each card
-				const indexCardLinks = $accordion.find('.card:not(.cloneable) .card-link-label.label-with-index');
-				let cardIndices = indexCardLinks
-					.map((i, el) => {
-						return parseInt(
-							$(el).closest('.card')
-								.attr('id')
-								.match(/\d+$/)
-							);
-					}).get(); // returns array like [0, 2, 3] where array items are keys of fieldValueObjects
-
-				for (const i in fieldValueObjects) {
-					let fieldValues = {...fieldValueObjects[i]};
-					
-					// Remove any fields aren't stored in the DB
-					for (const fieldName in fieldValues) {
-						if (!(fieldName in FIELD_INFO)) delete fieldValues[fieldName];
-					}
-
-					// Record the order of the items if necessary
-					if (indexCardLinks.length) {
-						// i is the persistent key of this card whereas cardIndices.indexOf(i) 
-						//	gives the sequential order
-						const order = cardIndices.indexOf(parseInt(i));
-						const orderField = $(indexCardLinks[order]).data('order-column');
-						fieldValues[orderField] = order + 1;
-					}
-
-					const [statement, params] = valuesToSQL(fieldValues, tableName);
-					sqlStatements.push(statement);
-					sqlParameters.push(params);
-				}
-			}
-
-			$.ajax({
-				url: 'bhims.php',
-				method: 'POST',
-				data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
-				cache: false
-			}).done((queryResultString) => {
-				queryResultString = queryResultString.trim();
-
-				hideLoadingIndicator();
-
-				if (queryResultString !== 'success') {
-					showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
-					return;
-				} 
-
-				$('.submition-confirmation-container')
-					.removeClass('hidden')
-					.siblings()
-						.addClass('hidden');
-
-				// Clear localStorage
-				//FIELD_VALUES = {};
-				//window.localStorage.clear();
-
-				// Second email notification
-				
-			}).fail((xhr, status, error) => {
-				showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
-			})
-
-			
-
-
-		}
-	});
-
-
 
 }

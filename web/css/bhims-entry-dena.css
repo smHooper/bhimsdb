@@ -10,16 +10,16 @@
     background-size: cover;
 }
 
-.form-section {
+.form-page {
 	height: unset;
 	overflow-y: auto;
 }
 
-.section-body {
+.form-section {
 	height: unset;
 }
 
-.section-body-content {
+.form-section-content {
 	height: unset;
 }
 

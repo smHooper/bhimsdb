@@ -593,6 +593,9 @@ button.indicator-dot:focus {
 	line-height: 45px;
 	justify-content: flex-start;
 }
+.marker-container.collapse:not(.show) {
+	display: none;
+}
 .marker-label {
     transition: all 0.2s ease-out;
     font-size: 13px;

@@ -1,3 +1,7 @@
+:root {
+  --ui-primary-color: hsl(211 68% 52%);
+}
+
 html, body {
   height: 100%;
   overflow: hidden;
@@ -74,7 +78,10 @@ button.icon-button:focus,
 button.text-only-button:focus,
 img.modal-img:focus,
 video.modal-img:focus,
-audio.modal-img:focus {
+audio.modal-img:focus,
+input.query-option-operator:focus,
+input.query-option-input-field:focus,
+input.slider-value:focus {
   -webkit-box-shadow: none;
   outline: -webkit-focus-ring-color auto 0px;
 }

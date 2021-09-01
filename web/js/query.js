@@ -1,17 +1,537 @@
 
 var BHIMSQuery = (function(){
-
+	
+	/*
+	Main constructor
+	*/
+	var _this;
 	var Constructor = function() {
 		this.queryResult = {};
 		this.lookupValues = {};
 		this.joinedDataTables = [];
 		this.selectedID = null;
+		this.dataLoadedFunctions = []; // array of functions to extend 
+		this.queryResultMapData = L.geoJSON();
+		this.queryResultMap = null;
+		this.queryOptions = {};
+		_this = this; // scope hack for event handlers that take over "this"
 	}
 
 
-	/*
-	Main constructor
-	*/
+	Constructor.prototype.configureQueryOptions = function() {
+		// Configure query options
+		// Get numeric field min/max
+		var numericFieldRanges = {};
+		var valueRangeTrigger = $.Deferred();
+		var valueRangeDeferreds = [valueRangeTrigger];
+		
+		// Query the DB to get the numeric fields per table
+		queryDB(`
+			SELECT 
+				table_name, 
+				string_agg(field_name, ',' ORDER BY field_name) AS fields
+			FROM data_entry_fields 
+			WHERE 
+				is_enabled AND 
+				html_input_type='number' AND 
+				field_name IS NOT NULL AND 
+				table_name IS NOT NULL
+			GROUP BY table_name
+			;
+		`).done(queryResultString => {
+			if (queryReturnedError(queryResultString)) { 
+				console.log(`error getting numeric fields: ${queryResultString}`);
+			} else {
+				const queryResults = $.parseJSON(queryResultString);
+				for (const i in queryResults) {
+					const row = queryResults[i];
+					const fieldNames = row.fields.split(',');
+					const minString = fieldNames.map(fieldName => {
+						return `min(${fieldName}) AS min_${fieldName}`
+					}).join(', ');
+					const maxString = minString.replace(/min/g, 'max');
+					
+					const deferred = queryDB(
+						`SELECT '${row.table_name}' as table_name, ${minString}, ${maxString} FROM ${row.table_name} GROUP BY table_name;` 
+					).then(resultString => {
+						if (queryReturnedError(resultString)) { 
+							console.log(`error getting value ranges: ${queryResultString}`);
+						} else {
+							// Each result will be a single row
+							const result = $.parseJSON(resultString)[0];
+							const tableName = result.table_name;
+							numericFieldRanges[tableName] = {};
+							for (field in result) {
+								if (field === 'table_name') continue;
+								const fieldType = field.match(/^min_|^max_/).toLocaleString();
+								const fieldName = field.replace(fieldType, '');
+								if (!numericFieldRanges[tableName][fieldName]) numericFieldRanges[tableName][fieldName] = {};
+								numericFieldRanges[tableName][fieldName][fieldType.replace('_', '')] = result[field];
+							}
+
+							// If this is the last deferred, resolve the trigger so the next query will run
+							// 	Removing each one once it's processed and checking that queryResults is empty
+							//	is the best way to do this because the asynchronous processing can happen out
+							//	of order
+							queryResults.pop(queryResults[i]);
+							if (!queryResults.length) valueRangeTrigger.resolve(); 
+						}
+					})
+					valueRangeDeferreds.push(deferred);
+				}
+				// Add slight delay because sometimes the deferred doesn't get pushed to the array
+				//	before the trigger gets resolved
+				//setTimeout(() => {valueRangeTrigger.resolve()}, 100);
+			}
+		})
+
+		// valueRangeDeferreds should all resolve to the query result string, so process 
+		//	each one and save the result to the numericFieldRanges object
+		$.when(
+			...valueRangeDeferreds
+		).then(() => {
+			const queryOptionSQL = `
+				SELECT 
+					id, 
+					table_name, 
+					field_name, 
+					html_input_type, 
+					html_id, 
+					display_name, 
+					description 
+				FROM data_entry_fields 
+				WHERE 
+					is_enabled AND 
+					(table_name IS NOT NULL OR css_class LIKE '%boolean-collapse-trigger%') 
+				ORDER BY table_name, display_order;
+			`; 
+			queryDB(queryOptionSQL).then(queryResultString => {
+				if (queryReturnedError(queryResultString)) { 
+					console.log(`error configuring query options: ${queryResultString}`);
+				} else {
+					queryOptionConfig = {};
+					var queryResults = $.parseJSON(queryResultString);
+					// Add other fields
+					const otherQueryOptions = [
+						{id: 998, table_name: 'attachments', field_name: 'file_size_kb', html_input_type: 'number', html_id: 'input-file_size_kb', display_name: 'File size (kb)', description: 'File size of the attachment'},
+						{id: 999, table_name: 'attachments', field_name: 'client_file_name', html_input_type: 'text', html_id: 'input-client_file_name', display_name: 'File name', description: 'Name of the attached file'},
+					];
+					numericFieldRanges.attachments = {};
+					numericFieldRanges.attachments.file_size_kb = {min: 1, max: 1000000};
+					const queryOptionInfo = [...queryResults, ...otherQueryOptions];
+					
+					for (const row of queryOptionInfo) {
+						const tableName = row.table_name;
+						if (!queryOptionConfig[tableName]) queryOptionConfig[tableName] = [];
+						queryOptionConfig[tableName].push({...row});
+					}
+
+					for (tableName in queryOptionConfig) {
+						this.queryOptions[tableName] = {};
+						const $tab = $(`
+							<li>
+								<input id="tab-${tableName}" class="tab-button" type="radio" name="tabs">
+								<label id="tab-label-${tableName}" for="tab-${tableName}"
+									class="tab-label" 
+									role="tab" 
+									aria-selected="true" 
+									aria-controls="tab-content-${tableName}" 
+									tabindex="0">
+									${tableName[0].toUpperCase()}${tableName.slice(1).replace('_', ' ')}
+							    </label>
+							    <div id="tab-content-${tableName}" 
+									class="tab-content" 
+									role="tabpanel" 
+									aria-labelledby="tab-label-${tableName}" 
+									aria-hidden="false"
+								>
+									<div class="tab-field-list-container"></div
+								</div>
+							</li>
+						   `).appendTo('#query-options-drawer-body > .tabs');
+
+						for (option of queryOptionConfig[tableName]) {
+							const fieldName = option.field_name;
+							var $optionContent = null;
+
+							$(`
+								<label class="field-list-item">
+									<button id="button-add-${option.field_name}" class="icon-button add-field-query-option-button" data-target="#query-option-${option.field_name}" aria-label="Add query option">
+										<i class="fa fa-plus" aria-hidden="true"></i>
+									</button>
+									<span>${option.display_name}</span>
+								</label>
+							`).appendTo($tab.find('.tab-field-list-container'));
+
+							// Configure option depending on html_input_type
+							switch (option.html_input_type) {
+								case 'text':
+								case 'textarea':
+								case 'email':
+								case 'tel':
+									$optionContent = $(`
+										<div class="query-option-container hidden">
+											<div class="query-option-condition-container">
+												<select class="query-option-operator string-match-query-option" value="equals">
+													<option value="equals">equals</option>
+													<option value="startsWith">starts with</option>
+													<option value="endsWith">ends with</option>
+													<option value="contains">contains</option>
+													<option value="is null">is null</option>
+													<option value="is not null">is not null</option>
+												</select>
+												<input id="query-option-${option.field_name}" class="query-option-input-field string-match-query-option" type="text" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+											</div>
+										</div>
+									`); 
+									break;
+								case 'number':
+									var thisMin;
+									try{
+										thisMin = numericFieldRanges[tableName][fieldName].min || 0;
+									} catch {
+										a=1
+									}
+									const thisMax = numericFieldRanges[tableName][fieldName].max || 100;
+									$optionContent = $(`
+										<div class="query-option-container hidden">
+											<div class="query-option-condition-container">
+												<div id="query-option-${option.field_name}" class="slider-container query-option-input-field" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+													<div class="query-slider-label-container">
+														<input class="slider-value slider-value-low" type="number" value=${thisMin} min=${thisMin} max=${thisMax}>
+														<input class="slider-value slider-value-high" type="number" value=${thisMax} min=${thisMin} max=${thisMax}>
+														<!--<label class="query-slider-label">${thisMin}</label>
+														<label class="query-slider-label">${thisMax}</label>-->
+													</div>
+												</div>
+												<!-- text boxes
+												<div class="slider-value-input-container">
+													<input class="slider-value slider-value-low" type="number" value=${thisMin} min=${thisMin} max=${thisMax}>
+													<input class="slider-value slider-value-high" type="number" value=${thisMax} min=${thisMin} max=${thisMax}>
+												</div>-->
+											</div>	
+										</div>	
+									`)
+									
+									const sliderOptions = {
+										range: true,
+										min: Math.ceil(thisMin / 10) * 10,
+										max: Math.ceil(thisMax / 10) * 10,
+										values: [thisMin, thisMax],
+										disabled: numericFieldRanges[tableName][fieldName].min == null, //if it's null, nothing's been entered in this field
+										slide: (e, slider) => {
+											// Set the query option clause
+											const $sliderContainer = $(slider.handle).closest('.slider-container');
+											const tableName = $sliderContainer.data('table-name');
+											const fieldName = $sliderContainer.data('field-name');
+											this.queryOptions[tableName][fieldName] = `${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
+											
+											// Set the location of the slider handle's label
+											const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
+											const handleIndex = slider.handleIndex;
+											const sliderValue = slider.values[handleIndex];
+											
+											this.setSliderHandleLabel($sliderContainer, handleIndex, sliderValue);
+
+											// Set value of the handle's input val
+											const sliderValueInput = $sliderContainer//.siblings('.slider-value-input-container')
+												.find('input.slider-value').get(handleIndex);
+											sliderValueInput.value = sliderValue;
+										},
+										stop: (e, slider) => {
+
+										}
+									}
+									
+									$optionContent.find('.slider-container').slider(sliderOptions);
+
+									break;
+								case 'datetime-local':
+								case 'date':
+								case 'time':
+									$optionContent = $(`
+										<div class="query-option-container hidden">
+											<div class="query-option-condition-container">
+												<select class="query-option-operator datetime-query-option" value="equals">
+													<option value="=">equals</option>
+													<option value="<=">is before</option>
+													<option value=">=">is after</option>
+													<option value="BETWEEN">is between</option>
+												</select>
+												<input id="query-option-${option.field_name}" class="query-option-input-field single-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" >
+												<div class="query-option-double-value-container hidden">
+													<input class="query-option-input-field double-value-field low-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" aria-hidden="true">
+													<span>and</span>
+													<input class="query-option-input-field double-value-field high-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" aria-hidden="true">
+												</div>
+											</div>
+										</div>
+									`);
+									break;
+								case 'select':
+									//collection of checkboxes
+									const $select = $('#' + option.html_id);
+									const $selectOptions = $select.find('option')
+										.filter((_, el) => {return el.value != ''});
+									//const selectOptionValues = $selectOptions.map((_, el) => {return {value: el.value, text: el.innerHTML}});
+									/*const selectOptionHTML = $selectOptions.map((_, el) => {
+										return `<option value="${el.value}">${el.innerHTML}</option>`
+									}).join('\n');*/
+									$optionContent = $(`
+										<div class="query-option-container hidden">
+											<div class="query-option-condition-container checkbox-option-group">
+												<select id="query-option-${option.field_name}" class="input-field query-option-input-field select2-no-tag" multiple="multiple" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+												</select>
+											</div>
+										</div>
+									`);
+									$optionContent.find('select').append($selectOptions);
+									break;
+								default:
+									console.log(`Could not understand html_input_type ${option.html_input_type}`)
+							}
+							//reactions will need to be sequential series of selects
+
+							// Add the option group and insert a header above it
+							//$optionContent.appendTo($optionGroup.find('.query-option-group-container-body'))
+							$optionContent.appendTo($tab.find('.tab-content'))
+								.prepend(`
+									<div class="query-option-condition-header">
+										<label class="query-option-label">${option.display_name}</label>
+										<button class="icon-button remove-query-option-button">
+											<i class="fas fa-lg fa-times"></i>
+										</button>
+									</div>
+								`);
+
+						}
+					}
+					$('.select2-no-tag').select2({
+						tokenSeparators: [',', ' '],
+						dropdownCssClass: 'bhims-query-select2-dropdown-container',
+						width: 'element'
+					});
+
+					// Add the query option when the plus button is clicked
+					$('.add-field-query-option-button').click(e => {
+						const $button = $(e.target).closest('.add-field-query-option-button');
+						const $target = $($button.data('target'));
+						const $container = $target.closest('.query-option-container').removeClass('hidden');
+						$button.closest('.field-list-item').addClass('hidden');
+					});
+
+					$('.remove-query-option-button').click(e => {
+						const $button = $(e.target).closest('.remove-query-option-button');
+						const $container = $button.closest('.query-option-container')
+							.addClass('hidden');
+							//.fadeOut(500, (_, el) => {$(el).addClass('hidden')})
+						
+						const dataAttributes = $container.find('.query-option-input-field').data();
+						const tableName = dataAttributes.tableName;
+						const fieldName = dataAttributes.fieldName;
+
+						$(`#button-add-${fieldName}`)
+							.closest('.field-list-item')
+							.removeClass('hidden');
+
+						// Reset the inputs
+						//	reset all regular selects to their default value
+						for (const el of $container.find($('select:not(.select2-no-tag)'))) {
+							const $select = $(el);
+							$select.val($select.find('option').first().attr('value'));
+						}
+						
+						// 	reset sliders
+						const $sliderContainer = $container.find('.slider-container');
+						const $sliderInputs = $sliderContainer.find('input.slider-value')
+						const $lowerValueInput = $sliderInputs.first();
+						const $upperValueInput = $sliderInputs.last();
+						const min = $lowerValueInput.attr('min');
+						const max = $lowerValueInput.attr('max');
+						$lowerValueInput.last().val(min);
+						$upperValueInput.last().val(max);
+						$sliderContainer.slider('values', [min, max]);
+						
+						// reset all text/datetime fields
+						$container.find(`
+							.query-option-input-field.string-match-query-option, 
+							.query-option-input-field.datetime-query-option
+						`).val('')
+						.filter('.string-match-query-option, .single-value-field')
+							.removeClass('hidden');
+						$('.query-option-double-value-container').addClass('hidden');
+
+						// reset multi-selects
+						$container.find('.select2-no-tag').val(null).trigger('change');
+
+						//remove option from query
+						delete _this.queryOptions[tableName][fieldName];
+					});
+
+					//** Capture query condition on change **//
+					//	String fields
+					$('.string-match-query-option').change(e => {
+						const $target = $(e.target);
+						const $operatorField = $target.parent().find('select.query-option-operator');
+						const $valueField = $target.parent().find('input.query-option-input-field');
+						const operatorValue = $operatorField.val();
+						const tableName = $valueField.data('table-name');
+						const fieldName = $valueField.data('field-name');
+						const value = $valueField.val();
+						const isNullOperator = operatorValue.endsWith(' null');
+
+						// Show/hide the value field depending on whether the operator requires a value
+						$valueField.toggleClass('hidden', isNullOperator);
+
+						// exit if the user hasn't entered a value yet
+						if (!isNullOperator && (value == null || value === '')) {
+							delete this.queryOptions[tableName][fieldName];
+							return;
+						}	
+
+						var queryClause = '';
+						switch (operatorValue) {
+							case 'equals':
+								queryClause = `${fieldName} = '${value}'`;
+								break;
+							case 'startsWith':
+								queryClause = `${fieldName} LIKE '${value}%'`;
+								break;
+							case 'endsWith':
+								queryClause = `${fieldName} LIKE '%${value}'`;
+								break;
+							case 'contains':
+								queryClause = `${fieldName} LIKE '%${value}%'`;
+								break;
+							case 'is null':
+								queryClause = `${fieldName} IS NULL`;
+								break;
+							case 'is not null':
+								queryClause = `${fieldName} IS NOT NULL`;
+								break;
+							default:
+								console.log(`Could not underatnd operator ${$operatorField.val()} from #${operatorField.attr('id')}`)
+						}
+						
+						this.queryOptions[tableName][fieldName] = queryClause;
+					});
+
+					$('input.slider-value').change(e => {
+						/*Set the slider values when the input changes*/
+						const $input = $(e.target);
+						const index = $input.index();
+						var value = $input.val();
+						const dbMin = $input.attr('min');
+						const dbMax = $input.attr('max');
+						if (index == 0 && value < dbMin) {
+							showModal(`The value entered is less than the minimum value found in the database. Try entering a value greater than ${dbMin}.`, 'Invalid value entered');
+							value = dbMin;
+							$input.val(dbMin);
+						} else if (index == 1 && value > dbMax) {
+							showModal(`The value entered is greater than the minimum value found in the database. Try entering a value less than ${dbMax}.`, 'Invalid value entered');
+							$input.val(dbMax);
+							value = dbMax;
+						}
+						const $parent = $input.closest('.query-option-condition-container');
+						$parent.find('.slider-container')
+							.slider('values', index, value);
+
+						const $sliderRange = $parent.find('.slider-container').first();
+						_this.setSliderHandleLabel($sliderRange, index, value);
+					}).keyup(e => {
+						/* Change the width of the input when the length of it changes*/
+						$target = $(e.target)
+						const $sliderRange = $target.closest('.slider-container');
+						const index = $target.index();
+						const value = $target.val();
+						_this.setSliderHandleLabel($sliderRange, index, value);
+					}).each((_, el) => {
+						// Set the width of each slider label
+						const $input = $(el);
+						const index = $input.index();
+						const value = $input.val();
+						const $sliderRange = $input.closest('.query-option-condition-container')
+							.find('.slider-container').first();
+						_this.setSliderHandleLabel($sliderRange, index, value);
+					});
+
+					// Date fields
+					$('.datetime-query-option').change(e => {
+						const $container = $(e.target).closest('.query-option-condition-container');
+						const $operatorField = $container.find('.query-option-operator');
+						const operatorValue = $operatorField.val();
+						const $valueField = $container.find('.query-option-input-field.single-value-field');
+						const tableName = $valueField.data('table-name');
+						const fieldName = $valueField.data('field-name');
+						var queryClause = '';
+						if (operatorValue == 'BETWEEN') {
+							const lowValue = $container.find('.double-value-field.low-value-field').val();
+							const highValue = $container.find('.double-value-field.high-value-field').val();
+							
+							// exit if the user hasn't entered a value for both fields yet
+							if (lowValue == null || highValue == null || lowValue === '' || highValue === '') return;
+
+							queryClause = `${fieldName} BETWEEN '${lowValue}' AND '${highValue}'`;
+						} else {
+							const value = $valueField.val(); 
+							
+							// exit if the user hasn't entered a value yet
+							if (value == null || value === '') return;
+
+							queryClause = `${fieldName} ${operatorValue} '${value}'`
+						}
+						this.queryOptions[tableName][fieldName] = queryClause;
+					});
+
+					$('.query-option-operator.datetime-query-option').change(e => {
+						/*toggle the double or single value field*/
+						const $target = $(e.target);
+						const operatorValue = $target.val();
+						const showDoubleValue = operatorValue === 'BETWEEN';
+						$target.siblings('.single-value-field')
+							.toggleClass('hidden', showDoubleValue)
+							.attr('aria-hidden', showDoubleValue);
+						$target.siblings('.query-option-double-value-container')
+							.toggleClass('hidden', !showDoubleValue)
+							.find('.double-value-field')
+								.attr('aria-hidden', !showDoubleValue);
+					});
+
+					//Select the first tab
+					$('.tabs').find('input[type="radio"]').first().click();
+				}
+			})
+		})
+	}
+
+	Constructor.prototype.setSliderHandleLabel = function($sliderContainer, handleIndex, handleValue) {
+		
+		const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
+		const rangeLeft = $sliderRange.css('left');
+		const rangeWidth = $sliderRange.css('width');
+		// $sliderContainer.find('.query-slider-label-container')
+		// 	.css('left', `calc(${rangeLeft} - .6em`)
+		// 	.css('width', `calc(${rangeWidth} + 1.2em`);
+
+		// Set the value of the slider handle's label
+		$label = $($sliderContainer.find('.query-slider-label')[handleIndex]);
+		$label.text(handleValue);
+
+
+
+		const $input = $($sliderContainer.find('input.slider-value')[handleIndex]);
+		$input.val(handleValue);
+		$input.css('width', (($input[0].value.length + 1) * 8) + 'px');
+		
+	}
+
+	
+	// Add a pill button
+	Constructor.prototype.addQueryOption = function(tableName, fieldDisplayName) {
+
+	}
+
+
 	Constructor.prototype.configureQuery = function() {
 		// Get username
 		$.ajax({
@@ -30,7 +550,9 @@ var BHIMSQuery = (function(){
 
 		
 
-		this.configureMap('query-result-map');
+		this.queryResultMap = this.configureMap('query-result-map');
+		
+		$('#show-query-options-container button').click(this.onShowQueryOptionsClick);
 
 		$.when(
 			...this.getLookupValues(), 
@@ -46,22 +568,25 @@ var BHIMSQuery = (function(){
 
 				//update result map
 			} else {
-				// show message that tells user to run query
+				hideLoadingIndicator();
+				$('#show-query-options-container > button').click();
+
 			}
 
-			// Set the selectedID property whenever a new list item is selected
-			$('#query-result-list > li').click(e => {
-				bhimsQuery.selectedID = $(e.target).closest('li').data('encounter-id');
-			})
+			this.configureQueryOptions();
+
+			// Make changes to form to redo/undo some of the entry configuration stuff
+			//	Remove the lock from any locked sections
+			$('.form-section.locked').removeClass('locked').find('.unlock-button').remove();
+			
+			//	The mic button shouldn't be visible because it would be too easy 
+			//	to overwrite what someone already wrote/dictated
+			$('.mic-button-container').addClass('hidden');
 
 		});
-		
+
+		customizeQuery();
 		//getFieldInfo();
-	}
-
-
-	Constructor.prototype.onShowQueryOptionsClick = function(e) {
-		$(e.target).closest('.header-menu-item-group').toggleClass('hide');
 	}
 
 
@@ -86,57 +611,6 @@ var BHIMSQuery = (function(){
 			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
 		}).addTo(map);
 
-		/*const sql = `
-			SELECT 
-				round(CURRENT_DATE - encounters.start_date)::integer AS report_age,
-				encounter_locations.latitude,
-				encounter_locations.longitude,
-				encounters.*
-			FROM
-				encounters
-			INNER JOIN
-				encounter_locations 
-			ON encounters.id=encounter_locations.encounter_id
-			WHERE 
-				extract(year FROM encounters.start_date)=(extract(year FROM CURRENT_DATE) - 2) AND
-				latitude IS NOT NULL AND longitude IS NOT NULL
-		`;
-		for (let row of queryResult) {
-			
-			let properties = {};
-			for (let fieldName in row) {
-				if (fieldName !== 'latitude' && fieldName !== 'longitude') {
-					properties[fieldName] = row[fieldName];
-				}
-			}
-
-			features.push({
-				id: row.id,
-				type: 'Feature',
-				properties: properties,
-				geometry: {
-					type: 'Point',
-	                coordinates: [
-	                    parseFloat(row.longitude),
-	                    parseFloat(row.latitude)
-	                ]
-				}
-			});
-		}
-
-		const markerOptions = {
-		    radius: 8,
-		    fillColor: "#ff7800",
-		    color: "#000",
-		    weight: 1,
-		    opacity: 1,
-		    fillOpacity: 0.8
-		};
-		var geojsonLayer = L.geoJSON(features, {
-			pointToLayer: geojsonPointAsCircle
-		}).addTo(map);*/
-
-		//zoom to extent of geojsonLayer
 		return map;
 	}
 
@@ -185,45 +659,7 @@ var BHIMSQuery = (function(){
 	Get the query result for the selected encounter and fill fields in the entry form
 	*/
 	Constructor.prototype.fillFieldsFromQuery = function() {
-		// convert query result to FIELD_VALUES format
 
-		var fieldValues = {}
-		//const selectedID = $('#query-result-list > .selected').data('encounter-id');
-
-		// Loop through the accordions to find all the joined data tables that have a 
-		//	1-to-many relationship with the encounters table
-		/*for (const el of $('.accordion')) {
-			const $accordion = $(el);
-			const tableName = $accordion.data('table-name');
-			if (tableName in this.queryResult) {
-				fieldValues[tableName] = [];
-				const thisData = this.queryResult[tableName][selectedID];
-				
-				// If this encounter doesn't have any records for this table, skip the table
-				if (!thisData) continue;
-				
-				for (const rowID in thisData) {
-					const theseFieldValues = {};
-					for (const fieldName in thisData[rowID]) {
-						theseFieldValues[fieldName] = thisData[rowID][fieldName];
-					}
-					fieldValues[tableName].push(theseFieldValues);
-				}
-			}
-		}*/
-
-		/*for (const tableName of this.joinedDataTables) {//this.queryResult[selectedID]) {
-			// If this is one of the accordions, skip it
-			if (tableName in fieldValues) continue;
-
-			const tableData = this.queryResult[tableName][selectedID];
-			/*for (const fieldName in ) {
-
-				if (FIELD_VALUES[fieldName]) {
-
-				}
-			}
-		}*/
 		entryForm.fieldValues = this.queryResult[this.selectedID];
 		entryForm.fillFieldValues(entryForm.fieldValues);
 	}
@@ -256,83 +692,97 @@ var BHIMSQuery = (function(){
 		return queryDB(sql);
 	}
 
+
+	/*
+
+	*/
+	Constructor.prototype.setEncounterMarkerState = function() {
+		if (entryForm.markerIsOnMap()) {
+
+		}
+	}
+
+
 	/* Query all data tables */
 	Constructor.prototype.runDataQuery = function(whereClause, tableSortColumns) {
 
 		var deferreds = [$.Deferred()];
 		// Get encounters table
-		deferreds.push(
-			queryDB(`SELECT * FROM encounters WHERE ${whereClause}`)
-				.done(queryResultString => {
-					if (queryReturnedError(queryResultString)) { 
-						console.log(`error configuring main form: ${queryResultString}`);
-					} else {
-						var liElements = [];
-						const result = $.parseJSON(queryResultString);
-						//this.queryResult.encounters = {};
-						// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
-						for (const encounter of result) {
-							
-							this.queryResult[encounter.id] = {...encounter};
-							//this.queryResult.encounters[encounter.id] = {...encounter};
-
-							// Configure the list item element for this encounter
-							const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
-							liElements.push(
-								$(`
-									<li data-encounter-id="${encounter.id}">
-										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group type:</strong> ${bearGroupType}
-									</li>
-								`).appendTo('#query-result-list')
-							);
-						}
-
-						// Make the first one selected
-						const $firstEl = liElements[0];
-						if ($firstEl) {
-							$firstEl.addClass('selected');
-							this.selectedID = $firstEl.data('encounter-id');
-						}
-					}
-				}
-			)
-		);
-
-		// Get all table names from accordions
-		const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
-		
-		for (const tableName of this.joinedDataTables) {
-			const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id WHERE ${whereClause} ORDER BY ${tableName}.${tableSortColumns[tableName]}`;
-			const deferred = queryDB(sql);
-			deferred.done( queryResultString => {
+		//deferreds.push(
+		var encountersDeferred = queryDB(`SELECT * FROM encounters WHERE ${whereClause}`)
+			.done(queryResultString => {
 				if (queryReturnedError(queryResultString)) { 
-						console.log(`error querying ${tableName}: ${queryResultString}`);
-				} else { 
+					console.log(`error configuring main form: ${queryResultString}`);
+				} else {
+					var liElements = [];
 					const result = $.parseJSON(queryResultString);
-					//this.queryResult[tableName] = {};
-					for (const row of result) {
-						const encounterID = row.encounter_id;
-						if (oneToManyTables.includes(tableName)) {
-							if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
-							this.queryResult[encounterID][tableName].push({...row});
-						} else {
-							this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
-						}
-						//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};
+					//this.queryResult.encounters = {};
+					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
+					for (const encounter of result) {
 						
+						this.queryResult[encounter.id] = {...encounter};
+						//this.queryResult.encounters[encounter.id] = {...encounter};
+
+						// Configure the list item element for this encounter
+						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
+						liElements.push(
+							$(`
+								<li class="query-result-list-item" data-encounter-id="${encounter.id}">
+									<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group type:</strong> ${bearGroupType}
+								</li>
+							`).appendTo('#query-result-list')
+								.click(this.onResultItemClick)
+						);
+					}
+
+					// Make the first one selected
+					const $firstEl = liElements[0];
+					if ($firstEl) {
+						$firstEl.addClass('selected');
+						this.selectedID = $firstEl.data('encounter-id');
 					}
 				}
-				
-			}).fail((xhr, status, error) => {
-				console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
-			});
-			deferreds.push(deferred);
-		}
+			}
+		).then(() => {
 
-		deferreds[0].resolve();
-		$.when(...deferreds).then(() =>  {
-			this.getReactionByFromReactionCodes().then(() => {
-				this.fillFieldsFromQuery();
+			// Get all table names from accordions
+			const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
+			
+			for (const tableName of this.joinedDataTables) {
+				const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id WHERE ${whereClause} ORDER BY ${tableName}.${tableSortColumns[tableName]}`;
+				const deferred = queryDB(sql);
+				deferred.done( queryResultString => {
+					if (queryReturnedError(queryResultString)) { 
+							console.log(`error querying ${tableName}: ${queryResultString}`);
+					} else { 
+						const result = $.parseJSON(queryResultString);
+						//this.queryResult[tableName] = {};
+						for (const row of result) {
+							const encounterID = row.encounter_id;
+							if (!this.queryResult[encounterID]) {
+								a = 1;
+							}
+							if (oneToManyTables.includes(tableName)) {
+								if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
+								this.queryResult[encounterID][tableName].push({...row});
+							} else {
+								this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
+							}
+							//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};
+							
+						}
+					}
+					
+				}).fail((xhr, status, error) => {
+					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
+				});
+				deferreds.push(deferred);
+			}
+
+			deferreds[0].resolve();
+			$.when(...deferreds).then(() =>  {
+				this.loadSelectedEncounter();
+				this.addMapData();
 			});
 		});
 
@@ -374,10 +824,7 @@ var BHIMSQuery = (function(){
 					$.when(
 						this.runDataQuery(whereClause, tableSortColumns)
 					).then( () => {
-						// Set value for all boolean fields that show/hide accordions
-						for (const el of $('.accordion.collapse')) {
-							this.setImplicitBooleanField($(el));
-						}
+
 						//this.setReactionFieldsFromQuery();
 					});
 				}
@@ -388,8 +835,223 @@ var BHIMSQuery = (function(){
 		
 	}
 
+
 	/*
-	Helper function to set appropriate values for all fields that show/hide accordion collapses
+	Add all query results to the result map. This only happens when the user runs a new 
+	query, not when the user selects a different encounter
+	*/
+	Constructor.prototype.addMapData = function() {
+
+		var features = [];
+		for (const encounterID in this.queryResult) {
+
+			data = this.queryResult[encounterID];
+			// Skip it if it doesn't have spatial data
+			if (!data.longitude && !data.latitude) continue;
+
+			features.push({
+				id: encounterID,
+				type: 'Feature',
+				properties: {...data},
+				geometry: {
+					type: 'Point',
+					coordinates: [
+						parseFloat(data.longitude),
+						parseFloat(data.latitude)
+					]
+				}
+			});
+		}
+
+		const featureToMarker = (feature, latlng) => {
+
+			return L.circleMarker(latlng);//, styleFunc)
+		}
+
+		const getColor = (encounterID) => { 
+			return encounterID == _this.selectedID ? 
+				'#f56761' : //red
+				'#f3ab3a'; //orange
+		}
+		const styleFunc = (feature) => {
+			return {
+				radius: 8,
+				weight: 1,
+				opacity: 1,
+				fillOpacity: 0.8,
+				fillColor: getColor(feature.id),
+				color: getColor(feature.id)
+			}
+		}
+
+		this.queryResultMapData = L.geoJSON(
+				features, 
+				{
+					//onEachFeature: onEachPoint,
+					style: styleFunc,
+					pointToLayer: featureToMarker
+				}
+		).on('click', (e) => {
+			/*
+			When a point is clicked on the map, select the corresponding encounter
+			*/
+			const clickedMarker = e.layer;
+			const encounterID = clickedMarker.feature.id;
+
+			// If this encounter is already selected, do nothing
+			if (encounterID == _this.selectedID) return;
+
+			const $selectedItem = $('.query-result-list-item')
+				.filter((_, el) => {
+					return encounterID == $(el).data('encounter-id')
+				});
+			
+			// Load data by triggering the onclick event for the .query-result-list-item
+			$selectedItem.click();
+			
+			// Show this point as selected in the map
+			_this.selectResultMapPoint();
+
+		}).addTo(this.queryResultMap);
+
+		// Zoom to fit data on map
+		this.queryResultMap
+			.fitBounds(this.queryResultMapData.getBounds())
+			.setZoom(Math.min(this.queryResultMap.getZoom(), 15));
+	}
+
+
+	/*
+	*/
+	Constructor.prototype.loadSelectedEncounter = function() {
+		//const markerWasOnMap = entryForm.markerIsOnMap();
+
+		this.getReactionByFromReactionCodes().then(() => {
+			this.fillFieldsFromQuery();
+			this.setAllImplicitBooleanFields();
+			this.setDescribeLocationByField();
+			this.selectResultMapPoint();
+
+			const selectedEncounterData = this.queryResult[this.selectedID];
+			if (!(selectedEncounterData.latitude && selectedEncounterData.longitude)) {
+				$('#encounter-marker-container').slideDown(0);//.collapse('show')
+			}
+
+			/*const $nullSelects = $('select').filter((_, el) => {
+				const dataValue = selectedEncounterData[el.name];
+				return !dataValue;
+			});
+			$nullSelects.addClass('default');
+			*/
+
+			// Run any extended functions
+			for (func of this.dataLoadedFunctions) {
+				try {
+					func()
+				} catch (e) {
+					console.log(`failed to run ${func.name} after loading data: ${e}`)
+				}
+			}
+		});
+
+	}
+
+
+	/*
+	Helper function to reset a select to the default option and with the default class
+	*/
+	Constructor.prototype.resetSelectDefault = function($select){
+		const placeholder = $select.attr('placeholder');
+		const $options = $select.children();
+		var $placeholderOption = $options.filter((_, el) => {return el.value === placeholder});
+		if (!$placeholderOption.length) {
+			$placeholderOption = $options.first()
+				.before(
+					`<option value="${placeholder}">${placeholder}</>`
+				);
+		}
+
+		$select.addClass('default')
+			.val(placeholder);
+	}
+
+	/*
+	Set onclick event for newly created result list items
+	*/
+	Constructor.prototype.onResultItemClick = function(e) {
+		
+		// Reset the form
+		//	clear accordions
+		$('.accordion .card:not(.cloneable)').remove();
+		
+		// 	Reset the entry form map
+		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
+		$('#input-location_type').val('Place name');
+		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
+		_this.resetSelectDefault($('#input-location_accuracy'));
+		$('#input-datum').val(1); //WGS84
+
+		// Deselect the currently selected encounter and select the clicked one
+		$('.query-result-list-item.selected').removeClass('selected');
+		const $selectedItem = $(e.target).closest('li').addClass('selected');
+		_this.selectedID = $selectedItem.data('encounter-id');
+
+		// Load data
+		_this.loadSelectedEncounter();
+
+	}
+
+
+	/*
+	Show a point on the query result map as selected and zoom to it
+	*/
+	Constructor.prototype.selectResultMapPoint = function() {
+
+		// Use the style function to set the color of the points
+		_this.queryResultMapData.resetStyle();
+
+		// Set the center of the map on the selected point
+		for (const feature of _this.queryResultMapData.toGeoJSON().features) {
+			if (feature.id == _this.selectedID) {
+				const coordinates = feature.geometry.coordinates;
+				// geometry.coordinates is annoyingly [x, y] but .panTo() requires lat, lon
+				_this.queryResultMap.panTo({lon: coordinates[0], lat: coordinates[1]});
+
+				_this.queryResultMapData.eachLayer(layer => {
+					if (layer.feature.id === feature.id) layer.bringToFront();
+				})
+
+				break;
+			}
+		}
+
+		// Scroll to the selected list item
+		const $selectedItem = $('.query-result-list-item.selected');//new item is already selected
+		const $resultList = $('#query-result-list');//;
+		const scrollPosition = $resultList.scrollTop();
+		const listHeight = $resultList[0].clientHeight;
+		const rowHeight = $selectedItem.first()[0].clientHeight;
+		const elementIndex = $selectedItem.index();
+		const scrollTo = elementIndex * rowHeight - rowHeight;
+
+		// Check if the user has reduced motion set
+		const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+		// scroll to the row if it's off the screen
+		if (scrollTo < scrollPosition || scrollTo > scrollPosition + listHeight - rowHeight) {
+			$resultList.parent()
+				.animate(
+					{scrollTop: scrollTo < 0 ? 0 : scrollTo}, 
+					!mediaQuery || mediaQuery.matches ? 
+						0 : // reduced motion
+						300 // no preference set, so animate
+				);
+		}
+	}
+
+
+	/*
+	Set appropriate values for field that show/hide accordion collapses
 	*/
 	Constructor.prototype.setImplicitBooleanField = function($accordion) {
 		
@@ -399,6 +1061,33 @@ var BHIMSQuery = (function(){
 		}
 	}
 
+
+	/*
+	Helper function to set all implicit boolean fields
+	*/
+	Constructor.prototype.setAllImplicitBooleanFields = function () {
+		// Set value for all boolean fields that show/hide accordions
+		for (const el of $('.accordion.collapse')) {
+			_this.setImplicitBooleanField($(el));
+		}
+
+		for (const targetField of $('.boolean-collapse-trigger')) {
+			const htmlID = targetField.id;
+			const $dependentFields = $('.input-field').filter((_, el) => {
+				return $(el).data('dependent-target') === '#' + htmlID
+			});
+			var collapsed = true;
+			if ($dependentFields.length) {
+				for (const el of $dependentFields) {
+					if (el.value != null && el.value !== '') {
+						collapsed = false;//show the collapse
+						break;
+					}
+				}	
+			}
+			$(targetField).val(collapsed ? 0 : 1).change();
+		}
+	}
 
 	Constructor.prototype.getReactionByFromReactionCodes = function() {
 		
@@ -422,25 +1111,6 @@ var BHIMSQuery = (function(){
 
 						// Determine reaction_by and fill value
 						reactionRows[i].reaction_by = reactionCodesTable[reaction.reaction_code].action_by;
-
-						/*const $reactionBySelect = $(`#input-reaction_by-${i}`).val(reactionByCode);//.change();
-						
-						// Rather than call the .change() event handler, manually remove default/error classes
-						//	and the default blank option because .change() will also trigger .updateReactionSelect()
-						//	and the val has to be set AFTER that function has run. The .change() event won't return
-						//	the deferred object, so doing all this manually is the only way to expose it
-						$reactionBySelect.removeClass('default error');
-						// the user selected an actual option so remove the empty default option
-						for (const el of $reactionBySelect.find('option')) {//.each(function(){
-							const $option = $(el);
-							if ($option.val() == '') {
-								$option.remove();
-							}
-						}
-						// Fill reaction selects and set value
-						entryForm.updateReactionsSelect($reactionBySelect).then(() => {
-							$(`#input-reaction-${i}`).val(reaction.reaction_code).change();
-						})*/
 					}
 					deferred.resolve();
 				} else {	
@@ -455,7 +1125,7 @@ var BHIMSQuery = (function(){
 
 
 	Constructor.prototype.setDescribeLocationByField = function() {
-		const queryData = this.queryResult[this.selectedID];
+		const queryData = _this.queryResult[_this.selectedID];
 		var $locationTypeField = $('#input-location_type');
 		if (queryData.place_name_code) {
 			$locationTypeField.val('Place name');
@@ -467,6 +1137,16 @@ var BHIMSQuery = (function(){
 			$locationTypeField.val('GPS coordinates');
 		}
 		$locationTypeField.change();
+	}
+
+
+	Constructor.prototype.onEncounterDataLoaded = function() {
+		//dummy function
+	}
+
+
+	Constructor.prototype.onShowQueryOptionsClick = function(e) {
+		$(e.target).closest('.header-menu-item-group').toggleClass('open');
 	}
 
 	/***end of BHIMSQuery module***/

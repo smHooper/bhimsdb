@@ -22,6 +22,7 @@ var BHIMSEntryForm = (function() {
 	/*
 	Main Constructor
 	*/
+	var _this;
 	var Constructor = function() {
 		// Map stuff
 		this.encounterMap = null;
@@ -42,6 +43,7 @@ var BHIMSEntryForm = (function() {
 		this.backcountryUnitCoordinates = {};
 		this.placeNameCoordinates = {};
 		this.acceptedAttachmentExtensions = {};
+		_this = this;
 	}
 
 
@@ -66,7 +68,7 @@ var BHIMSEntryForm = (function() {
 			} 
 		}
 
-		var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
+		//var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
 
 		// Query configuration tables from database
 		var deferred = $.Deferred();
@@ -80,7 +82,7 @@ var BHIMSEntryForm = (function() {
 				}),
 			queryDB('SELECT * FROM data_entry_pages ORDER BY page_index;')
 				.done(result => {processQueryResult(pages, result)}),
-			queryDB('SELECT * FROM data_entry_sections WHERE is_enabled AND page_id IS NOT NULL ORDER BY display_order;')
+			queryDB('SELECT * FROM data_entry_sections WHERE is_enabled ORDER BY display_order;')
 				.done(result => {processQueryResult(sections, result)}),
 			queryDB('SELECT * FROM data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;')
 				.done(result => {processQueryResult(accordions, result)}),
@@ -128,7 +130,7 @@ var BHIMSEntryForm = (function() {
 						`).insertBefore('.form-page.submit-page');
 						$(`
 							<li>
-								<button class="indicator-dot" type="button" onclick="entryForm.onIndicatorDotClick(event)" data-page-index="${index}" aria-label="${pageInfo.page_name}">
+								<button class="indicator-dot" type="button" data-page-index="${index}" aria-label="${pageInfo.page_name}">
 									<!--<div class="tip">
 										<h6>${pageInfo.page_name}</h6>
 										<i class="tooltip-arrow"></i>
@@ -147,6 +149,10 @@ var BHIMSEntryForm = (function() {
 			if (Object.keys(sections).length) {
 				for (const id in sections) {
 					const sectionInfo = sections[id];
+					
+					// Skip any section that don't have a page_id defined
+					if (!sectionInfo.page_id && isNewEntry) continue;
+
 					const pageInfo = pages[sectionInfo.page_id];
 					const titleHTMLTag = sectionInfo.title_html_tag;
 					$(`
@@ -465,13 +471,13 @@ var BHIMSEntryForm = (function() {
 					</div>
 				</div>
 				<div class="field-container map-container">
-					<div class="marker-container" id="encounter-marker-container">
+					<div class="marker-container collapse show" id="encounter-marker-container">
 						<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
 						<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
 					</div>
 					
 					<div id="expand-map-button-container">
-						<button id="expand-map-button" class="icon-button" onclick="entryForm.onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
+						<button id="expand-map-button" class="icon-button"  title="Expand map" aria-label="Expand map">
 							<img src="imgs/maximize_window_icon_50px.svg"></img>
 						</button>
 					</div>
@@ -537,31 +543,31 @@ var BHIMSEntryForm = (function() {
 
 			// Configure narrative field
 			const $narrativeField = $('#input-narrative');
-			if (isNewEntry) {
-				if ($narrativeField.length) {
-					$(`
-						<div class="recorded-text-container">
-							<span id="recorded-text-final" contenteditable="true"></span>
-							<span id="recorded-text-interim"></span>
-						</div>
-						<div class="mic-button-container">
-							<label class="recording-status-message" id="recording-status-message"></label>
-							<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
-								<!--<span class="record-on-indicator"></span>-->
-								<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
-								<!--<div class="tip tip-left">
-									<h6>Start dictation</h6>
-									<i class="tooltip-arrow"></i>
-								</div>-->
-							</button>
-						</div>
-					`).appendTo($narrativeField.closest('.field-container'));
-				}
+			if ($narrativeField.length) {
+				$(`
+					<div class="recorded-text-container">
+						<span id="recorded-text-final" contenteditable="true"></span>
+						<span id="recorded-text-interim"></span>
+					</div>
+					<div class="mic-button-container">
+						<label class="recording-status-message" id="recording-status-message"></label>
+						<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
+							<!--<span class="record-on-indicator"></span>-->
+							<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
+							<!--<div class="tip tip-left">
+								<h6>Start dictation</h6>
+								<i class="tooltip-arrow"></i>
+							</div>-->
+						</button>
+					</div>
+				`).appendTo($narrativeField.closest('.field-container'));
+			}
 
+			if (isNewEntry) {
 				// Add page indicator for submit page
 				$(`
 					<li>
-						<button class="indicator-dot" type="button" onclick="entryForm.onIndicatorDotClick(event)" data-page-index="4" aria-label="Submission page">
+						<button class="indicator-dot" type="button" data-page-index="4" aria-label="Submission page">
 							<!--<div class="tip">
 								<h6>Submit</h6>
 								<i class="tooltip-arrow"></i>
@@ -577,6 +583,15 @@ var BHIMSEntryForm = (function() {
 					$('.required-indicator-explanation').removeClass('hidden');
 				})
 
+				$('#previous-button').click(e => {
+					_this.onPreviousNextButtonClick(e, -1);
+				});
+				$('#next-button').click(e => {
+					_this.onPreviousNextButtonClick(e, 1);
+				});
+				$('#submit-button').click(_this.onSubmitButtonClick);
+				$('.indicator-dot').click(_this.onIndicatorDotClick);
+				$('#expand-map-button').click(_this.onExpandMapButtonClick);
 			}
 
 			// Do all other configuration stuff
@@ -1141,9 +1156,9 @@ var BHIMSEntryForm = (function() {
 		const currentIndex = parseInt($('.indicator-dot.selected').data('page-index'));
 		const nextIndex = parseInt($dot.data('page-index'));
 
-		entryForm.goToPage(nextIndex - currentIndex);
+		_this.goToPage(nextIndex - currentIndex);
 
-		entryForm.setPreviousNextButtonState(nextIndex);
+		_this.setPreviousNextButtonState(nextIndex);
 
 	}
 
@@ -1174,10 +1189,10 @@ var BHIMSEntryForm = (function() {
 		
 		const val = $input.is('.input-checkbox') ? +$input.prop('checked') : $input.val();
 
-		const fieldInfo = entryForm.fieldInfo[fieldName];
+		const fieldInfo = _this.fieldInfo[fieldName];
 		if (!fieldInfo) {
 			console.log(`${fieldName} not in this.fieldInfo. ID: ${$input.attr('id')}`);
-			entryForm.fieldValues[fieldName] = val;
+			_this.fieldValues[fieldName] = val;
 			//return;
 		} 
 		
@@ -1190,15 +1205,15 @@ var BHIMSEntryForm = (function() {
 
 			// If this is the first time a field has been changed in this 
 			//	accordion, this.fieldValues[tableName] will be undefined
-			if (!entryForm.fieldValues[tableName]) entryForm.fieldValues[tableName] = {};
-			const tableRows = entryForm.fieldValues[tableName];
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion
 			const index = $input.attr('id').match(/\d+$/)[0];
 			if (!tableRows[index]) tableRows[index] = {};
 			tableRows[index][fieldName] = val;
 		} else {
-			entryForm.fieldValues[fieldName] = val;
+			_this.fieldValues[fieldName] = val;
 		}
 	}
 
@@ -1282,11 +1297,11 @@ var BHIMSEntryForm = (function() {
 				if (show) {
 					//$thisContainer.removeClass('hidden');
 					$thisContainer.collapse('show');
-					entryForm.toggleDependentFields($thisField, hide=false)
+					_this.toggleDependentFields($thisField, hide=false)
 				} else {
 					$thisContainer.collapse('hide');
 					//$thisContainer.addClass('hidden');
-					entryForm.toggleDependentFields($thisField, hide=true)
+					_this.toggleDependentFields($thisField, hide=true)
 				}
 			}
 		});
@@ -1316,7 +1331,7 @@ var BHIMSEntryForm = (function() {
 
 		// If there are any dependent fields that should be shown/hidden, 
 		//	toggle its visibility as necessary
-		entryForm.toggleDependentFields($select);
+		_this.toggleDependentFields($select);
 	}
 
 
@@ -1457,7 +1472,7 @@ var BHIMSEntryForm = (function() {
 		const itemName = $accordion.find('.delete-button').first().data('item-name');
 		var isValid = true;
 		$accordion.find('.card:not(.cloneable) .card-collapse').each((_, el) => {
-			isValid = entryForm.validateFields($(el));
+			isValid = _this.validateFields($(el));
 			if (!isValid) {
 
 				showModal(`You have to finish filling details of all existing ${itemName ?  itemName : 'item'}s before you can add a new one.`, 'Incomplete item');
@@ -1465,7 +1480,7 @@ var BHIMSEntryForm = (function() {
 			}
 		})
 
-		if (isValid) entryForm.addNewCard($accordion);
+		if (isValid) _this.addNewCard($accordion);
 	}
 
 
@@ -1482,12 +1497,12 @@ var BHIMSEntryForm = (function() {
 			
 			$card.remove();
 
-			const fieldValues = entryForm.fieldValues[tableName];
+			const fieldValues = _this.fieldValues[tableName];
 			if (fieldValues) {
 				if (Object.keys(fieldValues).length >= cardIndex) delete fieldValues[cardIndex];
 			}
 
-			$siblings.each((_, card) => {entryForm.onCardLabelFieldChange($(card).find('.card-label-field').first())});
+			$siblings.each((_, card) => {_this.onCardLabelFieldChange($(card).find('.card-label-field').first())});
 		})
 	}
 
@@ -1595,7 +1610,7 @@ var BHIMSEntryForm = (function() {
 		//const defaultText = $card.closest('.accordion').find('.card.cloneable.hidden .card-link-label').text();
 		const defaultText = $card.find('.card-link-label').text();
 
-		entryForm.setCardLabel($card, names, defaultText);
+		_this.setCardLabel($card, names, defaultText);
 	}
 
 
@@ -1839,8 +1854,8 @@ var BHIMSEntryForm = (function() {
 	*/
 	Constructor.prototype.removeDraggableMarker = function() {
 	
-		$('#encounter-marker-img').remove();
-		$('#encounter-marker-container').slideUp(500, (_, el) => {$(el).remove()});
+		//$('#encounter-marker-img').addClass('hidden')//.remove();
+		$('#encounter-marker-container').slideUp(500);//.collapse('hide');//.slideUp(500, (_, el) => {$(el).remove()});
 	}
 
 	/*
@@ -1862,11 +1877,11 @@ var BHIMSEntryForm = (function() {
 		originalEvent.pageY -= originalEvent.offsetY - $target.height();
 		originalEvent.clientX -= originalEvent.offsetX - ($target.width() / 2); 
 		originalEvent.clientY -= originalEvent.offsetY - $target.height();
-		const latlng = entryForm.encounterMap.mouseEventToLatLng(originalEvent);
+		const latlng = _this.encounterMap.mouseEventToLatLng(originalEvent);
 		
-		entryForm.placeEncounterMarker(latlng);
+		_this.placeEncounterMarker(latlng);
 
-		entryForm.removeDraggableMarker();
+		_this.removeDraggableMarker();
 
 		$('#input-location_accuracy').val(3).change();//== < 5km
 
@@ -1878,9 +1893,9 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.setCoordinatesFromMarker = function() {
 		
 
-		const latlng = this.encounterMarker.getLatLng();
+		const latlng = _this.encounterMarker.getLatLng();
 		var [latDDD, lonDDD] = getRoundedDDD(latlng.lat, latlng.lng);
-		this.fillCoordinateFields(latDDD, lonDDD);
+		_this.fillCoordinateFields(latDDD, lonDDD);
 
 		$('#input-location_accuracy').val(3).change();//== < 5km
 	}
@@ -1913,10 +1928,10 @@ var BHIMSEntryForm = (function() {
 		const lonDDD = $('#input-lon_dec_deg').val();
 
 		if (latDDD && lonDDD) {
-			if (entryForm.markerIsOnMap()) { 
-				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			if (_this.markerIsOnMap()) { 
+				_this.confirmMoveEncounterMarker(latDDD, lonDDD);
 			} else {
-				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+				_this.placeEncounterMarker({lat: latDDD, lng: lonDDD})
 			}
 		}
 	}
@@ -1933,10 +1948,10 @@ var BHIMSEntryForm = (function() {
 
 		if (latDegrees && lonDegrees && latDecimalMinutes && lonDecimalMinutes) {
 			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latDecimalMinutes, lonDecimalMinutes);
-			if (entryForm.markerIsOnMap()) { 
-				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			if (_this.markerIsOnMap()) { 
+				_this.confirmMoveEncounterMarker(latDDD, lonDDD);
 			} else {
-				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+				_this.placeEncounterMarker({lat: latDDD, lng: lonDDD})
 			}
 		}
 
@@ -1957,10 +1972,10 @@ var BHIMSEntryForm = (function() {
 
 		if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
 			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
-			if (entryForm.markerIsOnMap()) { 
-				entryForm.confirmMoveEncounterMarker(latDDD, lonDDD);
+			if (_this.markerIsOnMap()) { 
+				_this.confirmMoveEncounterMarker(latDDD, lonDDD);
 			} else {
-				entryForm.placeEncounterMarker({lat: latDDD, lng: lonDDD})
+				_this.placeEncounterMarker({lat: latDDD, lng: lonDDD})
 			}
 		}
 
@@ -1997,17 +2012,17 @@ var BHIMSEntryForm = (function() {
 
 		const code = el.value;
 		const coordinates = $('#input-location_type').val() === 'Place name' ? 
-			entryForm.placeNameCoordinates :
-			entryForm.backcountryUnitCoordinates;
+			_this.placeNameCoordinates :
+			_this.backcountryUnitCoordinates;
 
 		if (code in coordinates) {
 			const latlon = coordinates[code];
 			if (latDDD && lonDDD) {
-				const onConfirm = 'entryForm.confirmSetMarkerFromLocationSelect();';
-				entryForm.confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
+				const onConfirm = '_this.confirmSetMarkerFromLocationSelect();';
+				_this.confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
 			} else {
-				entryForm.placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
-				entryForm.confirmSetMarkerFromLocationSelect();
+				_this.placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
+				_this.confirmSetMarkerFromLocationSelect();
 			}
 		}
 	}
@@ -2021,36 +2036,36 @@ var BHIMSEntryForm = (function() {
 		e.preventDefault();
 
 		// Create marker with event listener that does the same thing as this.encounterMarker
-		const modalMarker = new L.marker(entryForm.encounterMarker.getLatLng(), {
+		const modalMarker = new L.marker(_this.encounterMarker.getLatLng(), {
 				draggable: true,
 				autoPan: true,
 			})
 			.on('dragend', () => {
 				// When the modal marker is moved
 				//set the form marker postion
-				entryForm.encounterMarker.setLatLng(modalMarker.getLatLng()); 
+				_this.encounterMarker.setLatLng(modalMarker.getLatLng()); 
 				//set coordinate fields
-				entryForm.setCoordinatesFromMarker();
+				_this.setCoordinatesFromMarker();
 			})
-			.addTo(entryForm.modalEncounterMap);
+			.addTo(_this.modalEncounterMap);
 
 		$('#map-modal')
 			.on('shown.bs.modal', e => {
 				// When the modal is shown, the map's size is not yet determined so 
 				//	Leaflet thinks it's much smaller than it is. As a result, 
 				//	only a single tile is shown. Reset the size after a delay to prevent this
-				entryForm.modalEncounterMap.invalidateSize()
+				_this.modalEncounterMap.invalidateSize()
 				
 				// Center the map on the marker
-				entryForm.modalEncounterMap.setView(entryForm.encounterMarker.getLatLng(), entryForm.encounterMap.getZoom())
+				_this.modalEncounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
 			})
 			.on('hidden.bs.modal', e => {
 				// Remove the marker when the modal is hidden
-				entryForm.modalEncounterMap.removeLayer(modalMarker);
+				_this.modalEncounterMap.removeLayer(modalMarker);
 
 				//center form map on the marker. Do this here because it's less jarring 
 				//	for the user to see the map move to center when the modal is closed
-				entryForm.encounterMap.setView(entryForm.encounterMarker.getLatLng(), entryForm.encounterMap.getZoom())
+				_this.encounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
 			})
 			.modal() // Show the modal
 	}
@@ -2150,7 +2165,7 @@ var BHIMSEntryForm = (function() {
 				.toLowerCase();
 			showModal(`You already selected a file. Do you want to upload a new <strong>${fileType}</strong> file instead?`, `Upload a new file?`, 'confirm', footerButtons);
 		} else {
-			entryForm.updateAttachmentAcceptString($fileTypeSelect.attr('id'));
+			_this.updateAttachmentAcceptString($fileTypeSelect.attr('id'));
 		}
 	}
 
@@ -2191,7 +2206,7 @@ var BHIMSEntryForm = (function() {
 						.fadeIn(250)
 						.delay(300)
 						.text(fileName);
-				entryForm.attachmentFiles[sourceInput.id] = sourceInput.files;
+				_this.attachmentFiles[sourceInput.id] = sourceInput.files;
 				$progressBar.css('width', '0px');
 			}
 
@@ -2215,7 +2230,7 @@ var BHIMSEntryForm = (function() {
 		// If the user cancels, it resets the input files attribute to null 
 		//	which is dumb. Reset it to the previous file and exit
 		if (el.files.length === 0) {
-			el.files = entryForm.attachmentFiles[el.id];
+			el.files = _this.attachmentFiles[el.id];
 			return
 		}
 
@@ -2228,7 +2243,7 @@ var BHIMSEntryForm = (function() {
 		$progressBar.closest('.collapse')
 				.show();// make sure the collapse that contains both is open
 		
-		entryForm.readAttachment(el, $thumbnail, $progressBar);
+		_this.readAttachment(el, $thumbnail, $progressBar);
 	}
 
 
@@ -2285,13 +2300,13 @@ var BHIMSEntryForm = (function() {
 		$accordion.find('.card:not(.cloneable)').remove();
 
 		// For each individual bear, add a card
-		entryForm.fieldValues.bears = [];
+		_this.fieldValues.bears = [];
 
 		// Bear cohort code is a field in the encounters table, not the bears table
 		delete values.bear_cohort_code;
 
 		for (const i in ageAndSex) {
-			const $card = entryForm.addNewCard($accordion);
+			const $card = _this.addNewCard($accordion);
 			const $inputs = $card.find('.input-field');
 			const bear = {...ageAndSex[i], ...values};
 			bear.bear_number = parseInt(i) + 1;
@@ -2303,7 +2318,7 @@ var BHIMSEntryForm = (function() {
 					.change();
 			}
 
-			entryForm.fieldValues.bears[i] = {...bear};
+			_this.fieldValues.bears[i] = {...bear};
 		
 		}
 
@@ -2322,8 +2337,8 @@ var BHIMSEntryForm = (function() {
 		}).done(function(resultString) {
 				resultString = resultString.trim();
 				if (resultString)  {
-					entryForm.username = resultString.toLowerCase();
-					$('#input-entered_by').val(entryForm.username);	
+					_this.username = resultString.toLowerCase();
+					$('#input-entered_by').val(_this.username);	
 				} else {
 					console.log('username query failed. result: ' + resultString)
 				}
@@ -2391,13 +2406,13 @@ var BHIMSEntryForm = (function() {
 			const $page = $(page);
 			const allFieldsValid = $page.find('.validate-field-parent')
 				.map((_, parent) => {
-					return entryForm.validateFields($(parent), focusOnField=false);
+					return _this.validateFields($(parent), focusOnField=false);
 				}).get()
 				.every((isValid) => isValid);
 			if (!allFieldsValid) {
 				hideLoadingIndicator();
 				const onClick = `			
-					const pageIndex = entryForm.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
+					const pageIndex = _this.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
 					entryForm.setPreviousNextButtonState(pageIndex);
 				`;
 				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
@@ -2431,9 +2446,9 @@ var BHIMSEntryForm = (function() {
 									file_path: filePath,//should be the saved filepath (with UUID)
 									file_size_kb: Math.floor(thisFile.size / 1000),
 									mime_type: thisFile.type,
-									attached_by: entryForm.username,//retrieved in window.onload()
+									attached_by: _this.username,//retrieved in window.onload()
 									datetime_attached: timestamp,
-									last_changed_by: entryForm.username,
+									last_changed_by: _this.username,
 									datetime_last_changed: timestamp
 								};
 
@@ -2441,11 +2456,11 @@ var BHIMSEntryForm = (function() {
 									const fieldName = inputField.name;
 									// Get input values for all input fields except file input (which has 
 									//	the name "uploadedFile" used by php script)
-									if (fieldName in entryForm.fieldInfo) {
+									if (fieldName in _this.fieldInfo) {
 										fileInfo[fieldName] = inputField.value; 
 									}
 								}
-								uploadedFiles[Object.keys(uploadedFiles).length] = fileInfo;
+								uploadedFiles[Object.keys(uploadedFiles).length] = {...fileInfo};
 							}
 						
 						},
@@ -2492,31 +2507,31 @@ var BHIMSEntryForm = (function() {
 					const fieldName = input.name;
 
 					//if this field isn't stored in the DB or then skip it 
-					if (!(fieldName in entryForm.fieldInfo)) continue;
+					if (!(fieldName in _this.fieldInfo)) continue;
 
-					const fieldInfo = entryForm.fieldInfo[fieldName];
+					const fieldInfo = _this.fieldInfo[fieldName];
 					const tableName = fieldInfo.table_name;
 
 					//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
-					if ((!(fieldName in entryForm.fieldValues) || typeof(entryForm.fieldValues[tableName]) === 'object')) continue;
+					if ((!(fieldName in _this.fieldValues) || typeof(_this.fieldValues[tableName]) === 'object')) continue;
 
 					if (!(tableName in unorderedParameters)) {
 						unorderedParameters[tableName] = {}
 					}
 					
-					unorderedParameters[tableName][fieldName] = entryForm.fieldValues[fieldName];
+					unorderedParameters[tableName][fieldName] = _this.fieldValues[fieldName];
 				}
 
 
 				// Make sure that encounters is the first insert since everything references it
-				const [encountersSQL, encountersParams] = entryForm.valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
+				const [encountersSQL, encountersParams] = _this.valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
 				sqlStatements.push(encountersSQL);
 				sqlParameters.push(encountersParams);
 
 				// loop through each table and add statements and params
 				for (tableName in unorderedParameters) {
 					if (tableName !== 'encounters' && tableName != null) {
-						const [statement, params] = entryForm.valuesToSQL(unorderedParameters[tableName], tableName)
+						const [statement, params] = _this.valuesToSQL(unorderedParameters[tableName], tableName)
 						sqlStatements.push(statement);
 						sqlParameters.push(params);
 					} 
@@ -2533,10 +2548,10 @@ var BHIMSEntryForm = (function() {
 					const tableName = $accordion.data('table-name');
 					const fieldValueObjects = tableName === 'attachments' ?
 						uploadedFiles :
-						entryForm.fieldValues[tableName];
+						_this.fieldValues[tableName];
 
 					if (!fieldValueObjects) {
-						console.log(`No entryForm.fieldValues for ${tableName} (${$accordion.attr('id')})`);
+						console.log(`No _this.fieldValues for ${tableName} (${$accordion.attr('id')})`);
 						continue;
 					}
 
@@ -2556,14 +2571,16 @@ var BHIMSEntryForm = (function() {
 						let fieldValues = {...fieldValueObjects[i]};
 						
 						// Remove any fields aren't stored in the DB
-						for (const fieldName in fieldValues) {
-							if (!(fieldName in entryForm.fieldInfo)) {
-								// If it's not in fieldInfo, it doesn't belong in the DB
-								delete fieldValues[fieldName];
-							} else {
-								// If it's in fieldInfo but the table_name is blank or otherwise doesn't 
-								//	match the accordion's table-name attribute, it doesn't belong either
-								if (entryForm.fieldInfo[fieldName].table_name != tableName) delete fieldValues[fieldName];
+						if (tableName != 'attachments') { //except attachments has several file attribute fields that aren't data entry fields
+							for (const fieldName in fieldValues) {
+								if (!(fieldName in _this.fieldInfo)) { 
+									// If it's not in fieldInfo, it doesn't belong in the DB
+									delete fieldValues[fieldName];
+								} else {
+									// If it's in fieldInfo but the table_name is blank or otherwise doesn't 
+									//	match the accordion's table-name attribute, it doesn't belong either
+									if (_this.fieldInfo[fieldName].table_name != tableName) delete fieldValues[fieldName];
+								}
 							}
 						}
 
@@ -2576,7 +2593,7 @@ var BHIMSEntryForm = (function() {
 							fieldValues[orderField] = order + 1;
 						}
 
-						const [statement, params] = entryForm.valuesToSQL(fieldValues, tableName);
+						const [statement, params] = _this.valuesToSQL(fieldValues, tableName);
 						sqlStatements.push(statement);
 						sqlParameters.push(params);
 					}
@@ -2603,7 +2620,7 @@ var BHIMSEntryForm = (function() {
 							.addClass('hidden');
 
 					// Clear localStorage
-					//entryForm.fieldValues = {};
+					//_this.fieldValues = {};
 					//window.localStorage.clear();
 
 					// Second email notification

@@ -27,6 +27,7 @@ CREATE TABLE location_accuracy_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE
 CREATE TABLE location_source_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE making_noise_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE management_classification_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE management_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE mapping_method_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE observation_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE park_unit_codes (id SERIAL PRIMARY KEY, alpha_code CHAR(4) UNIQUE, name VARCHAR(50) UNIQUE);
@@ -358,6 +359,7 @@ INSERT INTO initial_human_activity_codes (short_name, name) VALUES ('SLP', 'Slee
 INSERT INTO initial_bear_action_codes (short_name, name) VALUES ('VEG', 'Feeding on vegetation'), ('CRC', 'Feeding on carcass'), ('HUN', 'Hunting'), ('DIG', 'Digging'), ('STD', 'Standing'), ('RST', 'Resting'), ('BRD', 'Breeding'), ('WLK', 'Walking toward people'), ('RTW', 'Running toward people'), ('RAW', 'Running away from people'), ('TRV', 'Traveling'), ('PLA', 'Playing'), ('INV', 'Investigating'), ('OTH', 'Other'), ('UNK', 'Unknown');
 INSERT INTO location_source_codes (short_name, name) VALUES ('MAP', 'Selected point from a paper map'), ('WEB', 'Selected point on web map'), ('KNW', 'Known location'), ('GPS', 'GPS point'), ('NON', 'No location given'), ('UNK', 'Unknown');
 INSERT INTO management_classification_codes (short_name, name) VALUES ('OBS', 'Observation'), ('ENC', 'Encounter'), ('GEN', 'Incident; general'), ('FOO', 'Incident; gets food'), ('PRP', 'Incident; property damange'), ('INJ', 'Incident; injury');
+INSERT INTO management_action_codes (short_name, name) VALUES ('NON', 'None'), ('HAZ', 'Hazing'), ('AVR', 'Aversive conditioning'), ('REL', 'Relocation'), ('REM', 'Removal'), ('DES', 'Destruction');
 INSERT INTO mapping_method_codes (code, name, short_name) VALUES (1, 'GPS', 'GPS'), (2, 'Marked on digital map', 'DIG'), (3, 'Marked on paper map', 'PAP'), (4, 'From selected location', 'LOC'), (-1, 'Unknown', 'UNK'), (-2, 'Other', 'OTH');
 INSERT INTO observation_type_codes (short_name, name) VALUES ('OBS', 'Observation/Sighting'), ('ENC', 'Encounter'), ('TRK', 'Track'), ('DEN', 'Den site'), ('OTH', 'Other');
 INSERT INTO reaction_by_codes (short_name, name) VALUES ('BER', 'Bear'), ('HUM', 'Person'), ('DOG', 'Dog'), ('STK', 'Stock animal'), ('OTH', 'Other');

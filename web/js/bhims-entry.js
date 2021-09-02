@@ -43,6 +43,7 @@ var BHIMSEntryForm = (function() {
 		this.backcountryUnitCoordinates = {};
 		this.placeNameCoordinates = {};
 		this.acceptedAttachmentExtensions = {};
+		this.confirmLocationSelectChange = true;
 		_this = this;
 	}
 
@@ -1928,7 +1929,7 @@ var BHIMSEntryForm = (function() {
 		const lonDDD = $('#input-lon_dec_deg').val();
 
 		if (latDDD && lonDDD) {
-			if (_this.markerIsOnMap()) { 
+			if (_this.markerIsOnMap() && _this.confirmLocationSelectChange) { 
 				_this.confirmMoveEncounterMarker(latDDD, lonDDD);
 			} else {
 				_this.placeEncounterMarker({lat: latDDD, lng: lonDDD})
@@ -2017,7 +2018,7 @@ var BHIMSEntryForm = (function() {
 
 		if (code in coordinates) {
 			const latlon = coordinates[code];
-			if (latDDD && lonDDD) {
+			if (latDDD && lonDDD && _this.confirmLocationSelectChange) {
 				const onConfirm = '_this.confirmSetMarkerFromLocationSelect();';
 				_this.confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
 			} else {

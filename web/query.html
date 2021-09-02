@@ -51,7 +51,7 @@
 			<h4 class="page-tile">BHIMS query</h4>
 		</div>
 		<div class="header-menu-item-group" id="show-query-options-container">
-			<button class="text-only-button">
+			<button id="show-query-options-button" class="text-only-button">
 				<h6>query options</h6>
 				<i class="fa fa-chevron-down pull-right"></i>
 			</button>
@@ -179,23 +179,13 @@
 	<script src="js/bhims-custom.js"></script>
 
 	<script>
-		/*var ENCOUNTER_MAP, MODAL_ENCOUNTER_MAP;
-		var ENCOUNTER_MARKER = new L.marker([0, 0], {
-				draggable: true,
-				autoPan: true,
-			})
-			.on('dragend', setCoordinatesFromMarker);
-		var QUERY_RESULT = {}, 
-			FIELD_INFO = {},
-			FIELD_VALUES = {},
-			LOOKUP_VALUES = {},
-			JOINED_DATA_TABLES = [];*/
 
 		var entryForm,
 			bhimsQuery;
 		$(document).ready(function(){
 			entryForm = new BHIMSEntryForm();
-
+			entryForm.confirmLocationSelectChange = false;
+			
 			bhimsQuery = new BHIMSQuery();
 			bhimsQuery.configureQuery();
 

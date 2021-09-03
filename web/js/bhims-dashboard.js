@@ -1,5 +1,7 @@
 'use strict';
 
+var mapData;
+
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
 	const sql = `
@@ -81,6 +83,7 @@ function geojsonPointAsCircle(feature, latlng) {
 			popupContent += `<p class="leaflet-field-item"><strong>${key}:</strong> ${value}</p>`;
 	}
 
+	const queryURL = `query.html?{"encounters": {"id": {"value": ${feature.id}, "operator": "="}}}`
 	var popup = L.popup({
 		autoPan: true,
 
@@ -88,9 +91,9 @@ function geojsonPointAsCircle(feature, latlng) {
 		<div class="leaflet-popup-data-container">
 			${popupContent}
 		</div>
-		<a href="${encodeURI('query.html?encounter.id=' + feature.id)}" target="_blank">View record</a>
+		<a href="${encodeURI(queryURL)}" target="_blank">View record</a>
 	`);
-
+	
 	return L.circleMarker(latlng, markerOptions)
 		.bindPopup(popup);
 }
@@ -413,7 +416,7 @@ function configureDailyEncounterChart() {
 				            console.log(e.y)
 				            // Set the href of the tooltip so the user can open. Do this here rather than in the 
 				            //	tooltip handler because the fullDates array is available within this scope
-				            $tooltip.find('a').attr('href', encodeURI(`query.html?encounters.start_date='${fullDates[index]}'`))
+				            $tooltip.find('a').attr('href', encodeURI(`query.html?{"encounters": {"start_date": {"value": "'${fullDates[index]}'", "operator": "="}}}`))
 
 				        },
 		                aspectRatio: canvasWidth / $canvasWrapper.height(),

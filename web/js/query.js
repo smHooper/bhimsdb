@@ -14,7 +14,715 @@ var BHIMSQuery = (function(){
 		this.queryResultMapData = L.geoJSON();
 		this.queryResultMap = null;
 		this.queryOptions = {};
+		this.tableSortColumns = {};
 		_this = this; // scope hack for event handlers that take over "this"
+	}
+
+
+	/*
+	Get the query result for the selected encounter and fill fields in the entry form
+	*/
+	Constructor.prototype.fillFieldsFromQuery = function() {
+
+		entryForm.fieldValues = this.queryResult[this.selectedID];
+		entryForm.fillFieldValues(entryForm.fieldValues);
+
+		// All distance values in the DB should be in meters so make sure the units match that
+		$('.short-distance-select').val('m')
+	}
+
+
+	/*
+	Helper function to uery the database to find the primary key for each 
+	table. This is really only necessary for bears and reactions, which
+	both have primary keys from two columns, a order column specific 
+	to the encounter and the encounter_id
+	*/
+	Constructor.prototype.getTableSortColumns = function() {
+		const sql = `
+			SELECT 
+				tc.table_schema, tc.table_name, kc.column_name
+			FROM information_schema.table_constraints tc
+				INNER JOIN information_schema.key_column_usage kc 
+				ON kc.table_name = tc.table_name AND kc.table_schema = tc.table_schema AND kc.constraint_name = tc.constraint_name
+			WHERE 
+				tc.constraint_type = 'PRIMARY KEY' AND
+				kc.column_name <> 'encounter_id' AND 
+				kc.table_name NOT LIKE '%_codes' AND
+				kc.ordinal_position is not null
+			ORDER BY 
+				tc.table_schema,
+				tc.table_name,
+				kc.position_in_unique_constraint
+			;
+		`;
+		return queryDB(sql)
+			.done(queryResultString => {
+				if (queryReturnedError(queryResultString)) { 
+					console.log(`error configuring main form: ${queryResultString}`);
+				} else {
+					const result = $.parseJSON(queryResultString);
+					//var tableSortColumns = {};
+					for (row of result) {
+						this.tableSortColumns[row.table_name] = row.column_name;
+					}
+				}
+			});
+	}
+
+	/* 
+	Query each right-side table separately
+	*/
+	Constructor.prototype.getJoinedDataTables = function() {
+		
+		const tablesSQL = `
+			SELECT 
+				DISTINCT table_name 
+			FROM information_schema.columns 
+			WHERE table_schema='public' AND column_name='encounter_id'
+		;`;
+		return queryDB(tablesSQL).done( tableQueryResultString => {
+			const rightSideTables = $.parseJSON(tableQueryResultString);
+			for (const row of rightSideTables) {
+				const tableName = row.table_name;
+				this.joinedDataTables.push(tableName);
+			}
+		});
+	}
+
+	/*
+
+	*/
+	Constructor.prototype.setEncounterMarkerState = function() {
+		if (entryForm.markerIsOnMap()) {
+
+		}
+	}
+
+
+	/* Query all data tables */
+	Constructor.prototype.runDataQuery = function(sqlQueryParameters) {
+
+		// Remove any items from a previous query
+		$('#query-result-list').empty();
+		//this.queryResultMapData.remove();
+		this.queryResult = {};
+
+		// for some reason accordions also occasionally get cleared before being reloaded with new data, so do that manually
+		$('.accordion.form-item-list .card:not(.cloneable)').remove();
+
+		var deferreds = [$.Deferred()];
+		// Get encounters table
+		if (typeof(sqlQueryParameters) === 'string') {
+			try {
+				sqlQueryParameters = $.parseJSON(sqlQueryParameters);
+			} catch {
+				console.log('could not parse queryParameters string: ' + sqlQueryParameters);
+				return;
+			}
+		}
+		var encountersWhereClauses = [];
+		var joinClauses = [];
+		var whereClauses = {};
+		for (const tableName in sqlQueryParameters) {
+			for (const fieldName in sqlQueryParameters[tableName]) {
+				// Initiate array for this table only if there's at least one param
+				if (whereClauses[tableName] == undefined) whereClauses[tableName] = [];
+				
+				const value = sqlQueryParameters[tableName][fieldName].value;
+				var operator = sqlQueryParameters[tableName][fieldName].operator;
+				const clause = `${tableName}.${fieldName} ${operator} ${value}`;
+				whereClauses[tableName].push(clause);
+				encountersWhereClauses.push(clause);
+			}
+			if (whereClauses[tableName]) {
+				if (whereClauses[tableName].length && tableName !== 'encounters') {
+					joinClauses.push(`LEFT JOIN ${tableName} ON encounters.id=${tableName}.encounter_id`);
+				}
+			}
+		}
+
+		/*for (const fieldName in sqlQueryParameters.encounters) {
+			const value = sqlQueryParameters.encounters[fieldName].value;
+			var operator = sqlQueryParameters.encounters[fieldName].operator;
+			const clause = `encounters.${fieldName} ${operator} ${value}`;
+			encountersWhereClauses.push(clause)
+		}*/
+		const encountersWhereStatement = 'WHERE ' + encountersWhereClauses.join(' AND ');
+		var encountersDeferred = queryDB(`SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement}`)//LIMIT 50`)
+			.done(queryResultString => {
+				if (queryReturnedError(queryResultString)) { 
+					console.log(`error configuring main form: ${queryResultString}`);
+				} else {
+					var liElements = [];
+					const result = $.parseJSON(queryResultString);
+					//this.queryResult.encounters = {};
+					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
+					for (const encounter of result) {
+						
+						this.queryResult[encounter.id] = {...encounter};
+						//this.queryResult.encounters[encounter.id] = {...encounter};
+
+						// Configure the list item element for this encounter
+						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
+						liElements.push(
+							$(`
+								<li class="query-result-list-item" data-encounter-id="${encounter.id}">
+									<label>
+										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group type:</strong> ${bearGroupType}
+									</label>
+									<div class="query-result-edit-button-container">
+										<button id="delete-button-${encounter.id}" class="query-result-edit-button icon-button" type="button" aria-label="Delete selected encounter">
+											<i class="fas fa-trash fa-lg"></i>
+										</button>
+										<button id="edit-button-${encounter.id}" class="query-result-edit-button icon-button" type="button" aria-label="Edit selected encounter">
+											<i class="fas fa-edit fa-lg"></i>
+										</button>
+										<button id="save-button-${encounter.id}" class="query-result-edit-button icon-button hidden" type="button" aria-label="Save edits">
+											<i class="fas fa-save fa-lg"></i>
+										</button>
+									</div>
+								</li>
+							`).appendTo('#query-result-list')
+								.click(this.onResultItemClick)
+						);
+					}
+
+					// Make the first one selected
+					const $firstEl = liElements[0];
+					if ($firstEl) {
+						$firstEl.addClass('selected');
+						this.selectedID = $firstEl.data('encounter-id');
+					}
+				}
+			}
+		).then(() => {
+
+			// Get all table names from accordions
+			const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
+			const encounterIDClause = `encounters.id IN (${Object.keys(this.queryResult).join(',')})`
+			for (const tableName of this.joinedDataTables) {
+				/*var tableWhereClauses = [];
+				for (const fieldName in sqlQueryParameters[tableName]) {
+					const value = sqlQueryParameters[tableName][fieldName].value;
+					var operator = sqlQueryParameters[tableName][fieldName].operator;
+					const clause = `${tableName}.${fieldName} ${operator} ${value}`;
+					encountersWhereClauses.push(clause);
+				}*/
+				// construct WHERE statement in the format "WHERE encounters.id IN (...) AND <tableName>.<fieldName>..." 
+				//	unless there are no query params for this table. If that's the case just use "WHERE encounters.id IN (...)"
+				const tableWhereClauseString = whereClauses[tableName] ? 'AND ' + whereClauses[tableName].join(' AND ') : '';
+				const whereString = `WHERE ${encounterIDClause} ${tableWhereClauseString}`;
+				const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id ${whereString} ORDER BY ${tableName}.${this.tableSortColumns[tableName]}`;
+				const deferred = queryDB(sql);
+				deferred.done( queryResultString => {
+					if (queryReturnedError(queryResultString)) { 
+							console.log(`error querying ${tableName}: ${queryResultString}`);
+					} else { 
+						const result = $.parseJSON(queryResultString);
+						//this.queryResult[tableName] = {};
+						for (const row of result) {
+							const encounterID = row.encounter_id;
+							if (!this.queryResult[encounterID]) {
+								a = 1;
+							}
+							if (oneToManyTables.includes(tableName)) {
+								if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
+								this.queryResult[encounterID][tableName].push({...row});
+							} else {
+								this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
+							}
+							//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};
+							
+						}
+					}
+					
+				}).fail((xhr, status, error) => {
+					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
+				});
+				deferreds.push(deferred);
+			}
+
+			deferreds[0].resolve();
+			$.when(...deferreds).then(() =>  {
+				this.loadSelectedEncounter();
+				this.addMapData();
+			});
+		});
+
+		return deferreds;
+
+	}
+
+
+	/* 
+	Parse a URL query into an SQL query and process the result 
+	*/
+	Constructor.prototype.urlQueryToSQL = function() {
+
+		var queryParams = decodeURIComponent(window.location.search.slice(1));
+
+		// 
+		$.when(
+			this.runDataQuery(queryParams)
+		).then( () => {
+
+			//this.setReactionFieldsFromQuery();
+		});
+		
+	}
+
+
+	/*
+	Add all query results to the result map. This only happens when the user runs a new 
+	query, not when the user selects a different encounter
+	*/
+	Constructor.prototype.addMapData = function() {
+
+		var features = [];
+		for (const encounterID in this.queryResult) {
+
+			data = this.queryResult[encounterID];
+			// Skip it if it doesn't have spatial data
+			if (!data.longitude && !data.latitude) continue;
+
+			features.push({
+				id: encounterID,
+				type: 'Feature',
+				properties: {...data},
+				geometry: {
+					type: 'Point',
+					coordinates: [
+						parseFloat(data.longitude),
+						parseFloat(data.latitude)
+					]
+				}
+			});
+		}
+
+		const featureToMarker = (feature, latlng) => {
+
+			return L.circleMarker(latlng);//, styleFunc)
+		}
+
+		const getColor = (encounterID) => { 
+			return encounterID == _this.selectedID ? 
+				'#f73830' ://'#f56761' : //red
+				'#f3ab3a'; //orange
+		}
+		const styleFunc = (feature) => {
+			return {
+				radius: 8,
+				weight: 1,
+				opacity: 1,
+				fillOpacity: 0.8,
+				fillColor: getColor(feature.id),
+				color: getColor(feature.id)
+			}
+		}
+
+		this.queryResultMapData = L.geoJSON(
+				features, 
+				{
+					//onEachFeature: onEachPoint,
+					style: styleFunc,
+					pointToLayer: featureToMarker
+				}
+		).on('click', (e) => {
+			/*
+			When a point is clicked on the map, select the corresponding encounter
+			*/
+			const clickedMarker = e.layer;
+			const encounterID = clickedMarker.feature.id;
+
+			// If this encounter is already selected, do nothing
+			if (encounterID == _this.selectedID) return;
+
+			const $selectedItem = $('.query-result-list-item')
+				.filter((_, el) => {
+					return encounterID == $(el).data('encounter-id')
+				});
+			
+			// Load data by triggering the onclick event for the .query-result-list-item
+			$selectedItem.click();
+			
+			// Show this point as selected in the map
+			_this.selectResultMapPoint();
+
+		}).addTo(this.queryResultMap);
+
+		// Zoom to fit data on map
+		this.queryResultMap
+			.fitBounds(this.queryResultMapData.getBounds())
+			.setZoom(Math.min(this.queryResultMap.getZoom(), 15));
+	}
+
+
+	/*
+	*/
+	Constructor.prototype.loadSelectedEncounter = function() {
+		//const markerWasOnMap = entryForm.markerIsOnMap();
+
+		this.getReactionByFromReactionCodes().then(() => {
+			this.fillFieldsFromQuery();
+			this.setAllImplicitBooleanFields();
+			this.setDescribeLocationByField();
+			this.selectResultMapPoint();
+
+			const selectedEncounterData = this.queryResult[this.selectedID];
+			if (!(selectedEncounterData.latitude && selectedEncounterData.longitude)) {
+				$('#encounter-marker-container').slideDown(0);//.collapse('show')
+			}
+
+			/*const $nullSelects = $('select').filter((_, el) => {
+				const dataValue = selectedEncounterData[el.name];
+				return !dataValue;
+			});
+			$nullSelects.addClass('default');
+			*/
+
+			// Run any extended functions
+			for (func of this.dataLoadedFunctions) {
+				try {
+					func()
+				} catch (e) {
+					console.log(`failed to run ${func.name} after loading data: ${e}`)
+				}
+			}
+		});
+
+	}
+
+
+	/*
+	Helper function to reset a select to the default option and with the default class
+	*/
+	Constructor.prototype.resetSelectDefault = function($select){
+		const placeholder = $select.attr('placeholder');
+		const $options = $select.children();
+		var $placeholderOption = $options.filter((_, el) => {return el.value === placeholder});
+		if (!$placeholderOption.length) {
+			$placeholderOption = $options.first()
+				.before(
+					`<option value="${placeholder}">${placeholder}</>`
+				);
+		}
+
+		$select.addClass('default')
+			.val(placeholder);
+	}
+
+	/*** Event Handlers ***/
+	/*
+	Query the DB if the user has specified any query parameters
+	*/
+	Constructor.prototype.onRunQueryClick = function() {
+
+		// Check that the user has actually specified options
+		var hasQueryOptions = false;
+		for (const tableName in _this.queryOptions) {
+			if (Object.keys(_this.queryOptions[tableName]).length) {
+				hasQueryOptions = true;
+				break;
+			}
+		}
+		if (!hasQueryOptions) {
+			showModal('You have not selected or specified any query options to filter query results. Once you have added a field, add or change the value to filter results based on that field.', 'No query options selected')
+			return;
+		}
+
+		_this.runDataQuery(_this.queryOptions);
+		$('#show-query-options-container').removeClass('open');
+
+	}
+
+
+	/*
+	Set onclick event for newly created result list items
+	*/
+	Constructor.prototype.onResultItemClick = function(e) {
+		
+		// Reset the form
+		//	clear accordions
+		$('.accordion .card:not(.cloneable)').remove();
+		
+		// 	Reset the entry form map
+		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
+		$('#input-location_type').val('Place name');
+		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
+		_this.resetSelectDefault($('#input-location_accuracy'));
+		$('#input-datum').val(1); //WGS84
+
+		// Deselect the currently selected encounter and select the clicked one
+		$('.query-result-list-item.selected').removeClass('selected');
+		const $selectedItem = $(e.target).closest('li').addClass('selected');
+		_this.selectedID = $selectedItem.data('encounter-id');
+
+		// Load data
+		_this.loadSelectedEncounter();
+
+	}
+
+	/*
+	Show a point on the query result map as selected and zoom to it
+	*/
+	Constructor.prototype.selectResultMapPoint = function() {
+
+		// Use the style function to set the color of the points
+		_this.queryResultMapData.resetStyle();
+
+		// Set the center of the map on the selected point
+		for (const feature of _this.queryResultMapData.toGeoJSON().features) {
+			if (feature.id == _this.selectedID) {
+				const coordinates = feature.geometry.coordinates;
+				// geometry.coordinates is annoyingly [x, y] but .panTo() requires lat, lon
+				_this.queryResultMap.panTo({lon: coordinates[0], lat: coordinates[1]});
+
+				_this.queryResultMapData.eachLayer(layer => {
+					if (layer.feature.id === feature.id) layer.bringToFront();
+				})
+
+				break;
+			}
+		}
+
+		// Scroll to the selected list item
+		const $selectedItem = $('.query-result-list-item.selected');//new item is already selected
+		const $resultList = $('#query-result-list');//;
+		const scrollPosition = $resultList.scrollTop();
+		const listHeight = $resultList[0].clientHeight;
+		const rowHeight = $selectedItem.first()[0].clientHeight;
+		const elementIndex = $selectedItem.index();
+		const scrollTo = elementIndex * rowHeight - rowHeight;
+
+		// Check if the user has reduced motion set
+		const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+		// scroll to the row if it's off the screen
+		if (scrollTo < scrollPosition || scrollTo > scrollPosition + listHeight - rowHeight) {
+			$resultList.parent()
+				.animate(
+					{scrollTop: scrollTo < 0 ? 0 : scrollTo}, 
+					!mediaQuery || mediaQuery.matches ? 
+						0 : // reduced motion
+						300 // no preference set, so animate
+				);
+		}
+	}
+
+
+	/*
+	Set appropriate values for field that show/hide accordion collapses
+	*/
+	Constructor.prototype.setImplicitBooleanField = function($accordion) {
+		
+		const $targetField = $($accordion.data('dependent-target'));
+		if ($targetField.data('lookup-table') === 'boolean_response_codes') {
+			$targetField.val($accordion.find('.card:not(.cloneable)').length ? 1 : 0).change();
+		}
+	}
+
+
+	/*
+	Helper function to set all implicit boolean fields
+	*/
+	Constructor.prototype.setAllImplicitBooleanFields = function () {
+		// Set value for all boolean fields that show/hide accordions
+		for (const el of $('.accordion.collapse')) {
+			_this.setImplicitBooleanField($(el));
+		}
+
+		for (const targetField of $('.boolean-collapse-trigger')) {
+			const htmlID = targetField.id;
+			const $dependentFields = $('.input-field').filter((_, el) => {
+				return $(el).data('dependent-target') === '#' + htmlID
+			});
+			var collapsed = true;
+			if ($dependentFields.length) {
+				for (const el of $dependentFields) {
+					if (el.value != null && el.value !== '') {
+						collapsed = false;//show the collapse
+						break;
+					}
+				}	
+			}
+			$(targetField).val(collapsed ? 0 : 1).change();
+		}
+	}
+
+
+	/*
+	Determine the "reaction by" field from the reaction code 
+	*/
+	Constructor.prototype.getReactionByFromReactionCodes = function() {
+		
+		var deferred = $.Deferred();
+		queryDB(
+			`SELECT * FROM reaction_codes;`
+		).then(queryResultString => {
+			if (queryReturnedError(queryResultString)) {
+				console.log('Could not getReactionByFromReactionCodes because ' + queryResultString);
+				deferred.resolve();
+			} else {
+				var reactionCodesTable = {};
+				for (const row of $.parseJSON(queryResultString)) {
+					reactionCodesTable[row.code] = {...row};
+				}
+				const reactionRows = this.queryResult[this.selectedID].reactions;
+				if (reactionRows.length) {
+					for (const i in reactionRows) {
+						// Get reaction code
+						const reaction = reactionRows[i];
+
+						// Determine reaction_by and fill value
+						reactionRows[i].reaction_by = reactionCodesTable[reaction.reaction_code].action_by;
+					}
+					deferred.resolve();
+				} else {	
+					deferred.resolve();
+				}
+			}	
+		})
+
+		return deferred;
+
+	}
+
+
+	/*
+	Make sure the "Describe location by:" field matches the entry in the database
+	*/
+	Constructor.prototype.setDescribeLocationByField = function() {
+		const queryData = _this.queryResult[_this.selectedID];
+		var $locationTypeField = $('#input-location_type');
+		if (queryData.place_name_code) {
+			$locationTypeField.val('Place name');
+		} else if (queryData.backountry_unit_code) {
+			$locationTypeField.val('Backcountry unit');
+		} else if (queryData.road_mile) {
+			$locationTypeField.val('Road mile');
+		} else {
+			$locationTypeField.val('GPS coordinates');
+		}
+		$locationTypeField.change();
+	}
+
+
+	Constructor.prototype.onEncounterDataLoaded = function() {
+		//dummy function
+	}
+
+
+	/*
+	Event handler for the query options button
+	*/
+	Constructor.prototype.onShowQueryOptionsClick = function(e) {
+		$(e.target).closest('.header-menu-item-group').toggleClass('open');
+	}
+
+
+	/* 
+	When a meters/feet units field changes, set the value of the associated distance field. 
+	This should happen in the review/query form but not in the entry form because when the user 
+	enters a value in the entry form, it has not yet been determined what the units are. 
+	Once the value is in the database, though, it will only be stored in meters. So if a user 
+	just changes the units, presumably the don't intend to change the actual distance.
+	*/
+	Constructor.prototype.onShortDistanceUnitsFieldChange = function(e) {
+		const $target = $(e.target);
+		const units = $target.val();
+		const conversionFactor = 3.2808399;
+		const $valueField = $target.closest('.field-container')
+			.find('.flex-field-container')
+				.find('.input-field');
+		const distanceInMeters = entryForm.fieldValues[$valueField.attr('name')];
+		$valueField.val(
+			units === 'm' ? 
+			distanceInMeters : 
+			Math.round(distanceInMeters * conversionFactor)
+		);
+	}
+
+
+	Constructor.prototype.configureMap = function(divID) {
+
+		var mapCenter, mapZoom;
+		const pageName = window.location.pathname.split('/').pop();
+		var currentStorage = window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
+		if (currentStorage.encounterMapInfo) {
+			mapCenter = currentStorage.encounterMapInfo.center;
+			mapZoom = currentStorage.encounterMapInfo.zoom;
+		}
+
+		var map = L.map(divID, {
+			editable: true,
+			scrollWheelZoom: true,
+			center: mapCenter || [63.5, -150],
+			zoom: mapZoom || 9
+		});
+
+		var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+		}).addTo(map);
+
+		return map;
+	}
+
+
+	/* 
+	Get the code/value pairs for all lookup tables 
+	*/
+	Constructor.prototype.getLookupValues = function() {
+		
+		const sql = `
+			SELECT table_name 
+			FROM information_schema.tables 
+			WHERE table_schema='public' AND table_name LIKE '%_codes';
+		`;
+		// Since this array of deferreds will get returned before all the $.Deferreds get added, 
+		//	initialize with a dummy Deferred. When the for-loop is done, this dummy Deferred can 
+		//	be resolved to indicate that all have been added 
+		var deferreds = [$.Deferred()];
+
+		queryDB(sql).done(tableQueryResultString => {
+			const queryResult = $.parseJSON(tableQueryResultString);
+			for (const tableRow of queryResult) {
+				var tableName = tableRow.table_name;
+				this.lookupValues[tableName] = {};
+				const d = queryDB(`SELECT * FROM ${tableName};`).done(lookupQueryResultString => {
+					const lookupResult = $.parseJSON(lookupQueryResultString);
+					let tName = tableRow.table_name;
+					for (const lookupRow of lookupResult) {
+						this.lookupValues[tName][lookupRow.code] = {...lookupRow};
+					}
+				}).fail((xhr, status, error) => {
+					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting lookup values from ${tableName}.`)
+				});
+				deferreds.push(d);
+			}
+			deferreds[0].resolve(); // trigger initial dummy Deferred 
+		}).fail((xhr, status, error) => {
+			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
+		});
+
+		return deferreds;	
+	}
+
+
+	Constructor.prototype.setSliderHandleLabel = function($sliderContainer, handleIndex, handleValue) {
+		
+		const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
+		const rangeLeft = $sliderRange.css('left');
+		const rangeWidth = $sliderRange.css('width');
+
+		// Set the value of the slider handle's label
+		$label = $($sliderContainer.find('.query-slider-label')[handleIndex]);
+		$label.text(handleValue);
+
+		// Set the width of the input to be just wide enough to handle the value's width
+		const $input = $($sliderContainer.find('input.slider-value')[handleIndex]);
+		$input.val(handleValue);
+		$input.css('width', (($input[0].value.length + 1) * 8) + 'px');
 	}
 
 
@@ -24,7 +732,7 @@ var BHIMSQuery = (function(){
 		var numericFieldRanges = {};
 		var valueRangeTrigger = $.Deferred();
 		var valueRangeDeferreds = [valueRangeTrigger];
-		
+
 		// Query the DB to get the numeric fields per table
 		queryDB(`
 			SELECT 
@@ -79,9 +787,6 @@ var BHIMSQuery = (function(){
 					})
 					valueRangeDeferreds.push(deferred);
 				}
-				// Add slight delay because sometimes the deferred doesn't get pushed to the array
-				//	before the trigger gets resolved
-				//setTimeout(() => {valueRangeTrigger.resolve()}, 100);
 			}
 		})
 
@@ -224,7 +929,7 @@ var BHIMSQuery = (function(){
 											const $sliderContainer = $(slider.handle).closest('.slider-container');
 											const tableName = $sliderContainer.data('table-name');
 											const fieldName = $sliderContainer.data('field-name');
-											this.queryOptions[tableName][fieldName] = `${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
+											this.queryOptions[tableName][fieldName] = {value: `${slider.values[0]} AND ${slider.values[1] + 1}`, operator: 'BETWEEN'};//`${tableName}.${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
 											
 											// Set the location of the slider handle's label
 											const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
@@ -285,7 +990,7 @@ var BHIMSQuery = (function(){
 											</div>
 										</div>
 									`);
-									$optionContent.find('select').append($selectOptions);
+									$optionContent.find('select').append($selectOptions.clone());
 									break;
 								default:
 									console.log(`Could not understand html_input_type ${option.html_input_type}`)
@@ -368,6 +1073,20 @@ var BHIMSQuery = (function(){
 						delete _this.queryOptions[tableName][fieldName];
 					});
 
+					$('.query-option-operator.datetime-query-option').change(e => {
+						/*toggle the double or single value field*/
+						const $target = $(e.target);
+						const operatorValue = $target.val();
+						const showDoubleValue = operatorValue === 'BETWEEN';
+						$target.siblings('.single-value-field')
+							.toggleClass('hidden', showDoubleValue)
+							.attr('aria-hidden', showDoubleValue);
+						$target.siblings('.query-option-double-value-container')
+							.toggleClass('hidden', !showDoubleValue)
+							.find('.double-value-field')
+								.attr('aria-hidden', !showDoubleValue);
+					});
+
 					//** Capture query condition on change **//
 					//	String fields
 					$('.string-match-query-option').change(e => {
@@ -392,22 +1111,22 @@ var BHIMSQuery = (function(){
 						var queryClause = '';
 						switch (operatorValue) {
 							case 'equals':
-								queryClause = `${fieldName} = '${value}'`;
+								queryClause = {value: `'${value}'`, operator: '='};//`${tableName}.${fieldName} = '${value}'`;
 								break;
 							case 'startsWith':
-								queryClause = `${fieldName} LIKE '${value}%'`;
+								queryClause = {value: `'${value}%'`, operator: 'LIKE'};// `${tableName}.${fieldName} LIKE '${value}%'`;
 								break;
 							case 'endsWith':
-								queryClause = `${fieldName} LIKE '%${value}'`;
+								queryClause = {value: `'%${value}'`, operator: 'LIKE'};//`${tableName}.${fieldName} LIKE '%${value}'`;
 								break;
 							case 'contains':
-								queryClause = `${fieldName} LIKE '%${value}%'`;
+								queryClause = {value: `'%${value}%'`, operator: 'LIKE'};//`${tableName}.${fieldName} LIKE '%${value}%'`;
 								break;
 							case 'is null':
-								queryClause = `${fieldName} IS NULL`;
+								queryClause = {value: 'NULL', operator: 'IS'};// `${tableName}.${fieldName} IS NULL`;
 								break;
 							case 'is not null':
-								queryClause = `${fieldName} IS NOT NULL`;
+								queryClause = {value: 'NULL', operator: 'IS NOT'};//`${tableName}.${fieldName} IS NOT NULL`;
 								break;
 							default:
 								console.log(`Could not underatnd operator ${$operatorField.val()} from #${operatorField.attr('id')}`)
@@ -471,31 +1190,32 @@ var BHIMSQuery = (function(){
 							// exit if the user hasn't entered a value for both fields yet
 							if (lowValue == null || highValue == null || lowValue === '' || highValue === '') return;
 
-							queryClause = `${fieldName} BETWEEN '${lowValue}' AND '${highValue}'`;
+							queryClause = {value: `'${lowValue}' AND '${highValue}'`, operator: 'BETWEEN'};//`${tableName}.${fieldName} BETWEEN '${lowValue}' AND '${highValue}'`;
 						} else {
 							const value = $valueField.val(); 
 							
 							// exit if the user hasn't entered a value yet
 							if (value == null || value === '') return;
 
-							queryClause = `${fieldName} ${operatorValue} '${value}'`
+							queryClause = {value: value, operator: operatorValue};//`${tableName}.${fieldName} ${operatorValue} '${value}'`
 						}
 						this.queryOptions[tableName][fieldName] = queryClause;
 					});
 
-					$('.query-option-operator.datetime-query-option').change(e => {
-						/*toggle the double or single value field*/
-						const $target = $(e.target);
-						const operatorValue = $target.val();
-						const showDoubleValue = operatorValue === 'BETWEEN';
-						$target.siblings('.single-value-field')
-							.toggleClass('hidden', showDoubleValue)
-							.attr('aria-hidden', showDoubleValue);
-						$target.siblings('.query-option-double-value-container')
-							.toggleClass('hidden', !showDoubleValue)
-							.find('.double-value-field')
-								.attr('aria-hidden', !showDoubleValue);
-					});
+					// selects
+					$('.select2-no-tag').change(e => {
+						const $select = $(e.target);
+						const tableName = $select.data('table-name');
+						const fieldName = $select.data('field-name');
+						const valueString = $select.val().join(',');
+						
+						// If it's empty, remove the query option
+						if (!valueString.length) {
+							delete this.queryOptions[tableName][fieldName];
+							return;
+						}
+						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
+					})
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();
@@ -504,34 +1224,10 @@ var BHIMSQuery = (function(){
 		})
 	}
 
-	Constructor.prototype.setSliderHandleLabel = function($sliderContainer, handleIndex, handleValue) {
-		
-		const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
-		const rangeLeft = $sliderRange.css('left');
-		const rangeWidth = $sliderRange.css('width');
-		// $sliderContainer.find('.query-slider-label-container')
-		// 	.css('left', `calc(${rangeLeft} - .6em`)
-		// 	.css('width', `calc(${rangeWidth} + 1.2em`);
 
-		// Set the value of the slider handle's label
-		$label = $($sliderContainer.find('.query-slider-label')[handleIndex]);
-		$label.text(handleValue);
-
-
-
-		const $input = $($sliderContainer.find('input.slider-value')[handleIndex]);
-		$input.val(handleValue);
-		$input.css('width', (($input[0].value.length + 1) * 8) + 'px');
-		
-	}
-
-	
-	// Add a pill button
-	Constructor.prototype.addQueryOption = function(tableName, fieldDisplayName) {
-
-	}
-
-
+	/*
+	Configure the page
+	*/
 	Constructor.prototype.configureQuery = function() {
 		// Get username
 		$.ajax({
@@ -548,15 +1244,16 @@ var BHIMSQuery = (function(){
 			}
 		});
 
-		
-
 		this.queryResultMap = this.configureMap('query-result-map');
 		
-		$('#show-query-options-container button').click(this.onShowQueryOptionsClick);
+		$('#show-query-options-button').click(this.onShowQueryOptionsClick);
+		$('#run-query-button').click(this.onRunQueryClick);
 
 		$.when(
 			...this.getLookupValues(), 
-			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false)
+			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false),
+			this.getJoinedDataTables(),
+			this.getTableSortColumns()
 		).then(() => {
 			if (window.location.search) {
 				this.urlQueryToSQL();
@@ -569,7 +1266,7 @@ var BHIMSQuery = (function(){
 				//update result map
 			} else {
 				hideLoadingIndicator();
-				$('#show-query-options-container > button').click();
+				$('#show-query-options-container').addClass('open');
 
 			}
 
@@ -583,1236 +1280,16 @@ var BHIMSQuery = (function(){
 			//	to overwrite what someone already wrote/dictated
 			$('.mic-button-container').addClass('hidden');
 
+			$('.short-distance-select').change(this.onShortDistanceUnitsFieldChange);
 		});
 
 		customizeQuery();
 		//getFieldInfo();
 	}
 
-
-	Constructor.prototype.configureMap = function(divID) {
-
-		var mapCenter, mapZoom;
-		const pageName = window.location.pathname.split('/').pop();
-		var currentStorage = window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
-		if (currentStorage.encounterMapInfo) {
-			mapCenter = currentStorage.encounterMapInfo.center;
-			mapZoom = currentStorage.encounterMapInfo.zoom;
-		}
-
-		var map = L.map(divID, {
-			editable: true,
-			scrollWheelZoom: true,
-			center: mapCenter || [63.5, -150],
-			zoom: mapZoom || 9
-		});
-
-		var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
-			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
-		}).addTo(map);
-
-		return map;
-	}
-
-
-	/* 
-	Get the code/value pairs for all lookup tables 
-	*/
-	Constructor.prototype.getLookupValues = function() {
-		
-		const sql = `
-			SELECT table_name 
-			FROM information_schema.tables 
-			WHERE table_schema='public' AND table_name LIKE '%_codes';
-		`;
-		// Since this array of deferreds will get returned before all the $.Deferreds get added, 
-		//	initialize with a dummy Deferred. When the for-loop is done, this dummy Deferred can 
-		//	be resolved to indicate that all have been added 
-		var deferreds = [$.Deferred()];
-
-		queryDB(sql).done(tableQueryResultString => {
-			const queryResult = $.parseJSON(tableQueryResultString);
-			for (const tableRow of queryResult) {
-				var tableName = tableRow.table_name;
-				this.lookupValues[tableName] = {};
-				const d = queryDB(`SELECT * FROM ${tableName};`).done(lookupQueryResultString => {
-					const lookupResult = $.parseJSON(lookupQueryResultString);
-					let tName = tableRow.table_name;
-					for (const lookupRow of lookupResult) {
-						this.lookupValues[tName][lookupRow.code] = {...lookupRow};
-					}
-				}).fail((xhr, status, error) => {
-					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting lookup values from ${tableName}.`)
-				});
-				deferreds.push(d);
-			}
-			deferreds[0].resolve(); // trigger initial dummy Deferred 
-		}).fail((xhr, status, error) => {
-			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		});
-
-		return deferreds;	
-	}
-
-
-	/*
-	Get the query result for the selected encounter and fill fields in the entry form
-	*/
-	Constructor.prototype.fillFieldsFromQuery = function() {
-
-		entryForm.fieldValues = this.queryResult[this.selectedID];
-		entryForm.fillFieldValues(entryForm.fieldValues);
-	}
-
-
-	/*
-	Helper function to uery the database to find the primary key for each 
-	table. This is really only necessary for bears and reactions, which
-	both have primary keys from two columns, a order column specific 
-	to the encounter and the encounter_id
-	*/
-	Constructor.prototype.getTableSortColumns = function() {
-		const sql = `
-			SELECT 
-				tc.table_schema, tc.table_name, kc.column_name
-			FROM information_schema.table_constraints tc
-				INNER JOIN information_schema.key_column_usage kc 
-				ON kc.table_name = tc.table_name AND kc.table_schema = tc.table_schema AND kc.constraint_name = tc.constraint_name
-			WHERE 
-				tc.constraint_type = 'PRIMARY KEY' AND
-				kc.column_name <> 'encounter_id' AND 
-				kc.table_name NOT LIKE '%_codes' AND
-				kc.ordinal_position is not null
-			ORDER BY 
-				tc.table_schema,
-				tc.table_name,
-				kc.position_in_unique_constraint
-			;
-		`;
-		return queryDB(sql);
-	}
-
-
-	/*
-
-	*/
-	Constructor.prototype.setEncounterMarkerState = function() {
-		if (entryForm.markerIsOnMap()) {
-
-		}
-	}
-
-
-	/* Query all data tables */
-	Constructor.prototype.runDataQuery = function(whereClause, tableSortColumns) {
-
-		var deferreds = [$.Deferred()];
-		// Get encounters table
-		//deferreds.push(
-		var encountersDeferred = queryDB(`SELECT * FROM encounters WHERE ${whereClause}`)
-			.done(queryResultString => {
-				if (queryReturnedError(queryResultString)) { 
-					console.log(`error configuring main form: ${queryResultString}`);
-				} else {
-					var liElements = [];
-					const result = $.parseJSON(queryResultString);
-					//this.queryResult.encounters = {};
-					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
-					for (const encounter of result) {
-						
-						this.queryResult[encounter.id] = {...encounter};
-						//this.queryResult.encounters[encounter.id] = {...encounter};
-
-						// Configure the list item element for this encounter
-						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
-						liElements.push(
-							$(`
-								<li class="query-result-list-item" data-encounter-id="${encounter.id}">
-									<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group type:</strong> ${bearGroupType}
-								</li>
-							`).appendTo('#query-result-list')
-								.click(this.onResultItemClick)
-						);
-					}
-
-					// Make the first one selected
-					const $firstEl = liElements[0];
-					if ($firstEl) {
-						$firstEl.addClass('selected');
-						this.selectedID = $firstEl.data('encounter-id');
-					}
-				}
-			}
-		).then(() => {
-
-			// Get all table names from accordions
-			const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
-			
-			for (const tableName of this.joinedDataTables) {
-				const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id WHERE ${whereClause} ORDER BY ${tableName}.${tableSortColumns[tableName]}`;
-				const deferred = queryDB(sql);
-				deferred.done( queryResultString => {
-					if (queryReturnedError(queryResultString)) { 
-							console.log(`error querying ${tableName}: ${queryResultString}`);
-					} else { 
-						const result = $.parseJSON(queryResultString);
-						//this.queryResult[tableName] = {};
-						for (const row of result) {
-							const encounterID = row.encounter_id;
-							if (!this.queryResult[encounterID]) {
-								a = 1;
-							}
-							if (oneToManyTables.includes(tableName)) {
-								if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
-								this.queryResult[encounterID][tableName].push({...row});
-							} else {
-								this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
-							}
-							//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};
-							
-						}
-					}
-					
-				}).fail((xhr, status, error) => {
-					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
-				});
-				deferreds.push(deferred);
-			}
-
-			deferreds[0].resolve();
-			$.when(...deferreds).then(() =>  {
-				this.loadSelectedEncounter();
-				this.addMapData();
-			});
-		});
-
-		return deferreds;
-
-	}
-
-
-	/* 
-	Parse a URL query into an SQL query and process the result 
-	*/
-	Constructor.prototype.urlQueryToSQL = function() {
-
-		//const urlParams = processURLQueryString();
-		var whereClause = decodeURIComponent(window.location.search.slice(1));
-
-		// Query each right-side table separately
-		const tablesSQL = `
-			SELECT 
-				DISTINCT table_name 
-			FROM information_schema.columns 
-			WHERE table_schema='public' AND column_name='encounter_id'
-		;`;
-		queryDB(tablesSQL).done( tableQueryResultString => {
-			const rightSideTables = $.parseJSON(tableQueryResultString);
-			for (const row of rightSideTables) {
-				const tableName = row.table_name;
-				this.joinedDataTables.push(tableName);
-			}
-			this.getTableSortColumns().then(queryResultString => {
-				if (queryReturnedError(queryResultString)) { 
-					console.log(`error configuring main form: ${queryResultString}`);
-				} else {
-					const result = $.parseJSON(queryResultString);
-					var tableSortColumns = {};
-					for (row of result) {
-						tableSortColumns[row.table_name] = row.column_name;
-					}
-					$.when(
-						this.runDataQuery(whereClause, tableSortColumns)
-					).then( () => {
-
-						//this.setReactionFieldsFromQuery();
-					});
-				}
-			});
-			
-			
-		});
-		
-	}
-
-
-	/*
-	Add all query results to the result map. This only happens when the user runs a new 
-	query, not when the user selects a different encounter
-	*/
-	Constructor.prototype.addMapData = function() {
-
-		var features = [];
-		for (const encounterID in this.queryResult) {
-
-			data = this.queryResult[encounterID];
-			// Skip it if it doesn't have spatial data
-			if (!data.longitude && !data.latitude) continue;
-
-			features.push({
-				id: encounterID,
-				type: 'Feature',
-				properties: {...data},
-				geometry: {
-					type: 'Point',
-					coordinates: [
-						parseFloat(data.longitude),
-						parseFloat(data.latitude)
-					]
-				}
-			});
-		}
-
-		const featureToMarker = (feature, latlng) => {
-
-			return L.circleMarker(latlng);//, styleFunc)
-		}
-
-		const getColor = (encounterID) => { 
-			return encounterID == _this.selectedID ? 
-				'#f56761' : //red
-				'#f3ab3a'; //orange
-		}
-		const styleFunc = (feature) => {
-			return {
-				radius: 8,
-				weight: 1,
-				opacity: 1,
-				fillOpacity: 0.8,
-				fillColor: getColor(feature.id),
-				color: getColor(feature.id)
-			}
-		}
-
-		this.queryResultMapData = L.geoJSON(
-				features, 
-				{
-					//onEachFeature: onEachPoint,
-					style: styleFunc,
-					pointToLayer: featureToMarker
-				}
-		).on('click', (e) => {
-			/*
-			When a point is clicked on the map, select the corresponding encounter
-			*/
-			const clickedMarker = e.layer;
-			const encounterID = clickedMarker.feature.id;
-
-			// If this encounter is already selected, do nothing
-			if (encounterID == _this.selectedID) return;
-
-			const $selectedItem = $('.query-result-list-item')
-				.filter((_, el) => {
-					return encounterID == $(el).data('encounter-id')
-				});
-			
-			// Load data by triggering the onclick event for the .query-result-list-item
-			$selectedItem.click();
-			
-			// Show this point as selected in the map
-			_this.selectResultMapPoint();
-
-		}).addTo(this.queryResultMap);
-
-		// Zoom to fit data on map
-		this.queryResultMap
-			.fitBounds(this.queryResultMapData.getBounds())
-			.setZoom(Math.min(this.queryResultMap.getZoom(), 15));
-	}
-
-
-	/*
-	*/
-	Constructor.prototype.loadSelectedEncounter = function() {
-		//const markerWasOnMap = entryForm.markerIsOnMap();
-
-		this.getReactionByFromReactionCodes().then(() => {
-			this.fillFieldsFromQuery();
-			this.setAllImplicitBooleanFields();
-			this.setDescribeLocationByField();
-			this.selectResultMapPoint();
-
-			const selectedEncounterData = this.queryResult[this.selectedID];
-			if (!(selectedEncounterData.latitude && selectedEncounterData.longitude)) {
-				$('#encounter-marker-container').slideDown(0);//.collapse('show')
-			}
-
-			/*const $nullSelects = $('select').filter((_, el) => {
-				const dataValue = selectedEncounterData[el.name];
-				return !dataValue;
-			});
-			$nullSelects.addClass('default');
-			*/
-
-			// Run any extended functions
-			for (func of this.dataLoadedFunctions) {
-				try {
-					func()
-				} catch (e) {
-					console.log(`failed to run ${func.name} after loading data: ${e}`)
-				}
-			}
-		});
-
-	}
-
-
-	/*
-	Helper function to reset a select to the default option and with the default class
-	*/
-	Constructor.prototype.resetSelectDefault = function($select){
-		const placeholder = $select.attr('placeholder');
-		const $options = $select.children();
-		var $placeholderOption = $options.filter((_, el) => {return el.value === placeholder});
-		if (!$placeholderOption.length) {
-			$placeholderOption = $options.first()
-				.before(
-					`<option value="${placeholder}">${placeholder}</>`
-				);
-		}
-
-		$select.addClass('default')
-			.val(placeholder);
-	}
-
-	/*
-	Set onclick event for newly created result list items
-	*/
-	Constructor.prototype.onResultItemClick = function(e) {
-		
-		// Reset the form
-		//	clear accordions
-		$('.accordion .card:not(.cloneable)').remove();
-		
-		// 	Reset the entry form map
-		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
-		$('#input-location_type').val('Place name');
-		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
-		_this.resetSelectDefault($('#input-location_accuracy'));
-		$('#input-datum').val(1); //WGS84
-
-		// Deselect the currently selected encounter and select the clicked one
-		$('.query-result-list-item.selected').removeClass('selected');
-		const $selectedItem = $(e.target).closest('li').addClass('selected');
-		_this.selectedID = $selectedItem.data('encounter-id');
-
-		// Load data
-		_this.loadSelectedEncounter();
-
-	}
-
-
-	/*
-	Show a point on the query result map as selected and zoom to it
-	*/
-	Constructor.prototype.selectResultMapPoint = function() {
-
-		// Use the style function to set the color of the points
-		_this.queryResultMapData.resetStyle();
-
-		// Set the center of the map on the selected point
-		for (const feature of _this.queryResultMapData.toGeoJSON().features) {
-			if (feature.id == _this.selectedID) {
-				const coordinates = feature.geometry.coordinates;
-				// geometry.coordinates is annoyingly [x, y] but .panTo() requires lat, lon
-				_this.queryResultMap.panTo({lon: coordinates[0], lat: coordinates[1]});
-
-				_this.queryResultMapData.eachLayer(layer => {
-					if (layer.feature.id === feature.id) layer.bringToFront();
-				})
-
-				break;
-			}
-		}
-
-		// Scroll to the selected list item
-		const $selectedItem = $('.query-result-list-item.selected');//new item is already selected
-		const $resultList = $('#query-result-list');//;
-		const scrollPosition = $resultList.scrollTop();
-		const listHeight = $resultList[0].clientHeight;
-		const rowHeight = $selectedItem.first()[0].clientHeight;
-		const elementIndex = $selectedItem.index();
-		const scrollTo = elementIndex * rowHeight - rowHeight;
-
-		// Check if the user has reduced motion set
-		const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-		// scroll to the row if it's off the screen
-		if (scrollTo < scrollPosition || scrollTo > scrollPosition + listHeight - rowHeight) {
-			$resultList.parent()
-				.animate(
-					{scrollTop: scrollTo < 0 ? 0 : scrollTo}, 
-					!mediaQuery || mediaQuery.matches ? 
-						0 : // reduced motion
-						300 // no preference set, so animate
-				);
-		}
-	}
-
-
-	/*
-	Set appropriate values for field that show/hide accordion collapses
-	*/
-	Constructor.prototype.setImplicitBooleanField = function($accordion) {
-		
-		const $targetField = $($accordion.data('dependent-target'));
-		if ($targetField.data('lookup-table') === 'boolean_response_codes') {
-			$targetField.val($accordion.find('.card:not(.cloneable)').length ? 1 : 0).change();
-		}
-	}
-
-
-	/*
-	Helper function to set all implicit boolean fields
-	*/
-	Constructor.prototype.setAllImplicitBooleanFields = function () {
-		// Set value for all boolean fields that show/hide accordions
-		for (const el of $('.accordion.collapse')) {
-			_this.setImplicitBooleanField($(el));
-		}
-
-		for (const targetField of $('.boolean-collapse-trigger')) {
-			const htmlID = targetField.id;
-			const $dependentFields = $('.input-field').filter((_, el) => {
-				return $(el).data('dependent-target') === '#' + htmlID
-			});
-			var collapsed = true;
-			if ($dependentFields.length) {
-				for (const el of $dependentFields) {
-					if (el.value != null && el.value !== '') {
-						collapsed = false;//show the collapse
-						break;
-					}
-				}	
-			}
-			$(targetField).val(collapsed ? 0 : 1).change();
-		}
-	}
-
-	Constructor.prototype.getReactionByFromReactionCodes = function() {
-		
-		var deferred = $.Deferred();
-		queryDB(
-			`SELECT * FROM reaction_codes;`
-		).then(queryResultString => {
-			if (queryReturnedError(queryResultString)) {
-				console.log('Could not getReactionByFromReactionCodes because ' + queryResultString);
-				deferred.resolve();
-			} else {
-				var reactionCodesTable = {};
-				for (const row of $.parseJSON(queryResultString)) {
-					reactionCodesTable[row.code] = {...row};
-				}
-				const reactionRows = this.queryResult[this.selectedID].reactions;
-				if (reactionRows.length) {
-					for (const i in reactionRows) {
-						// Get reaction code
-						const reaction = reactionRows[i];
-
-						// Determine reaction_by and fill value
-						reactionRows[i].reaction_by = reactionCodesTable[reaction.reaction_code].action_by;
-					}
-					deferred.resolve();
-				} else {	
-					deferred.resolve();
-				}
-			}	
-		})
-
-		return deferred;
-
-	}
-
-
-	Constructor.prototype.setDescribeLocationByField = function() {
-		const queryData = _this.queryResult[_this.selectedID];
-		var $locationTypeField = $('#input-location_type');
-		if (queryData.place_name_code) {
-			$locationTypeField.val('Place name');
-		} else if (queryData.backountry_unit_code) {
-			$locationTypeField.val('Backcountry unit');
-		} else if (queryData.road_mile) {
-			$locationTypeField.val('Road mile');
-		} else {
-			$locationTypeField.val('GPS coordinates');
-		}
-		$locationTypeField.change();
-	}
-
-
-	Constructor.prototype.onEncounterDataLoaded = function() {
-		//dummy function
-	}
-
-
-	Constructor.prototype.onShowQueryOptionsClick = function(e) {
-		$(e.target).closest('.header-menu-item-group').toggleClass('open');
-	}
-
 	/***end of BHIMSQuery module***/
 	return Constructor;
 })();
-
-
-function processURLQueryString() {
-
-	const urlSearchParams = new URLSearchParams(window.location.search);
-	const params = Object.fromEntries(urlSearchParams.entries());
-
-	return params;
-}
-
-function configureForm() {
-	var config = {},
-		pages = {},
-		sections = {},
-		accordions = {},
-		fieldContainers = {},
-		fields = {};
-
-	const processQueryResult = (obj, result) => {
-		const queryResult = $.parseJSON(result);
-		if (queryResult) {
-			for (const row of queryResult) {
-				obj[row.id] = {...row};
-			};
-		} 
-	}
-	// Query configuration tables from database
-	$.when(
-		queryDB('SELECT * FROM data_entry_config;')
-			.done(result => {
-				const queryResult = $.parseJSON(result);
-				if (queryResult) {
-					config = {...queryResult[0]};
-				}
-			}),
-		queryDB('SELECT * FROM data_entry_pages ORDER BY page_index;')
-			.done(result => {processQueryResult(pages, result)}),
-		queryDB('SELECT * FROM data_entry_sections WHERE is_enabled AND page_id IS NOT NULL ORDER BY display_order;')
-			.done(result => {processQueryResult(sections, result)}),
-		queryDB('SELECT * FROM data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;')
-			.done(result => {processQueryResult(accordions, result)}),
-		queryDB('SELECT * FROM data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;')
-			.done(result => {processQueryResult(fieldContainers, result)}),
-		queryDB('SELECT * FROM data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;')
-			.done(result => {processQueryResult(fields, result)})
-	).then(() => {
-		// Add sections
-		if (Object.keys(sections).length) {
-			for (const id in sections) {
-				const sectionInfo = sections[id];
-				const pageInfo = pages[sectionInfo.page_id];
-				const titleHTMLTag = sectionInfo.title_html_tag;
-				$(`
-					<section id="section-${id}" class="${sectionInfo.css_class} ${sectionInfo.is_enabled ? '' : 'disabled'}" >
-						<${titleHTMLTag} class="${sectionInfo.title_css_class}">
-							${titleHTMLTag == 'div' ? `<h4>${sectionInfo.section_title}</h4>` : sectionInfo.section_title}
-						</${titleHTMLTag}>
-						<div class="form-section-content"></div>
-					</section>
-				`).appendTo('#row-details-pane');
-			}
-		} else {
-			alert('Error retrieving data_entry_sections');
-			return;
-		}
-
-		// Accumulate accordions and field containers since these are the direct descendants of sections
-		//	Store them with the display order as the key so that these can be sorted and sequentially
-		//	iterated later.
-		var sectionChildren = {};
-
-		// Accordions
-		if (Object.keys(accordions).length) {
-			for (const id in accordions) {
-				const accordionInfo = accordions[id];
-				const sectionInfo = sections[accordionInfo.section_id];
-				const accordionHTMLID = accordionInfo.html_id;
-				const tableName = accordionInfo.table_name;
-				
-				var accordionAttributes = `id="${accordionHTMLID}" class="${accordionInfo.css_class} ${accordionInfo.is_enabled ? '' : 'disabled'}" data-table-name="${tableName}"`;
-				var dependentAttributes = '';
-				if (accordionInfo.dependent_target) 
-					dependentAttributes = `data-dependent-target="${accordionInfo.dependent_target}" data-dependent-value="${accordionInfo.dependent_value}"`;
-					accordionAttributes += dependentAttributes;
-
-				var cardLinkAttributes = `class="${accordionInfo.card_link_label_css_class}"`;
-				if (accordionInfo.card_link_label_order_column) 
-					cardLinkAttributes += ` data-order-column="${accordionInfo.card_link_label_order_column}"`;
-				if (accordionInfo.card_link_label_separator) 
-					cardLinkAttributes += ` data-label-sep="${accordionInfo.card_link_label_separator}"`;				
-				
-				const $accordion = $(`
-					<div ${accordionAttributes}>
-						<div class="card cloneable hidden" id="cloneable-card-${tableName}">
-							<div class="card-header" id="cardHeader-${tableName}-cloneable">
-								<a class="card-link" data-toggle="collapse" href="#collapse-${tableName}-cloneable" data-target="collapse-${tableName}-cloneable">
-									<div class="card-link-content">
-										<h5 ${cardLinkAttributes}">${accordionInfo.card_link_label_text}</h5>
-									</div>
-									<div class="card-link-content">
-										<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
-											<i class="fas fa-trash fa-lg"></i>
-										</button>
-										<i class="fa fa-chevron-down pull-right"></i>
-									</div>
-								</a>
-							</div>
-							<div id="collapse-${tableName}-cloneable" class="collapse show card-collapse" aria-labelledby="cardHeader-${tableName}-cloneable" data-parent="#${accordionHTMLID}">
-								<div class="card-body"></div>
-							</div>
-						</div>
-					</div>
-					<div class="${dependentAttributes.length ? 'collapse' : ''} add-item-container">
-						<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="${accordionHTMLID}" ${dependentAttributes}>
-							<strong>+</strong> ${accordionInfo.add_button_label}
-						</button>
-					</div>
-				`);
-				sectionChildren[accordionInfo.display_order] = {
-					element: $accordion, 
-					parentID: `#section-${accordionInfo.section_id} .form-section-content`
-				};
-			}
-		} else {
-			alert('Error retrieving data_entry_accordions');
-			return;
-		}
-
-		// Field containers
-		if (Object.keys(fieldContainers).length) {
-			for (const id in fieldContainers) {
-				const containerInfo = fieldContainers[id];
-				if (containerInfo.is_enabled) {
-					const accordionInfo = accordions[containerInfo.accordion_id];
-					const $container = $(`
-						<div id="field-container-${id}" class="${containerInfo.css_class}${containerInfo.is_enabled ? '' : ' disabled'}"></div>
-					`);
-					sectionChildren[containerInfo.display_order] = {
-						element: $container,
-						parentID: accordionInfo ? `#${accordionInfo.html_id} .card-body` : `#section-${containerInfo.section_id} .form-section-content`
-					};
-				}
-			}
-		} else {
-			alert('Error retrieving data_entry_field_containers');
-			return;
-		}
-
-		// Loop through sequentially and add them to their respective parents.
-		//	
-		for (displayOrder of Object.keys(sectionChildren).sort()) {
-			const child = sectionChildren[displayOrder];
-			// If the parent exists in the DOM, add the child element. It might not exist 
-			//	in the DOM if the parent is disabled
-			if ($(child.parentID).length) child.element.appendTo($(child.parentID));
-		}
-
-		// Add fields
-		if (Object.keys(fields).length) {
-			// Gather and sort field info within their containers
-			var sortedFields = {};
-			for (const id in fields) {
-				const fieldInfo = {...fields[id]};
-				const fieldContainerID = fieldInfo.field_container_id;
-				if (fieldContainerID in sortedFields) {
-					sortedFields[fieldContainerID][fieldInfo.display_order] = fieldInfo;
-				} else {
-					sortedFields[fieldContainerID] = [];
-					sortedFields[fieldContainerID][fieldInfo.display_order] = fieldInfo;
-				}
-			}
-
-			for (const fieldContainerID in sortedFields) {
-				const $parent = $('#field-container-' + fieldContainerID);
-				if ($parent.length) {
-					const childFields = sortedFields[fieldContainerID];
-					for (const displayOrder in childFields) {
-						const fieldInfo = childFields[displayOrder];
-
-						var inputFieldAttributes = `id="${fieldInfo.html_id}" class="${fieldInfo.css_class}" name="${fieldInfo.field_name || ''}" data-table-name="${fieldInfo.tableName || ''}" placeholder="${fieldInfo.placeholder}"`;
-						
-						var fieldLabelHTML = `<label class="field-label" for="${fieldInfo.html_id}">${fieldInfo.label_text || ''}</label>`
-						var inputTag = fieldInfo.html_input_type;
-						if (inputTag !== 'select' && inputTag !== 'textarea'){ 
-							inputFieldAttributes += ` type="${fieldInfo.html_input_type}"`;
-							inputTag = 'input';
-						} else if (inputTag === 'textarea'){
-							fieldLabelHTML = '';
-						}
-						if (fieldInfo.dependent_target) 
-							inputFieldAttributes += ` data-dependent-target="${fieldInfo.dependent_target}" data-dependent-value="${fieldInfo.dependent_value}"`;
-						if (fieldInfo.lookup_table) 
-							inputFieldAttributes += ` data-lookup-table="${fieldInfo.lookup_table}"`;
-						if (fieldInfo.on_change) 
-							inputFieldAttributes += ` onchange="${fieldInfo.on_change}"`;
-						if (fieldInfo.card_label_index) 
-							inputFieldAttributes += ` data-card-label-index="${fieldInfo.card_label_index}"`;
-						if (fieldInfo.calculation_target) 
-							inputFieldAttributes += ` data-calculation-target="${fieldInfo.calculation_target}"`;
-						if (fieldInfo.html_min) 
-							inputFieldAttributes += ` min="${fieldInfo.html_min}"`;
-						if (fieldInfo.html_max) 
-							inputFieldAttributes += ` max="${fieldInfo.html_max}"`;
-						if (fieldInfo.html_step) 
-							inputFieldAttributes += ` step="${fieldInfo.html_step}"`;
-						if (fieldInfo.html_input_type == 'datetime-local') 
-							inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
-						const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
-						$(`
-							<div class="${fieldInfo.parent_css_class}">
-								<${inputTag} ${inputFieldAttributes} ${fieldInfo.required ? 'required' : ''}>${inputTagClosure}
-								${fieldInfo.required ? '<span class="required-indicator">*</span>' : ''}
-								${fieldLabelHTML}
-							</div>
-						`).appendTo($parent);
-					}
-				}
-			}
-		}
-
-		// Fill fields
-
-
-		// Remove any field conainters that don't have any enabled fields
-		$('.field-container:empty').remove();
-		$('.units-field-container > .required-indicator, .units-field-container > .field-label').remove();
-
-
-		// Add stuff that can't easily be automated/stored in the DB
-		// Do stuff with utility flag classes
-		$('.input-field.money-field').before('<span class="unit-symbol unit-symbol-left">$</span>');
-		
-		const lockedSectionTitles = $('.form-section.admin-section.locked').removeClass('admin-section locked');
-
-		// Add "Describe location by" field
-		$(`
-			<div class="field-container col single-line-field">
-				<label class="field-label inline-label" for="input-location_type">Describe location by:</label>
-				<select class="input-field no-option-fill" id="input-location_type" value="Place name" name="location_type">
-					<option value="Place name">Place name</option>
-					<option value="Backcountry unit">Backcountry unit</option>
-					<option value="Road mile">Road mile</option>
-					<option value="GPS coordinates">GPS coordinates</option>
-				</select>
-			</div>
-		`).prependTo('#section-4 .form-section-content');
-
-		// Configure map and GPS fields
-		$(`
-			<!-- lat/lon fields -->
-			<div class="field-container col">
-				<div class="field-container col-6">
-					<select class="input-field no-option-fill coordinates-select" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
-						<option value="ddd">Decimal degrees (dd.ddd&#176)</option>
-						<option value="ddm">Degrees decimal minutes (dd&#176 mm.mmm)</option>
-						<option value="dms">Degrees minutes seconds (dd&#176 mm' ss")</option>
-					</select>
-					<label class="field-label" for="input-coordinate_format">Coordinate format</label>
-				</div>
-			</div>
-			<!--<div class="field-container">-->
-			<!-- dd.ddd -->
-			<div class="collapse show field-container col-6 inline">
-				<div class="field-container col-6">
-					<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude_dec_deg" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
-					<span class="required-indicator">*</span>
-					<span class="unit-symbol">&#176</span>
-					<label class="field-label" for="input-lat_dec_deg">Latitude</label>
-				</div>
-				<div class="field-container col-6">
-					<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude_dec_deg" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
-					<span class="required-indicator">*</span>
-					<span class="unit-symbol">&#176</span>
-					<label class="field-label" for="input-lon_dec_deg">Longitude</label>
-				</div>
-			</div>
-			<!--dd mm.mmm-->
-			<div class="collapse field-container col-6 inline">
-				<div class="field-container col-6 justify-content-start">
-					<div class="flex-field-container flex-nowrap">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_ddm" required>
-						<span class="required-indicator">*</span>
-						<span class="unit-symbol">&#176</span>
-					</div>
-					<div class="flex-field-container flex-nowrap">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mm" id="input-lat_dec_min" required>
-						<span class="unit-symbol">'</span>
-					</div>
-					<label class="field-label">Latitude</label>
-				</div>
-				<div class="field-container col-6 justify-content-start">
-					<div class="flex-field-container flex-nowrap">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="1" min="-180" max="180" placeholder="ddd" id="input-lon_deg_ddm" required>
-						<span class="required-indicator">*</span>
-						<span class="unit-symbol">&#176</span>
-					</div>
-					<div class="flex-field-container flex-nowrap">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddm" type="number" step="0.001" min="0" max="60" placeholder="mm.mmm" id="input-lon_dec_min" required>
-						<span class="unit-symbol">'</span>
-					</div>
-					<label class="field-label">Longitude</label>
-				</div>
-			</div>
-			<!--dd mm ss-->
-			<div class="collapse field-container col-6 inline">
-				<div class="field-container col-6">
-					<div class="field-container degree-field-container">
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-90" max="90" placeholder="dd" id="input-lat_deg_dms" required>
-							<span class="required-indicator">*</span>
-							<span class="unit-symbol">&#176</span>
-						</div>
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lat_min_dms" required>
-							<span class="unit-symbol">'</span>
-						</div>
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lat_dec_sec" required>
-							<span class="unit-symbol">"</span>
-						</div>
-					</div>
-					<label class="field-label">Latitude</label>
-				</div>
-				<div class="field-container col-6">
-					<div class="field-container degree-field-container">
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="-180" max="180" placeholder="dd" id="input-lon_deg_dms" required>
-							<span class="required-indicator">*</span>
-							<span class="unit-symbol">&#176</span>
-						</div>
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="1" min="0" max="60" placeholder="mm" id="input-lon_min_dms" required>
-							<span class="unit-symbol">'</span>
-						</div>
-						<div class="flex-field-container flex-nowrap">
-							<input class="input-field input-with-unit-symbol text-right coordinates-dms" type="number" step="0.1" min="0" max="60" placeholder="ss.s" id="input-lon_dec_sec" required>
-							<span class="unit-symbol">"</span>
-						</div>
-					</div>
-					<label class="field-label">Longitude</label>
-				</div>
-			</div>
-			<!--</div>-->
-				<div class="field-container col-6 inline">
-					<div class="field-container col-6">
-						<select class="input-field" name="datum_code" id="input-datum" value="1"></select>
-						<label class="field-label" for="input-datum">Datum</label>
-					</div>
-					<div class="field-container col-6">
-						<select class="input-field default" name="location_accuracy_code" id="input-location_accuracy" placeholder="GPS coordinate accuracy"></select>
-						<label class="field-label" for="input-location_accuracy">GPS coordinate accuracy</label>
-					</div>
-				</div>
-			<div class="field-container map-container">
-				<div class="marker-container" id="encounter-marker-container">
-					<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
-					<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
-				</div>
-				
-				<div id="expand-map-button-container">
-					<button id="expand-map-button" class="icon-button" onclick="onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
-						<img src="imgs/maximize_window_icon_50px.svg"></img>
-					</button>
-				</div>
-				
-				<div class="map" id="encounter-location-map"></div>
-			</div>
-		`).appendTo('#section-4 .form-section-content');//map section
-
-		// Configure attachments
-		// Attachment stuff
-		$('#input-file_type')
-			.parent()
-			.after(`
-				<div class="collapse field-container col-6 inline">
-					<div class="collapse field-container col-6 file-preview-container">
-						<div class="attachment-progress-bar-container">
-							<div class="attachment-progress-bar">
-								<div class="attachment-progress-indicator"></div>
-							</div>
-						</div>
-						<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
-					</div>
-					<div class="attachment-file-input-container col-6">
-						<label class="filename-label"></label>
-						<label class="generic-button text-center file-input-label" for="attachment-upload">select file</label>
-						<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="onAttachmentInputChange(event)" required>
-					</div>
-				</div>
-			`);
-		const $attachmentsAccordion = $('#attachements-accordion');
-
-		// Configure narrative field
-		const $narrativeField = $('#input-narrative');
-		/*if ($narrativeField.length) {
-			$(`
-				<div class="recorded-text-container">
-					<span id="recorded-text-final" contenteditable="true"></span>
-					<span id="recorded-text-interim"></span>
-				</div>
-				<div class="mic-button-container">
-					<label class="recording-status-message" id="recording-status-message"></label>
-					<button class="icon-button mb-2 hidden tooltipped" id="record-narrative-button">
-						<!--<span class="record-on-indicator"></span>-->
-						<i class="pointer fa fa-2x fa-microphone" id="narrative-mic-icon"></i>
-						<!--<div class="tip tip-left">
-							<h6>Start dictation</h6>
-							<i class="tooltip-arrow"></i>
-						</div>-->
-					</button>
-				</div>
-			`).appendTo($narrativeField.closest('.field-container'));
-		}//*/
-
-		// Do all other configuration stuff
-
-		// If the user does not have previous data saved, add the first card here in 
-		//	case this same form is used for data viewing. If there is saved data, the 
-		//	form and all inputs will be restored from the previous session
-		$('.accordion.form-item-list').each((_, el) => {
-			const tableName = $(el).data('table-name');
-			if (tableName in this.queryResult) {
-				for (row in this.queryResult[tableName]) {
-					addNewCard($(el));
-				}
-			}
-		});
-
-		// Some accordions might be permanetnely hidden because the form is simplified, 
-		//	but the database still needs to respect the one-to-many relationship. In 
-		//	these cases, make sure the add-item-container is also hidden
-		$('.accordion.form-item-list.hidden:not(.collapse)')
-			.siblings('.add-item-container')
-			.addClass('hidden');
-
-		// fill selects
-		let deferreds = $('select').map( function() {
-			const $el = $(this);
-			const placeholder = $el.attr('placeholder');
-			const lookupTable = $el.data('lookup-table');
-			const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
-			const id = this.id;
-			if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
-				if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
-				if (!$el.is('.no-option-fill')) {
-					return fillSelectOptions(id, `SELECT code AS value, name FROM ${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`);
-				}
-			}
-		})
-		$.when(
-			...deferreds
-		).then(function() {
-			//fillFields();
-		});
-
-		$('select').change(onSelectChange);
-		
-		// Add distance measurement units to unit selects
-		$('.short-distance-select')
-			.empty()
-			.append(`
-				<option value="ft">feet</option>
-				<option value="m">meters</option>
-			`).val('ft');
-
-		// Set additional change event for initial action selects
-		$('#input-initial_human_action, #input-initial_bear_action').change(onInitialActionChange);
-
-		// When an input changes, save the result to the FIELD_VALUES global object so data are persistent
-		$('.input-field').change(onInputFieldChange);
-
-		//When a field with units changes, re-calculate
-		$('.units-field').change(onUnitsFieldChange);
-
-		// When a card is clicked, close any open cards in the same accordion
-		$('.collapsed').click(function() {
-			const $accordion = $(this).closest('.accordion');
-			$accordion.find('.card:not(.cloneable) .collapse.show')
-				.removeClass('show')
-				.siblings()
-					.find('.card-header')
-					.addClass('collapsed');
-		});
-
-		// Make sure the hidden class is added/removed when bootstrap collapse events fire
-		$('.collapse.field-container, .collapse.accordion')
-			.on('hidden.bs.collapse', function () {
-				$(this).addClass('hidden');
-			})
-			.on('show.bs.collapse', function () {
-				$(this).removeClass('hidden');
-			});
-
-		// When any card-label-fields change, try to set the parent card label
-		$('.input-field.card-label-field').change(function() {onCardLabelFieldChange($(this))});
-
-		// When the user types anything in a field, remove the .error class (if it was assigned)
-		$('.input-field').on('keyup change', onInputFieldKeyUp);
-
-		// Set up coordinate fields to update eachother and the map
-		$('.coordinates-ddd').change(onDDDFieldChange);
-		$('.coordinates-ddm').change(onDMMFieldChange);
-		$('.coordinates-dms').change(onDMSFieldChange);
-		$('#input-coordinate_format').change(onCoordinateFormatChange);
-
-		// Set up the map
-		ENCOUNTER_MAP = configureMap('encounter-location-map');
-		MODAL_ENCOUNTER_MAP = configureMap('modal-encounter-location-map')
-			.on('moveend', e => { // on pan, get center and re-center ENCOUNTER_MAP
-				const modalMap = e.target;
-				ENCOUNTER_MAP.setView(modalMap.getCenter(), modalMap.getZoom());
-			}) 
-		MODAL_ENCOUNTER_MAP.scrollWheelZoom.enable();
-
-		// Prevent form submission when the user hits the 'Enter' key
-		$('.input-field').keydown((e) => { 
-			//if (event.which == 13) event.returnValue(); 
-			e = e || event;
-			var txtArea = /textarea/i.test((e.target || e.srcElement).tagName);
-			return txtArea || (e.keyCode || e.which || e.charCode || 0) !== 13;
-		});
-
-		var recognition = initSpeechRecognition();
-		if (recognition) {
-			$('#record-narrative-button')
-				.click(onMicIconClick)
-				.removeClass('hidden');
-		}
-
-		// When the user manually types (rather than dictates) the narrative, 
-		//	set the narrative textarea val
-		$('#recorded-text-final').on('input', (e) => {
-			$('#input-narrative')
-				.val($(e.target).text())
-				.change();
-		})
-
-		//add event listeners for contenteditable and textarea size change: https://stackoverflow.com/questions/1391278/contenteditable-change-events
-		//might have to use resizeobserver: https://stackoverflow.com/questions/6492683/how-to-detect-divs-dimension-changed
-
-		// resize modal video preview when new video is loaded
-		$('#modal-video-preview').on('loadedmetadata', function(event){
-			const el = event.target;
-			const aspectRatio = el.videoHeight / el.videoWidth;
-			
-		});
-		
-		$('#modal-audio-preview').on('loadedmetadata', function(event){
-			// Set width so close button is on the right edge of video/audio
-			const $el = $(event.target);
-			
-			var maxWidth;
-			try {
-				maxWidth = $el.css('max-width').match(/\d+/)[0];
-			} catch {
-				return
-			}
-
-			$el.closest('.modal')
-				.find('.modal-img-body')
-					.css('width', Math.min(maxWidth, window.innerWidth) + 'px');
-		});
-
-		$('#attachment-modal').on('hidden.bs.modal', e => {
-			// Release resources of video preview when modal closes
-			const $source = $('#modal-video-preview,#modal-audio-preview').not('.hidden').find('source');
-			const currentSrc = $source.attr('src');
-			if ($source.length && currentSrc != "#") {
-				$source.parent()[0].pause();//pause the video/audio because resetting src doesn't seem to work
-				URL.revokeObjectURL(currentSrc);
-				$source.attr('src', '#');
-			}
-
-			// Remove any inline css to the img/video/audio container element
-			$(e.target).find('.modal-img-body').css('width', '');
-
-		});
-
-
-		// Save user input when the user leaves the page
-		$(window).on('beforeunload', function(event) {
-			// Check if editing and warn the user if there are unsaved edits
-		});
-
-		customizeConfiguration();
-	})
-}
-
-
-/*function getFieldInfo() {
-
-	const sql = `
-		SELECT 
-			fields.* 
-		FROM data_entry_fields fields 
-			JOIN data_entry_field_containers containers 
-			ON fields.field_container_id=containers.id 
-		WHERE 
-			fields.is_enabled AND 
-			containers.is_enabled 
-		ORDER BY 
-			containers.display_order,
-			fields.display_order
-		;
-	`;
-
-	queryDB(sql).done(
-		queryResultString => {
-			const queryResult = $.parseJSON(queryResultString);
-			if (queryResult) {
-				for (const row of queryResult) {
-					const columnName = row.field_name;
-					FIELD_INFO[columnName] = {};
-					for (const property in row) {
-						FIELD_INFO[columnName][property] = row[property];
-					}
-				};
-			}
-		}
-	).fail(
-		(xhr, status, error) => {
-		showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-	});
-}*/
-
-
-function geojsonPointAsCircle(feature, latlng) {
-	/*
-	Called on each point to set style and add a popup
-	*/
-
-	var markerOptions = {
-		radius: 8,
-		weight: 1,
-		opacity: 1,
-		fillOpacity: 0.8,
-		fillColor: '#f56761',
-		color: '#f56761'
-	}
-
-	// Create a <p> element for each non-null property
-	var popupContent = '';
-	for (let key in feature.properties) {
-		const value = feature.properties[key];
-		if (value !== null) 
-			popupContent += `<p class="leaflet-field-item"><strong>${key}:</strong> ${value}</p>`;
-	}
-
-	var popup = L.popup({
-		autoPan: true,
-
-	}).setContent(`
-		<div class="leaflet-popup-data-container">
-			${popupContent}
-		</div>
-		<a href="query.html?id=${feature.id}" target="_blank">View record</a>
-	`);
-
-	return L.circleMarker(latlng, markerOptions)
-		.bindPopup(popup);
-}
 
 
 function customizeConfiguration() {

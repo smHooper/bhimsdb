@@ -1172,7 +1172,7 @@ var BHIMSEntryForm = (function() {
 		const $input = $(e.target);
 		if ($input.closest('.cloneable').length) return;//triggered manually and should be ignored
 
-		const $accordion = $input.closest('.accordion');
+		const $accordion = $input.closest('.accordion:not(.query-result-pane)');
 
 		// Don't save any attachments data. window.localStorage limit for most browsers 
 		//	is 5mb which is probably too small to save the attachment data. Since the 

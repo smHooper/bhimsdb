@@ -167,9 +167,9 @@ var BHIMSQuery = (function(){
 						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
 						liElements.push(
 							$(`
-								<li class="query-result-list-item" data-encounter-id="${encounter.id}">
+								<li class="query-result-list-item" data-encounter-id="${encounter.id}" title="Form number: ${encounter.park_form_id}, Bear group: ${bearGroupType}">
 									<label>
-										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group type:</strong> ${bearGroupType}
+										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group:</strong> ${bearGroupType}
 									</label>
 									<div class="query-result-edit-button-container">
 										<button id="delete-button-${encounter.id}" class="query-result-edit-button icon-button" type="button" aria-label="Delete selected encounter">
@@ -361,7 +361,13 @@ var BHIMSQuery = (function(){
 	/*
 	*/
 	Constructor.prototype.loadSelectedEncounter = function() {
-		//const markerWasOnMap = entryForm.markerIsOnMap();
+		
+		// close any open cards
+		$('#row-details-pane').find('.card.form-section .collapse.show')
+			.removeClass('show')
+			.siblings()
+				.find('.card-link')
+				.addClass('collapsed');
 
 		this.getReactionByFromReactionCodes().then(() => {
 			this.fillFieldsFromQuery();
@@ -374,21 +380,22 @@ var BHIMSQuery = (function(){
 				$('#encounter-marker-container').slideDown(0);//.collapse('show')
 			}
 
-			/*const $nullSelects = $('select').filter((_, el) => {
-				const dataValue = selectedEncounterData[el.name];
-				return !dataValue;
-			});
-			$nullSelects.addClass('default');
-			*/
-
 			// Run any extended functions
-			for (func of this.dataLoadedFunctions) {
+			for (const func of this.dataLoadedFunctions) {
 				try {
 					func()
 				} catch (e) {
 					console.log(`failed to run ${func.name} after loading data: ${e}`)
 				}
 			}
+
+			// Open the first card
+			$('.card.form-section').first()
+				.find('.row-details-card-collapse')
+					.collapse('show');
+					/*.siblings()
+						.find('.card-header')
+						.removeClass('collapsed');*/
 		});
 
 	}
@@ -444,7 +451,7 @@ var BHIMSQuery = (function(){
 		
 		// Reset the form
 		//	clear accordions
-		$('.accordion .card:not(.cloneable)').remove();
+		$('.accordion .card:not(.cloneable, .form-section)').remove();
 		
 		// 	Reset the entry form map
 		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
@@ -1224,7 +1231,51 @@ var BHIMSQuery = (function(){
 		})
 	}
 
+	/*
+	Show each section as a card in an accordion to allow the user 
+	to more easily navigate to a section of interest
+	*/
+	Constructor.prototype.sectionsToAccordion = function() {
 
+		$formSections = $('#row-details-pane').addClass('accordion')
+			.find('.form-section')
+				.addClass('card');
+		
+		for (const section of $formSections) {
+			const $card = $(section); // this is now a card
+			const $title = $card.find('.section-title');
+			const titleText = $title.text();
+			const sectionID = section.id;
+			const $cardHeader = $(`
+				<div class="card-header row-details-card-header" id="cardHeader-${sectionID}">
+					<a class="card-link collapsed" data-toggle="collapse" href="#collapse-${sectionID}" data-target="#collapse-${sectionID}" aria-expanded="false">
+						<div class="card-link-content card-link-title row-details-card-link-content">
+							<h4 class="card-link-label row-details-card-link-label">${titleText}</h4>
+						</div>
+						<!--<div class="card-link-content row-details-card-card-link-content">
+							<i class="fa fa-chevron-down pull-right fa-lg"></i>
+						</div>-->
+						<div class="card-link-content row-details-card-card-link-content">
+							<div class="card-link-chevron"></div>
+						</div>
+					</a>
+				</div>
+			`).prependTo($card); // add the header to the card section
+			
+			$title.remove();
+
+			const $collapse = $(`
+				<div id="collapse-${sectionID}" class="collapse card-collapse row-details-card-collapse" aria-labelledby="cardHeader-${sectionID}">
+				</div>
+			`).appendTo($card);
+			
+			// Move section content to the collapse
+			const $sectionContent = $card.find('.form-section-content')
+				.addClass('card-body row-details-card-body')
+				.appendTo($collapse);
+
+		}
+	}
 	/*
 	Configure the page
 	*/
@@ -1255,6 +1306,9 @@ var BHIMSQuery = (function(){
 			this.getJoinedDataTables(),
 			this.getTableSortColumns()
 		).then(() => {
+			
+			this.sectionsToAccordion();
+
 			if (window.location.search) {
 				this.urlQueryToSQL();
 				// Set value for all boolean fields that show/hide accordions

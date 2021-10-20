@@ -1,6 +1,4 @@
 
-
-
 body { 
 	background-image: linear-gradient(to bottom right, #d6e8ff, #628060, #001c2e);
 	background-image: url('../imgs/bhims_index_bg_1200.jpg');
@@ -302,9 +300,10 @@ select.input-field:focus::placeholder {
 
 .input-field.disabled,
 .field-container.disabled,
+.field-container.hidden,
 .field-container.collapse.show.disabled {
 	/*utility class to turn off fields that aren't relevant*/
-	display: none;
+	display: none !important;
 }
 
 .input-field.text-right-when-valid:not(:placeholder-shown) {

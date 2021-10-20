@@ -27,7 +27,7 @@ html, body {
   text-decoration: none !important; /*keep <a> tags from looking like links */
   color: white !important;
 }
-.generic-button:not(.disabled):focus{
+.generic-button:not(.disabled, .icon-button):focus{
   font-weight: 600;
    -moz-box-shadow:    5px 5px 20px 3px rgba(0, 0, 0, 0.25);
   -webkit-box-shadow: 5px 5px 20px 3px rgba(0, 0, 0, 0.25);
@@ -294,6 +294,7 @@ button > img {
     -ms-transition: opacity .2s linear, none;
     -o-transition: opacity .2s linear, none;
     transition: opacity .2s linear, none;
+    z-index: 10000;
 }
 
 .modal.lightbox-modal.fade .modal-dialog {
@@ -665,7 +666,7 @@ nav.sidebar {
   position: fixed;
   left: 50%;
   top: 50%;
-  z-index: 9999;
+  z-index: 10001;
   width: 150px;
   height: 150px;
   margin: -75px 0 0 -75px;
@@ -680,7 +681,7 @@ nav.sidebar {
 
 
 #loading-indicator-background {
-  z-index: 9998;
+  z-index: 10000;
 }
 
 @keyframes spin {

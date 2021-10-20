@@ -1,6 +1,8 @@
 'use strict';
 
 var mapData;
+var FIELD_INFO = {};
+var LOOKUP_TABLES = {};
 
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
@@ -78,9 +80,17 @@ function geojsonPointAsCircle(feature, latlng) {
 	// Create a <p> element for each non-null property
 	var popupContent = '';
 	for (let key in feature.properties) {
-		const value = feature.properties[key];
+		const fieldInfo = FIELD_INFO[key] || '';
+		var value = '';
+		if (fieldInfo.html_input_type === 'select') {
+			const lookupTableName = fieldInfo.lookup_table || fieldInfo.field_name + 's';
+			value = (LOOKUP_TABLES[lookupTableName] || '')[feature.properties[key]] ||  '';
+		} else {
+			value = feature.properties[key];
+		}
+		const displayName = fieldInfo ? fieldInfo.display_name : key;
 		if (value !== null) 
-			popupContent += `<p class="leaflet-field-item"><strong>${key}:</strong> ${value}</p>`;
+			popupContent += `<p class="leaflet-field-item"><strong>${displayName}:</strong> ${value}</p>`;
 	}
 
 	const queryURL = `query.html?{"encounters": {"id": {"value": ${feature.id}, "operator": "="}}}`
@@ -116,36 +126,51 @@ function configureMap(divID) {
 		zoom: mapZoom || 9
 	});
 
-	/*map.on('popupopen', function(e) {
-		var px = map.project(e.target._popup._latlng); // find the pixel location on the map where the popup anchor is
-		const bounds = map.getBounds();
-		const projectedNE = map.project(bounds._northEast);
-		const projectedSW = map.project(bounds._southWest);
-		const popupHeight = e.target._popup._container.clientHeight;
-		const popupWidth = e.target._popup._container.clientWidth;
-		const popupNorth = px.y - popupHeight;
-		const popupWest = px.x - popupWidth/2;
-		const popupEast = px.x + popupWidth/2;
-		const differenceN = projectedNE.y - popupNorth;
-		const differenceW = projectedSW.x - popupWest;
-		const differenceE = popupEast - projectedNE.x;
-		var moveMap = false; // flag indicating map should pan
-		var projectedMapCenter = map.project(map.getCenter());
-		if (differenceN > 0) {
-			projectedMapCenter.y -= differenceN + 20;
-			moveMap = true;
+	const fieldInfoSQL = `
+		SELECT 
+			fields.* 
+		FROM data_entry_fields fields 
+			JOIN data_entry_field_containers containers 
+			ON fields.field_container_id=containers.id 
+		WHERE 
+			fields.is_enabled 
+		ORDER BY 
+			containers.display_order,
+			fields.display_order
+		;
+	`;
+
+	const fieldInfoDeferred = queryDB(fieldInfoSQL).done(
+		queryResultString => {
+			const queryResult = $.parseJSON(queryResultString);
+			if (queryResult) {
+				for (const row of queryResult) {
+					const columnName = row.field_name;
+					FIELD_INFO[columnName] = {};
+					for (const property in row) {
+						FIELD_INFO[columnName][property] = row[property];
+					}
+					const lookupTableName = row.lookup_table || row.field_name + 's';
+					if (row.html_input_type === 'select' && !(lookupTableName in LOOKUP_TABLES)) {
+						queryDB(`SELECT code, name FROM ${lookupTableName}`).done(
+							resultString => {
+								if (!queryReturnedError(resultString)) { 
+									const result = $.parseJSON(resultString);
+									LOOKUP_TABLES[lookupTableName] = {};
+									for (const row of result) {
+										LOOKUP_TABLES[lookupTableName][row.code] = row.name; 
+									}
+								}
+							}
+						)
+					}
+				};
+			}
 		}
-		if (differenceW > 0) {
-			projectedMapCenter.x -= differenceW + 20;
-			moveMap = true;
-		}
-		if (differenceE > 0) {
-			projectedMapCenter.x += differenceE + 20;
-			moveMap = true;
-		}
-		//px.y -= e.target._popup._container.clientHeight/2; // find the height of the popup container, divide by 2, subtract from the Y axis of marker location
-		if (moveMap) map.panTo(map.unproject(projectedMapCenter),{animate: true}); // pan to new center
-	});*/
+	).fail(
+		(xhr, status, error) => {
+		showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
+	});
 
 	var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
 		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
@@ -153,7 +178,7 @@ function configureMap(divID) {
 
 	const sql = `
 		SELECT 
-			round(CURRENT_DATE - encounters.start_date)::integer AS report_age,
+			round(CURRENT_DATE - encounters.start_date)::integer AS "Age of report",
 			encounter_locations.latitude,
 			encounter_locations.longitude,
 			encounters.*
@@ -166,54 +191,56 @@ function configureMap(divID) {
 			extract(year FROM encounters.start_date)=(extract(year FROM CURRENT_DATE) - 2) AND
 			latitude IS NOT NULL AND longitude IS NOT NULL
 	`;
-	queryDB(sql, 'bhims')
-		.done((queryResultString) => {
-        	let resultString = queryResultString.trim();
-        	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
-        		alert('Unable to query encounters locations: ' + resultString);
-        		return false; // Save was unsuccessful
-        	} else {
-        		let queryResult = $.parseJSON(resultString);
-        		let features = [];
-        		for (let row of queryResult) {
-        			
-        			let properties = {};
-        			for (let fieldName in row) {
-        				if (fieldName !== 'latitude' && fieldName !== 'longitude') {
-        					properties[fieldName] = row[fieldName];
-        				}
-        			}
-
-        			features.push({
-        				id: row.id,
-        				type: 'Feature',
-        				properties: properties,
-        				geometry: {
-	        				type: 'Point',
-	                        coordinates: [
-	                            parseFloat(row.longitude),
-	                            parseFloat(row.latitude)
-	                        ]
+	fieldInfoDeferred.done(() => {
+		queryDB(sql, 'bhims')
+			.done((queryResultString) => {
+	        	let resultString = queryResultString.trim();
+	        	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
+	        		alert('Unable to query encounters locations: ' + resultString);
+	        		return false; // Save was unsuccessful
+	        	} else {
+	        		let queryResult = $.parseJSON(resultString);
+	        		let features = [];
+	        		for (let row of queryResult) {
+	        			
+	        			let properties = {};
+	        			for (let fieldName in row) {
+	        				if (fieldName !== 'latitude' && fieldName !== 'longitude') {
+	        					properties[fieldName] = row[fieldName];
+	        				}
 	        			}
-        			});
-        		}
 
-        		const markerOptions = {
-				    radius: 8,
-				    fillColor: "#ff7800",
-				    color: "#000",
-				    weight: 1,
-				    opacity: 1,
-				    fillOpacity: 0.8
-				};
-        		var geojsonLayer = L.geoJSON(features, {
-        			pointToLayer: geojsonPointAsCircle
-        		}).addTo(map);
-        	}
-        })
-        .fail((xhr, status, error) => {
-        	console.log(error)
-        });
+	        			features.push({
+	        				id: row.id,
+	        				type: 'Feature',
+	        				properties: properties,
+	        				geometry: {
+		        				type: 'Point',
+		                        coordinates: [
+		                            parseFloat(row.longitude),
+		                            parseFloat(row.latitude)
+		                        ]
+		        			}
+	        			});
+	        		}
+
+	        		const markerOptions = {
+					    radius: 8,
+					    fillColor: "#ff7800",
+					    color: "#000",
+					    weight: 1,
+					    opacity: 1,
+					    fillOpacity: 0.8
+					};
+	        		var geojsonLayer = L.geoJSON(features, {
+	        			pointToLayer: geojsonPointAsCircle
+	        		}).addTo(map);
+	        	}
+	        })
+	        .fail((xhr, status, error) => {
+	        	console.log(error)
+	        })
+    	});
 }
 
 

@@ -167,3 +167,17 @@ Helper function to check a Postgres query result for an error
 function queryReturnedError(queryResultString) {
 	return queryResultString.trim().startsWith('ERROR') || queryResultString.trim() === '["query returned an empty result"]';
 }
+
+/*
+Copy specified text to the clipboard
+*/
+function copyToClipboard(text, modalMessage='') {
+	navigator.clipboard
+		.writeText(text)
+		.then(() => {
+			showModal(modalMessage || `Successfully copied ${text} to clipboard`, 'Copy successful');
+		})
+		.catch((err) => {
+			console.error(`Error copying text to clipboard: ${err}`);
+		});
+}

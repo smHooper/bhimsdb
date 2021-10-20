@@ -313,6 +313,19 @@ CREATE TABLE data_entry_config (
     defailt_map_center_longitude REAL,
     allow_speech_recognition BOOLEAN,
 );
+
+CREATE TABLE user_role_codes (
+    id SERIAL PRIMARY KEY,
+    code INTEGER UNIQUE,
+    name VARCHAR(50) UNIQUE
+);
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    ad_username varchar(50),
+    role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+
 -- Only necessary because value columns were initially varchar(3)
 -- DO $$
 -- DECLARE
@@ -385,7 +398,8 @@ INSERT INTO state_codes (short_name, name) VALUES ('DC','District of Columbia'),
 --('AB', 'Alberta'), ('BC', 'British Columbia'), ('MB', 'Manitoba'), ('NB', 'New Brunswick'), ('NL', 'Newfoundland and Labrador'), ('NT', 'Northwest Territories'), ('NS', 'Nova Scotia'), ('NU', 'Nunavut'), ('ON', 'Ontario'), ('PE', 'Prince Edward Island'), ('QC', 'Québec'), ('SK', 'Saskatchewan'), ('YT', 'Yukon Territory');
 INSERT INTO structure_interaction_codes (short_name, name) VALUES ('OUT', 'Did not touch structure but was outside it'), ('TCH', 'Touched structure only'), ('ATT', 'Attempted entry'), ('ENT', 'Entered structure'), ('UNK', 'Unknown'); 
 INSERT INTO structure_type_codes (short_name, name) VALUES ('TNT', 'Tent'), ('BLD', 'Cabin or other building'), ('CAR', 'Automobile, RV, or camper'), ('RFT', 'Raft, kayak, or boat'), ('AIR', 'Airplane'), ('FOO', 'Food cache'), ('OTH', 'Other'), ('UNK', 'Unknown');
-INSERT INTO field_meta (table_name, field_name, display_name) SELECT table_name, column_name AS field_name, column_name AS display_name FROM information_schema.columns WHERE table_schema='public' AND table_name NOT LIKE '%_codes' AND table_name <> 'field_meta' ORDER BY table_name, column_name;
+--INSERT INTO field_meta (table_name, field_name, display_name) SELECT table_name, column_name AS field_name, column_name AS display_name FROM information_schema.columns WHERE table_schema='public' AND table_name NOT LIKE '%_codes' AND table_name <> 'field_meta' ORDER BY table_name, column_name;
+INSERT INTO user_role_codes (name) VALUES ('entry', 'rating', 'admin');
 
 -- Add sort order column to all lookup tables
 DO $$

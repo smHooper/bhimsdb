@@ -69,6 +69,11 @@
 				</div>
 				<div id="query-options-drawer-footer">
 					<button id="run-query-button" class="generic-button" aria-label="Run query">run query</button>
+					<button id="copy-query-link-button" class="generic-button icon-button hidden">
+						<i class="fas fa-link fa-2x">
+						</i>
+						<strong>get query link</strong>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -173,8 +178,34 @@
 	  </div>
 	</div>
 
+	<!--attachment preview modal -->
+	<div class="modal fade lightbox-modal" id="attachment-modal" tabindex="-1" role="dialog" aria-hidden="true">
+	  <div class="modal-dialog" role="document" data-dismiss="modal">
+	    <div class="modal-content" data-dismiss="modal">
+	      <div class="modal-body modal-img-body" >
+	      	<div class="modal-header-container" data-dismiss="modal">
+		      	<div class="modal-img-body-header">
+			        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+			          <span aria-hidden="true">&times;</span>
+			        </button>
+		      	</div>
+		    </div>
+	      	<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
+	      	<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
+	      		<source src="#">
+	      		Sorry, your browser does not support HTML video content
+	      	</video>
+	      	<audio class="modal-img hidden" id="modal-audio-preview" controls alt="preview of uploaded audio">
+	      		<source src="#">
+	      		Sorry, your browser does not support HTML audio content
+	      	</audio>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+	
 	<script src="js/bhims.js"></script>
-	<script src="js/bhims-entry.js"></script>
+	<script src="js/bhims-entry_.js"></script>
 	<script src="js/query.js"></script>
 	<script src="js/bhims-custom.js"></script>
 

@@ -29,6 +29,11 @@ var BHIMSQuery = (function(){
 
 		// All distance values in the DB should be in meters so make sure the units match that
 		$('.short-distance-select').val('m')
+
+		// fillFieldValues() will trigger .change() events, including adding the .dirty class
+		//	to all .input-fields so undo that
+		$('.input-field').removeClass('dirty');
+
 	}
 
 
@@ -103,6 +108,8 @@ var BHIMSQuery = (function(){
 	/* Query all data tables */
 	Constructor.prototype.runDataQuery = function(sqlQueryParameters) {
 
+		showLoadingIndicator();
+
 		// Remove any items from a previous query
 		$('#query-result-list').empty();
 		//this.queryResultMapData.remove();
@@ -167,19 +174,22 @@ var BHIMSQuery = (function(){
 						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
 						liElements.push(
 							$(`
-								<li class="query-result-list-item" data-encounter-id="${encounter.id}" title="Form number: ${encounter.park_form_id}, Bear group: ${bearGroupType}">
+								<li id="query-result-item-${encounter.id}" class="query-result-list-item" data-encounter-id="${encounter.id}" title="Form number: ${encounter.park_form_id}, Bear group: ${bearGroupType}">
 									<label>
 										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group:</strong> ${bearGroupType}
 									</label>
 									<div class="query-result-edit-button-container">
-										<button id="delete-button-${encounter.id}" class="query-result-edit-button icon-button" type="button" aria-label="Delete selected encounter">
+										<button id="delete-button-${encounter.id}" class="query-result-edit-button icon-button delete-encounter-button" type="button" aria-label="Delete selected encounter" title="Delete encounter">
 											<i class="fas fa-trash fa-lg"></i>
 										</button>
-										<button id="edit-button-${encounter.id}" class="query-result-edit-button icon-button" type="button" aria-label="Edit selected encounter">
+										<button id="edit-button-${encounter.id}" class="query-result-edit-button icon-button toggle-editing-button" type="button" aria-label="Edit selected encounter" title="Edit encounter">
 											<i class="fas fa-edit fa-lg"></i>
 										</button>
-										<button id="save-button-${encounter.id}" class="query-result-edit-button icon-button hidden" type="button" aria-label="Save edits">
+										<button id="save-button-${encounter.id}" class="query-result-edit-button icon-button save-edits-button hidden" type="button" aria-label="Save edits" title="Save edits">
 											<i class="fas fa-save fa-lg"></i>
+										</button>
+										<button id="permalink-button-${encounter.id}" class="query-result-edit-button icon-button encounter-permalink-button" type="button" aria-label="Copy permalink" title="Copy permalink" data-encounter-id="${encounter.id}">
+											<i class="fas fa-link fa-lg"></i>
 										</button>
 									</div>
 								</li>
@@ -194,6 +204,16 @@ var BHIMSQuery = (function(){
 						$firstEl.addClass('selected');
 						this.selectedID = $firstEl.data('encounter-id');
 					}
+
+					$('.delete-encounter-button').click(this.onDeleteEncounterButtonClick);
+					$('.toggle-editing-button').click(this.onEditButtonClick);
+					$('.save-edits-button').click(this.onSaveButtonClick);
+					$('.encounter-permalink-button').click(e => {
+						const $button = $(e.target).closest('.query-result-edit-button');
+						const encounterID = $button.data('encounter-id');
+						const url = encodeURI(`${window.location.href}?{"encounters": {"id": {"value": ${encounterID}, "operator": "="}}}`);
+						copyToClipboard(url, `Permalink for encounter ${encounterID} successfully copied to clipboard`);
+					})
 				}
 			}
 		).then(() => {
@@ -247,6 +267,7 @@ var BHIMSQuery = (function(){
 			$.when(...deferreds).then(() =>  {
 				this.loadSelectedEncounter();
 				this.addMapData();
+				hideLoadingIndicator();
 			});
 		});
 
@@ -359,15 +380,73 @@ var BHIMSQuery = (function(){
 
 
 	/*
+	Helper function to toggle field editability and change appearance
+	*/
+	Constructor.prototype.toggleFieldEditability = function(allowEdits) {
+		
+		$('.input-field')
+			.toggleClass('uneditable', !allowEdits)
+			.prop('readonly', !allowEdits)
+			.has('select') //"readonly" attribute doesn't work on selects, but "disabled" does
+				.prop('disabled', !allowEdits);
+		
+		$('.query-result-list-item.selected .save-edits-button').toggleClass('hidden', !allowEdits);
+	}
+
+
+	/*
+	Load a previously attached file from the server. 
+	*/
+	Constructor.prototype.loadAttachment = function(attachmentInfo) {
+		
+		const $card = entryForm.addNewCard($('#attachments-accordion'));
+		
+		const fileType = attachmentInfo.file_type_code;
+		$card.find('select') // file type select is the only one
+			.val(fileType)
+			.change();
+		const fileName = attachmentInfo.thumbnail_filename || attachmentInfo.file_path.split('\\').pop();
+		
+		$card.find('.file-thumbnail')
+			.attr('src', `attachments/${fileName}`) //set the image source
+			.data('file-path', attachmentInfo.file_path)
+			.removeClass('hidden') // and show it
+		// hide the progress bar
+		$card.find('.attachment-progress-bar-container')
+		 		.addClass('hidden') 
+		 		// and show the whole container
+		 		.closest('.collapse').collapse('show') 
+		// Set the card title and the file label
+		$card.find('.card-link-label, .filename-label')
+		 	.text(attachmentInfo.client_file_name);
+
+		$card.find('.input-field').filter((_, el) => {return el.name === 'file_description'})
+			.val(attachmentInfo.file_description);
+
+		// Load the file
+		$.ajax({
+			url: 'bhims.php',
+			method: 'POST',
+			data: {action: 'readAttachment', filePath: attachmentInfo.file_path},
+		}).done(dataString => {
+			var blob = fileType == 2 ? new Blob([dataString], {type: attachmentInfo.mime_type}) : null;
+			setAttachmentThumbnail(fileType, $card.find('.file-thumbnail'), blob, `attachments/${fileName}`);
+		}).fail((xhr, status, error) => {
+			console.log(`Could not read ${attachmentInfo.file_path} because ${error}`)
+		})
+	}
+
+	/*
 	*/
 	Constructor.prototype.loadSelectedEncounter = function() {
 		
 		// close any open cards
-		$('#row-details-pane').find('.card.form-section .collapse.show')
+		/*$('#row-details-pane').find('.row-details-card-collapse.show')
 			.removeClass('show')
 			.siblings()
 				.find('.card-link')
-				.addClass('collapsed');
+				.addClass('collapsed');*/
+		const selectedEncounterData = this.queryResult[this.selectedID];
 
 		this.getReactionByFromReactionCodes().then(() => {
 			this.fillFieldsFromQuery();
@@ -375,7 +454,19 @@ var BHIMSQuery = (function(){
 			this.setDescribeLocationByField();
 			this.selectResultMapPoint();
 
-			const selectedEncounterData = this.queryResult[this.selectedID];
+			// Load any attachments
+			const attachments = selectedEncounterData.attachments;
+			const $hasAttachmentsInput = $('#input-has_attachments');
+			if (attachments.length) $hasAttachmentsInput.val(1); //open the collapse
+			for (attachmentInfo of attachments) {
+				if (attachmentInfo.file_path) {
+					this.loadAttachment(attachmentInfo);
+				}	
+			}
+
+			const $attachmentsAccordion = $('#attachments-accordion');
+			setTimeout(()=>{$attachmentsAccordion.collapse('show')}, 500);
+			
 			if (!(selectedEncounterData.latitude && selectedEncounterData.longitude)) {
 				$('#encounter-marker-container').slideDown(0);//.collapse('show')
 			}
@@ -389,17 +480,231 @@ var BHIMSQuery = (function(){
 				}
 			}
 
+			this.toggleFieldEditability(false);
+
 			// Open the first card
-			$('.card.form-section').first()
-				.find('.row-details-card-collapse')
-					.collapse('show');
-					/*.siblings()
-						.find('.card-header')
-						.removeClass('collapsed');*/
+			if (!$('.row-details-card-collapse.show').length) {
+				$('.card.form-section').first()
+					.find('.row-details-card-collapse')
+						.collapse('show');
+			}
 		});
 
 	}
 
+
+	/*
+	Event handler for result item edit buttons
+	*/
+	Constructor.prototype.onEditButtonClick = function(e) {
+		
+		//e.preventDefault();
+		e.stopPropagation();
+
+		//Check to see if there's an active edit session
+		const isEditing = !$('.input-field.uneditable').length;
+
+		// check to see if anyone else is currently editing this encounter
+		/*
+		- if not isEditing:
+			- user client issues 'NOTIFY edits_<encounter_id>'
+			- user client issues 'LISTEN edits_<encounter_id>'
+			- php script starts checking notifications with pg_get_notify() in a while loop every 1/2 second
+			- if one is received, someone else is already editing and this user will be alerted and prevented from editing
+		- else:
+			- user client issues 'UNLISTEN edits_<encounter_id>'
+		*/
+
+		// Check for any edits
+		if (isEditing) {
+			const $dirtyInputs = $('.input-field.dirty');
+			if ($dirtyInputs.length) {
+			//const onConfirm = `_this.saveEdits`;
+			//showModal() // ask user if they want to save or discard edits
+			}
+		}
+
+		// If there are any .input-fields that are also .uneditable, turn on edits. 
+		//	Otherwise, rurn them off
+		_this.toggleFieldEditability(!isEditing);
+	}
+
+
+	Constructor.prototype.deleteEncounter = function() {
+
+		const encounterID = this.selectedID;
+		$.ajax({
+			url: 'bhims.php',
+			method: 'POST',
+			data: {
+				action: 'deleteEncounter',
+				encounterID: encounterID
+			},
+		}).done(deleteResultString => {
+			if (queryReturnedError(deleteResultString)) {
+				showModal('A problem occurred that prevented the server from deleting the encounter. Please try again later.');
+				return [];
+			} else {
+				const $deletedEncounterElement = $('#query-result-item-' + encounterID)
+					.fadeOut(500, (_, el) => {
+						$(el).remove();
+					})
+				const filesToDelete = this.queryResult[this.selectedID].attachments
+					.map(attachmentRow => {return attachmentRow.file_path})
+				$deletedEncounterElement
+					.next()
+					.click();
+				return filesToDelete;
+			}
+		}).fail((xhr, status, error) => {
+			console.log(`An unexpected error occurred while deleting encounter ${encounterID}: ${error}`)
+		})
+		// Delete any attached files
+		.then(filesToDelete => {
+			var failedFiles = [];
+			for (const filePath of filesToDelete) {
+				$.ajax({
+					url: 'bhims.php',
+					method: 'POST',
+					data: {action: 'deleteFile', filePath: filePath},
+					cache: false,
+				}).done(result => {
+					if (result.trim() !== 'true') {
+						failedFiles.push(filePath);
+					}
+				}).fail((xhr, status, error) => {
+					console.log(`Failed to delete ${filePath} because ${error}`)
+				})
+			}
+		});
+
+
+	}
+
+	/*
+	*/
+	Constructor.prototype.onDeleteEncounterButtonClick = function(e) {
+
+		e.stopPropagation();
+
+		const footerButtons = `
+			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
+			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="bhimsQuery.deleteEncounter()">Yes</button>
+		`;
+		showModal(`Are you sure you want to permanently delete this encounter and any files attached to it? This action cannot be undone.`, `Delete encounter?`, 'confirm', footerButtons);
+	}
+
+
+	/*
+	Helper function to get a parametized SQL UPDATE statement
+	*/
+	Constructor.prototype.getUpdateSQL = function(tableName, fieldValues, idField, id) {
+		var sortedFields = Object.keys(fieldValues).sort();
+		var parameters = sortedFields.map(f => fieldValues[f]);
+		parametized = [];
+		for (const index in sortedFields) {
+			parametized.push(`${sortedFields[index]}=$${parseInt(index) + 1}`);
+		}
+		const sql = `UPDATE ${tableName} SET ${parametized.join(', ')} WHERE ${idField}=${id};`
+		
+		return [sql, parameters];
+	}
+
+
+	/*
+	*/
+	Constructor.prototype.onSaveButtonClick = function(e) {
+		
+		e.stopPropagation();
+		
+		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
+
+		var oneToOneUpdates = {};
+		var oneToManyUpdates = {};
+		for (const input of $dirtyInputs) {
+			const $input = $(input);
+			const inputValue = $input.val();
+			const fieldName = $input.attr('name');
+			const $accordion = $input.closest('.accordion.form-item-list');
+
+			var tableName = '';
+			if ($accordion.length) { 
+				tableName = $accordion.data('table-name');
+			} else {
+				const fieldInfo = entryForm.fieldInfo[fieldName]; 
+				if (fieldInfo) {
+					tableName = fieldInfo.table_name;
+				} else {
+					continue;
+				}
+			}
+			
+			// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
+			//	there could, therefore, be multiple objects with this column. In that case,
+			//	append it to the appropriate object (as IDed by the index of the card)
+			if ($accordion.length) {
+				// If this is the first time a field has been changed in this 
+				//	table, oneToManyUpdates[tableName] will be undefined
+				if (!oneToManyUpdates[tableName]) oneToManyUpdates[tableName] = {};
+				const tableUpdates = oneToManyUpdates[tableName];
+
+				// Get the index of this card within the accordion
+				const index = $input.attr('id').match(/\d+$/)[0];
+				
+				if (!tableUpdates[index]) tableUpdates[index] = {id: undefined, values: {}};
+				const dbID = entryForm.fieldValues[tableName][index].id; // will be undefined if this is a new card
+				tableUpdates[index].id = dbID;
+				tableUpdates[index].values[fieldName] = inputValue;
+			} else {
+				if (!oneToOneUpdates[tableName]) oneToOneUpdates[tableName] = {};
+				oneToOneUpdates[tableName][fieldName] = inputValue;
+			}
+		}
+
+		// Add meta fields to encounters table
+		if (!('encounters' in oneToOneUpdates)) oneToOneUpdates.encounters = {};
+		oneToOneUpdates.encounters.last_edited_by = entryForm.username;
+		oneToOneUpdates.encounters.datetime_last_edited = getFormattedTimestamp();
+		
+		const sqlStatements = [];
+		const sqlParameters = [];
+		for (const tableName in oneToOneUpdates) {
+			const updates = oneToOneUpdates[tableName];
+			// If this is just a normal table update (not part of a 1-to-many relationship), 
+			//	just construct the UPDATE statement
+			const idField = tableName === 'encounters' ? 'id' : 'encounter_id';
+			var [sql, parameters] = _this.getUpdateSQL(tableName, updates, idField, _this.selectedID);
+			sqlStatements.push(sql);
+			sqlParameters.push(parameters);
+		} 
+		for (const tableName in oneToManyUpdates) {
+			// Otherwise either UPDATE the proper row or INSERT if this is a new row
+			const updates = oneToManyUpdates[tableName];
+			for (const cardID in updates) {
+				const dbID = updates[cardID].id;
+				var values = updates[cardID].values;
+				if (dbID === undefined) {
+					// new row that needs to be INSERTed
+					// Add the encounter_id field, since all related records need this
+					values['encounter_id'] = _this.selectedID;
+					
+					const sortedFields = Object.keys(values).sort();
+					var parameters = sortedFields.map(f => values[f]);
+					parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
+					sql = `INSERT INTO ${tableName} (${sortedFields.join(', ')}) VALUES ${parametized}`;
+					sqlStatements.push(sql);
+					sqlParameters.push(parameters);
+				} else {
+					// just a regular UPDATE
+					var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
+					sqlStatements.push(sql);
+					sqlParameters.push(parameters);			
+				}
+			}
+		}
+
+		//$dirtyInputs.removeClass('dirty');
+	}
 
 	/*
 	Helper function to reset a select to the default option and with the default class
@@ -734,6 +1039,9 @@ var BHIMSQuery = (function(){
 
 
 	Constructor.prototype.configureQueryOptions = function() {
+		
+		showLoadingIndicator()
+
 		// Configure query options
 		// Get numeric field min/max
 		var numericFieldRanges = {};
@@ -937,6 +1245,9 @@ var BHIMSQuery = (function(){
 											const tableName = $sliderContainer.data('table-name');
 											const fieldName = $sliderContainer.data('field-name');
 											this.queryOptions[tableName][fieldName] = {value: `${slider.values[0]} AND ${slider.values[1] + 1}`, operator: 'BETWEEN'};//`${tableName}.${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
+
+											// Show the copy-permalink button
+											$('#copy-query-link-button').removeClass('hidden');
 											
 											// Set the location of the slider handle's label
 											const $sliderRange = $sliderContainer.find('.ui-slider-range').first();
@@ -1032,6 +1343,15 @@ var BHIMSQuery = (function(){
 						$button.closest('.field-list-item').addClass('hidden');
 					});
 
+					toggleCopyQueryLinkButton = () => {
+						// If this was the last query option, hide the copy-permalink button
+						var queryOptionsSpecified = false;
+						for (const tableName in _this.queryOptions) {
+							if (Object.keys(_this.queryOptions[tableName]).length) queryOptionsSpecified = true;
+						}
+						$('#copy-query-link-button').toggleClass('hidden', !queryOptionsSpecified);
+					}
+
 					$('.remove-query-option-button').click(e => {
 						const $button = $(e.target).closest('.remove-query-option-button');
 						const $container = $button.closest('.query-option-container')
@@ -1078,6 +1398,8 @@ var BHIMSQuery = (function(){
 
 						//remove option from query
 						delete _this.queryOptions[tableName][fieldName];
+
+						toggleCopyQueryLinkButton();
 					});
 
 					$('.query-option-operator.datetime-query-option').change(e => {
@@ -1222,11 +1544,19 @@ var BHIMSQuery = (function(){
 							return;
 						}
 						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
-					})
+
+					});
+
+					// When a query option input loses focus, hide/show the copy-permalink button, depending on 
+					//	whether there user has any query options specified
+					$('.query-option-input-field').blur(() => {
+						toggleCopyQueryLinkButton();
+					});
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();
 				}
+				hideLoadingIndicator();
 			})
 		})
 	}
@@ -1276,10 +1606,15 @@ var BHIMSQuery = (function(){
 
 		}
 	}
+
+
 	/*
 	Configure the page
 	*/
 	Constructor.prototype.configureQuery = function() {
+
+		showLoadingIndicator();
+
 		// Get username
 		$.ajax({
 			url: 'bhims.php',
@@ -1299,6 +1634,15 @@ var BHIMSQuery = (function(){
 		
 		$('#show-query-options-button').click(this.onShowQueryOptionsClick);
 		$('#run-query-button').click(this.onRunQueryClick);
+		$('#copy-query-link-button').click(() => {
+			var options = {};
+			for (const tableName in _this.queryOptions) {
+				const tableOptions = _this.queryOptions[tableName];
+			    if (Object.keys(tableOptions).length) options[tableName] = {...tableOptions};
+			}
+			const url = encodeURI(`${window.location.href}?${JSON.stringify(options)}`);
+			copyToClipboard(url, `Permalink for this query successfully copied to clipboard`);
+		});
 
 		$.when(
 			...this.getLookupValues(), 
@@ -1319,7 +1663,6 @@ var BHIMSQuery = (function(){
 
 				//update result map
 			} else {
-				hideLoadingIndicator();
 				$('#show-query-options-container').addClass('open');
 
 			}
@@ -1335,6 +1678,14 @@ var BHIMSQuery = (function(){
 			$('.mic-button-container').addClass('hidden');
 
 			$('.short-distance-select').change(this.onShortDistanceUnitsFieldChange);
+
+			// When a user changes an input, add .dirty class
+			$('.input-field')
+				.filter(
+					(_, el) => {return !$(el).is('.ignore-on-insert, .short-distance-select')}
+				).change(e => {
+					$(e.target).addClass('dirty');
+				});
 		});
 
 		customizeQuery();

@@ -307,7 +307,7 @@ body {
 }
 .bhims-query-select2-dropdown-container {
 	position:  relative;
-	z-index: 10000;
+	z-index: 9997;
 }
 /*jquery UI slider*/
 #query-options-drawer .slider-container .ui-slider-handle {
@@ -416,6 +416,7 @@ body {
 	padding: 10px 15px;
 	justify-content: space-between;
 	cursor: unset;
+	pointer-events: none;
 }
 #query-result-list > .query-result-list-item.selected, 
 #query-result-list > .query-result-list-item.selected > label {
@@ -436,9 +437,14 @@ body {
 	width: 100%;
 	justify-content: center;
 }
-.query-result-edit-button {
-	margin-left: 20px;
+.query-result-edit-button-container > .query-result-edit-button {
+	margin: 0 10px;
 	color: #00b2c5;
+	transition: .3s all;
+	pointer-events: all;
+}
+.query-result-edit-button-container > .query-result-edit-button:hover {
+	color: #28c7d8;
 }
 #query-result-list > .query-result-list-item.selected .query-result-edit-button-container {
 	display: flex;
@@ -524,17 +530,47 @@ body {
 	transform: rotate(135deg);
 }
 
-/* Add animated chevron to card*/
-.card-link .fa {
-	transition: .3s transform ease-in-out;
-	margin-right: 15px;
-	margin-left: 25px;
-	/*padding-top: 25px;*/
-	padding-bottom: 25px;
+/* Style inputs for toggling editablity */
+#row-details-pane .input-field,
+#row-details-pane .field-label {
+	transition: .3s all;
 }
-
-.card-link.collapsed .fa-chevron-down {
-	transform: rotate(90deg);
+#row-details-pane .input-field.uneditable {
+	border-bottom: solid 2px rgba(0, 0, 0, 0);
+	text-indent: 0;
+	margin-bottom: .75rem;
+	appearance: none;
+	pointer-events: none;
+	cursor: default;
+	text-align: left;
+}
+#row-details-pane select.input-field.uneditable:disabled {
+	color: black;
+}
+#row-details-pane .input-field.uneditable ~ .field-label {
+	order: -2;
+	font-size: 15px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+	margin-bottom: 0;
+	padding-left: 0;
+}
+#row-details-pane .input-field.uneditable:not(:placeholder-shown) ~ .required-indicator {
+	display: none;
+}
+#row-details-pane .input-field.uneditable:placeholder-shown,
+#row-details-pane select.input-field.uneditable.default,
+#row-details-pane .input-field.uneditable:placeholder-shown ~ .unit-symbol {
+	visibility: hidden;
+}
+#row-details-pane .input-field.uneditable:placeholder-shown ~ .field-label,
+#row-details-pane select.input-field.uneditable.default ~ .field-label  {
+	padding-left: .5rem;
+	visibility: visible;
+	color: black;
+	/*padding-top: .75rem;*/
 }
 
 .form-section {
@@ -550,5 +586,5 @@ textarea.narrative-field {
 
 #alert-modal {
   background: rgba(0,0,0,0.5);
-  z-index: 9999;
+  z-index: 10000;
 }

@@ -43,7 +43,7 @@ var BHIMSEntryForm = (function() {
 		this.backcountryUnitCoordinates = {};
 		this.placeNameCoordinates = {};
 		this.acceptedAttachmentExtensions = {};
-		this.confirmLocationSelectChange = true;
+		this.confirmLocationSelectChange = false; //set to true after fillFieldValues runs
 		_this = this;
 	}
 
@@ -74,6 +74,7 @@ var BHIMSEntryForm = (function() {
 		// Query configuration tables from database
 		var deferred = $.Deferred();
 		$.when(
+			this.getFieldInfo(),
 			queryDB('SELECT * FROM data_entry_config;')
 				.done(result => {
 					const queryResult = $.parseJSON(result);
@@ -105,7 +106,7 @@ var BHIMSEntryForm = (function() {
 						}
 					},
 					failFilter=function(xhr, status, error) {
-						console.log(`Accepted file extension query failed with status ${status} because ${error} from query:\n${sql}`)
+						console.log(`Accepted file extension query failed with status ${status} because ${error}`)
 					}
 				)
 		).then(() => {
@@ -204,7 +205,7 @@ var BHIMSEntryForm = (function() {
 											<h5 ${cardLinkAttributes}">${accordionInfo.card_link_label_text}</h5>
 										</div>
 										<div class="card-link-content">
-											<button class="delete-button icon-button" type="button" onclick="onDeleteCardClick(event)" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
+											<button class="delete-button icon-button" type="button" onclick="entryForm.onDeleteCardClick(event)" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
 												<i class="fas fa-trash fa-lg"></i>
 											</button>
 											<i class="fa fa-chevron-down pull-right"></i>
@@ -217,7 +218,7 @@ var BHIMSEntryForm = (function() {
 							</div>
 						</div>
 						<div class="${dependentAttributes.length ? 'collapse' : ''} add-item-container">
-							<button class="generic-button add-item-button" type="button" onclick="onAddNewItemClick(event)" data-target="${accordionHTMLID}" ${dependentAttributes}>
+							<button class="generic-button add-item-button" type="button" onclick="entryForm.onAddNewItemClick(event)" data-target="${accordionHTMLID}" ${dependentAttributes}>
 								<strong>+</strong> ${accordionInfo.add_button_label}
 							</button>
 						</div>
@@ -353,17 +354,20 @@ var BHIMSEntryForm = (function() {
 			`);
 
 			// Add "Describe location by" field
-			$(`
-				<div class="field-container col single-line-field">
-					<label class="field-label inline-label" for="input-location_type">Describe location by:</label>
-					<select class="input-field no-option-fill" id="input-location_type" value="Place name" name="location_type">
-						<option value="Place name">Place name</option>
-						<option value="Backcountry unit">Backcountry unit</option>
-						<option value="Road mile">Road mile</option>
-						<option value="GPS coordinates">GPS coordinates</option>
-					</select>
-				</div>
-			`).prependTo('#section-4 .form-section-content');
+			const locationTypeFieldInfo = this.fieldInfo.location_type;
+			if (locationTypeFieldInfo) {
+				$(`
+					<div class="${locationTypeFieldInfo.parent_css_class}">
+						<label class="field-label inline-label" for="input-location_type">Describe location by:</label>
+						<select class="${locationTypeFieldInfo.css_class}" id="input-location_type" value="Place name" name="location_type">
+							<option value="Place name">Place name</option>
+							<option value="Backcountry unit">Backcountry unit</option>
+							<option value="Road mile">Road mile</option>
+							<option value="GPS coordinates">GPS coordinates</option>
+						</select>
+					</div>
+				`).prependTo('#section-4 .form-section-content');
+			}
 
 			// Configure map and GPS fields
 			$(`
@@ -499,7 +503,7 @@ var BHIMSEntryForm = (function() {
 									<div class="attachment-progress-indicator"></div>
 								</div>
 							</div>
-							<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
+							<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event, ${isNewEntry})" alt="clickable thumbnail of uploaded file">
 						</div>
 						<div class="attachment-file-input-container col-6">
 							<label class="filename-label"></label>
@@ -509,38 +513,6 @@ var BHIMSEntryForm = (function() {
 					</div>
 				`);
 			const $attachmentsAccordion = $('#attachements-accordion');
-			/*if ($attachmentsAccordion.length && !$attachmentsAccordion.is('.disabled')) {
-				$(`
-					<div class="field-container align-items-center">
-						<div class="field-container col-6 inline">
-							<select class="input-field default" name="file_type_code" placeholder="What type of file are you uploading?" id="input-file_type" onchange="onAttachmentTypeChange(event)" required></select>
-							<span class="required-indicator">*</span>
-							<label class="field-label" for="input-file_type_code">What kind of file are you uploading?</label>
-						</div>
-						<div class="collapse field-container col-6 inline">
-							<div class="collapse field-container col-6 file-preview-container">
-								<div class="attachment-progress-bar-container">
-									<div class="attachment-progress-bar">
-										<div class="attachment-progress-indicator"></div>
-									</div>
-								</div>
-								<img class="file-thumbnail hidden" src="#" alt="thumbnail" onclick="onThumbnailClick(event)" alt="clickable thumbnail of uploaded file">
-							</div>
-							<div class="attachment-file-input-container col-6">
-								<label class="filename-label"></label>
-								<label class="generic-button text-center file-input-label" for="attachment-upload">select file</label>
-								<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="onAttachmentInputChange(event)" required>
-							</div>
-						</div>
-					</div>
-
-					<div class="field-container col">
-						<input class="input-field" type="text" min="1" name="file_description" placeholder="What does this file depict?" id="input-file_description" required>
-						<span class="required-indicator">*</span>
-						<label class="field-label" for="input-file_description">What does this file depict?</label>
-					</div>
-				`).appentTo($attachmentsAccordion.find('.card.cloneable .card-body'))
-			}*/
 
 			// Configure narrative field
 			const $narrativeField = $('#input-narrative');
@@ -597,7 +569,6 @@ var BHIMSEntryForm = (function() {
 
 			// Do all other configuration stuff
 			// Get field info
-			this.getFieldInfo();
 			hideLoadingIndicator();
 
 			// Some accordions might be permanetnely hidden because the form is simplified, 
@@ -614,9 +585,6 @@ var BHIMSEntryForm = (function() {
 				const lookupTable = $el.data('lookup-table');
 				const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
 				const id = el.id;
-				if (id == 'input-location_accuracy') {
-					a=1;
-				}
 				if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
 					if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
 					if (!$el.is('.no-option-fill')) {
@@ -630,6 +598,7 @@ var BHIMSEntryForm = (function() {
 			).then(function() {
 				if (isNewEntry) {
 					_this.fillFieldValues(_this.fieldValues);
+					_this.confirmLocationSelectChange = true;
 					// If the user does not have previous data saved, add the first card here in 
 					//	case this same form is used for data viewing. If there is saved data, the 
 					//	form and all inputs will be restored from the previous session
@@ -882,7 +851,6 @@ var BHIMSEntryForm = (function() {
 								.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
 						} catch {
 							console.log($card)
-							const a =1;
 						}
 						
 						// If this is a checkbox, set the checked property. Otherwise,
@@ -909,6 +877,7 @@ var BHIMSEntryForm = (function() {
 				} else {
 					$input.val(value);
 				}
+
 				$input.change();//call change event callbacks
 			}
 		}
@@ -968,7 +937,7 @@ var BHIMSEntryForm = (function() {
 			;
 		`;
 
-		queryDB(sql).done(
+		return queryDB(sql).done(
 			queryResultString => {
 				const queryResult = $.parseJSON(queryResultString);
 				if (queryResult) {
@@ -1188,7 +1157,7 @@ var BHIMSEntryForm = (function() {
 			return;
 		}
 		
-		const val = $input.is('.input-checkbox') ? +$input.prop('checked') : $input.val();
+		const val = $input.is('.input-checkbox') ? $input.prop('checked') : $input.val();
 
 		const fieldInfo = _this.fieldInfo[fieldName];
 		if (!fieldInfo) {
@@ -1228,7 +1197,7 @@ var BHIMSEntryForm = (function() {
 			.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
 			(_, el) => {
 				const $el = $(el);
-				const $hiddenParent = $el.parents('.collapse:not(.show), .card.cloneable, .field-container.disabled, .hidden');
+				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
 				if (!$el.val() && $hiddenParent.length === 0) {
 					$el.addClass('error');
 				} else {
@@ -1262,6 +1231,7 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.toggleDependentFields = function($select) {
 
 		const selectID = '#' + $select.attr('id');
+
 		// Get all the elements with a data-dependent-target 
 		const dependentElements = $(`
 			.collapse.field-container .input-field, 
@@ -1369,12 +1339,12 @@ var BHIMSEntryForm = (function() {
 
 		// Get the collapse to show. If this already shown, that means this function 
 		//	was triggerred manually with .change(), and shouldn't actually be hidden
-		const $currentCollapse = $('.coordinates-' + format).closest('.collapse');
+		const $currentCollapse = $('.coordinates-' + format).closest('.collapse:not(.row-details-card-collapse)');
 		if ($currentCollapse.is('.show')) return;
 
 		// Hide all coordinate fields (which is really just the currently visible one)
 		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').each((_, el) => {
-			$(el).closest('.collapse')
+			$(el).closest('.collapse:not(.row-details-card-collapse)')
 				.addClass('hidden')//add hidden class first
 				.collapse('hide');
 		})
@@ -1456,7 +1426,7 @@ var BHIMSEntryForm = (function() {
 		// Open the card after a brief delay
 		//$newCard.find('.collapse:not(.show)').click();
 		setTimeout(function(){
-			$newCard.find('.collapse:not(.show)').siblings('.card-header').find('.card-link').click();
+			$newCard.find('.collapse:not(.show, .row-details-card-collapse)').siblings('.card-header').find('.card-link').click();
 		}, 500);
 
 		return $newCard;
@@ -1481,7 +1451,10 @@ var BHIMSEntryForm = (function() {
 			}
 		})
 
-		if (isValid) _this.addNewCard($accordion);
+		if (isValid) {
+			const $newCard = _this.addNewCard($accordion);
+			$newCard.addClass('new-card');
+		}
 	}
 
 
@@ -1768,8 +1741,10 @@ var BHIMSEntryForm = (function() {
 
 		// Fill global this.fieldValues in case this function was called by dragging 
 		//	and dropping the marker, which won't trigger the onInputFieldChange() event
-		this.fieldValues[$latDDDField.attr('name')] = latDDD;
-		this.fieldValues[$lonDDDField.attr('name')] = lonDDD;
+		this.fieldValues['latitude'] = latDDD;
+		this.fieldValues['longitude'] = lonDDD;
+		$('#input-latitude').val(latDDD);
+		$('#input-longitude').val(lonDDD);
 
 		// Set ddm fields
 		const minuteStep = $('#input-lat_dec_min').attr('step');
@@ -2199,7 +2174,9 @@ var BHIMSEntryForm = (function() {
 			reader.onload = function(e) {
 				// Show the thumbnail and hide the progress bar
 				const fileType = $barContainer.closest('.card').find('select').val();
-				setAttachmentThumbnail(fileType, $destinationImg, reader, file);
+				var blob;
+				if (fileType == 2) var blob = new Blob([reader.result], {type: file.type});
+				setAttachmentThumbnail(fileType, $destinationImg, blob);
 				$barContainer.addClass('hidden');
 				$destinationImg.closest('.card')
 					.find('.card-link-label')
@@ -2433,43 +2410,75 @@ var BHIMSEntryForm = (function() {
 			if (fileInput.files.length) {
 				const thisFile = fileInput.files[0]
 				const fileName = thisFile.name;
-				deferreds.push(saveAttachment(fileInput)
-					.then(
-						doneFilter=(resultString) => {
-							console.log(resultString)
-							if (resultString.trim().startsWith('ERROR')) {
-								failedFiles.push(fileName);
-							} else {
-								const $card = $(fileInput).closest('.card');
-								const filePath = resultString.trim().replace(/\//g, '\\');//replace forward slashes with backslash
-								const fileInfo = {
-									client_file_name: fileName,
-									file_path: filePath,//should be the saved filepath (with UUID)
-									file_size_kb: Math.floor(thisFile.size / 1000),
-									mime_type: thisFile.type,
-									attached_by: _this.username,//retrieved in window.onload()
-									datetime_attached: timestamp,
-									last_changed_by: _this.username,
-									datetime_last_changed: timestamp
-								};
+				const thumbnailName = `${fileName.split('.')[0]}_thumbnail.jpg`;
+				const fileTypeCode = $(fileInput).closest('.card').find('select').val();
+				deferreds.push(
+					saveAttachment(fileInput)
+						.done(resultString => {
+								if (resultString.trim().startsWith('ERROR')) {
+									failedFiles.push(fileName);
+									return false;
+								} else {
+									const result = $.parseJSON(resultString);
+									const $card = $(fileInput).closest('.card');
+									const filePath = result.filePath.replace(/\//g, '\\');//replace forward slashes with backslash
+									const filename = filePath.split('/').pop();
+									const fileExtension = filename.split('.').pop();
+									const thumbnailFilename = filename.replace('.' + fileExtension, '_thumbnail.jpg');
+									const fileInfo = {
+										client_file_name: fileName,
+										file_path: result.filePath,//should be the saved filepath (with UUID)
+										file_size_kb: Math.floor(thisFile.size / 1000),
+										mime_type: thisFile.type,
+										attached_by: _this.username,//retrieved in window.onload()
+										datetime_attached: timestamp,
+										last_changed_by: _this.username,
+										datetime_last_changed: timestamp,
+										thumbnail_filename: result.thumbnailFilename || null
+									};
+									
+									// If this is an audio file, just return
+									/*if (fileTypeCode === 3) {
+										fileInfo.thumbnail_filename = '../imgs/audio_thumbnail.jpg';
+									} else {
+										// Otherwise, make the thumbnail
+										$.ajax({
+											url: 'bhims.php',
+											method: 'POST',
+											data: {
+												action: 'makeThumbnail', 
+												fileName: filePath, 
+												fileTypeCode: fileTypeCode
+											}
+										}).done(result => {
+											result = result.trim()
+											if (result !== 'false') {
+												// Should return the thumbnail name, so set the property for this object
+												fileInfo.thumbnail_filename = result;
+											}
+										}).fail((xhr, status, error) => {
+											console.log(`Thumbnail creation for ${fileName} failed with status ${status} because ${error}`);
+											failedFiles.push(fileName);
+										});
+									}*/
 
-								for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
-									const fieldName = inputField.name;
 									// Get input values for all input fields except file input (which has 
 									//	the name "uploadedFile" used by php script)
-									if (fieldName in _this.fieldInfo) {
-										fileInfo[fieldName] = inputField.value; 
+									for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
+										const fieldName = inputField.name;
+										if (fieldName in _this.fieldInfo) {
+											fileInfo[fieldName] = inputField.value; 
+										}
 									}
+									const uploadedFileIndex = Object.keys(uploadedFiles).length;
+									uploadedFiles[uploadedFileIndex] = {...fileInfo};
 								}
-								uploadedFiles[Object.keys(uploadedFiles).length] = {...fileInfo};
+							
 							}
-						
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
-							failedFiles.push(fileName);
-						}
-					)
+						).fail((xhr, status, error) => {
+								console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
+								failedFiles.push(fileName);
+						})
 				);
 
 			}
@@ -2621,10 +2630,10 @@ var BHIMSEntryForm = (function() {
 							.addClass('hidden');
 
 					// Clear localStorage
-					//_this.fieldValues = {};
-					//window.localStorage.clear();
+					// _this.fieldValues = {};
+					// window.localStorage.clear();
 
-					// Second email notification
+					// Send email notification
 					
 				}).fail((xhr, status, error) => {
 					showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
@@ -2696,8 +2705,7 @@ function coordinatesToDDD(latDegrees=0, lonDegrees=0, latMinutes=0, lonMinutes=0
 }
 
 
-function getVideoStill($thumbnail, fileReader, file) {
-	var blob = new Blob([fileReader.result], {type: file.type});
+function getVideoStill($thumbnail, blob) {
 	var url = URL.createObjectURL(blob);
 	var video = document.createElement('video');
 	var timeupdate = function() {
@@ -2735,20 +2743,20 @@ function getVideoStill($thumbnail, fileReader, file) {
 }
 
 
-function setAttachmentThumbnail(fileType, $thumbnail, fileReader, file) {
+function setAttachmentThumbnail(fileTypeCode, $thumbnail, blob, thumbnailSrc) {
 
-	switch (parseInt(fileType)) {
+	switch (parseInt(fileTypeCode)) {
 		case 1://img
-			$thumbnail.attr('src', event.target.result);
+			$thumbnail.attr('src', thumbnailSrc || event.target.result);
 			break;
 		case 2://video
-			getVideoStill($thumbnail, fileReader, file);
+			getVideoStill($thumbnail, blob);
 			break;
 		case 3://audio
 			$thumbnail.attr('src', 'imgs/audio_thumbnail.jpg');
 			break;
 		default:
-			throw 'Could not understand fileType: ' + fileType;
+			throw 'Could not understand fileType: ' + fileTypeCode;
 	}
 	$thumbnail.removeClass('hidden');
 }
@@ -2779,19 +2787,20 @@ function showModalVideoAudio($el, objectURL) {
 }
 
 
-function onThumbnailClick(e) {
+function onThumbnailClick(e, loadFromMemory=true) {
 
 	const $thumbnail = $(e.target);
+	const thumbnailSrc = $thumbnail.attr('src');
 	const fileInput = $thumbnail.closest('.card').find('input[type=file]').get(0);
-	if (fileInput.files.length) { // this should always be the case but better safe than sorry
+	if (fileInput.files.length || !['', '#'].includes(thumbnailSrc)) { // this should always be the case but better safe than sorry
 		const file = fileInput.files[0];
 		const fileType = $thumbnail.closest('.card')
 			.find('select')
 				.val();
 		if (fileType == 1) {
-			showModalImg($thumbnail.attr('src')); 
+			showModalImg('attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop() || thumbnailSrc.replace('_thumbnail', '')); 
 		} else if (fileType.toString().match('2|3')) {
-			const url = URL.createObjectURL(file);
+			const url = loadFromMemory ? URL.createObjectURL(file) : 'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop();
 			const $el = fileType == 2 ? $('#modal-video-preview') : $('#modal-audio-preview');
 			showModalVideoAudio($el, url);
 		}

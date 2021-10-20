@@ -4,11 +4,14 @@
 
 include '../config/bhims-config.php';
 
+// Connect to the database
+
 
 function runQuery($ipAddress, $port, $dbName, $username, $password, $queryStr, $parameters=array()) {
 	/*return result of a postgres query as an array*/
 
 	$conn = pg_connect("hostaddr=$ipAddress port=$port dbname=$dbName user=$username password=$password");
+	
 	if (!$conn) {
 		return array("db connection failed");
 	}
@@ -38,6 +41,7 @@ function runQueryWithinTransaction($conn, $queryStr, $parameters=array()) {
 function runCmd($cmd) {
 	// can't get this to work for python commands because conda throws
 	// an error in conda-script (can't import cli.main)
+	
 	$process = proc_open(
 		$cmd, 
 		array(
@@ -64,12 +68,12 @@ function runCmd($cmd) {
 	    $returnCode = proc_close($process);
 
 	    if ($returnCode) {
-	    	echo json_encode($resultObj);
+	    	return json_encode($resultObj);
 	    } else {
-	    	echo 'nothing';//false;
+	    	return false;
 	    }
 	} else {
-		echo json_encode($_SERVER);
+		return false;//json_encode($_SERVER);
 	}
 }
 
@@ -112,7 +116,6 @@ function uuid() {
 }
 
 
-
 // File upload with submit
 if (isset($_FILES['uploadedFile'])) {
 	
@@ -123,7 +126,33 @@ if (isset($_FILES['uploadedFile'])) {
 	$uploadFilePath = "$attachmentDir/$uuid.$fileExt";
 
 	if (move_uploaded_file($_FILES['uploadedFile']['tmp_name'], $uploadFilePath)) {
-		echo $uploadFilePath;
+		//$fileTypeCode = $_POST['fileTypeCode'];
+		$mimeType = $_FILES['uploadedFile']['type'];
+		[$generalType, $specificType] = explode('/', $mimeType);
+		$gifFrameIndex = $specificType === 'gif' ? '[0]' : '';
+		$fileBasename = reset($fileNameParts);
+		$thumbnailName = $uuid . '_thumbnail.jpg';
+
+		// Use ImageMagick if it's an image
+		$imgMagickPath = 'C:\\ProgramData\\ImageMagick-7.1.0-Q16-HDRI\\';
+		$command = '';
+		if ($generalType === 'image') {
+			$command = $imgMagickPath . "magick $uploadFilePath$gifFrameIndex -resize 200x200 attachments/$thumbnailName";
+			
+		} else if ($generalType === 'video' || $mimeType === 'application/octet-stream') {
+			$command = $imgMagickPath . "ffmpeg -ss 00:00:01.00 -i $uploadFilePath -vf scale=200:200:force_original_aspect_ratio=decrease -vframes 1 attachments/$thumbnailName";
+		}
+		$cmdResult = runCmd($command);
+		$resultArray = array(
+			'filePath' => $uploadFilePath,
+			'thumbnailFilename' => boolval($cmdResult) ? $thumbnailName : false,
+			'cmdResult' => $cmdResult,
+			'command' => $command,
+			'mimeType' => $mimeType,
+			'substring' => substr($mimeType, 0, 5),
+			'fileExt' => $fileExt
+		);
+		echo json_encode($resultArray);
 	} else {
 		echo "ERROR: file uploaded was not valid: $uploadFilePath ";
 	}
@@ -163,57 +192,6 @@ if (isset($_POST['action'])) {
 			echo "ERROR: no query given";//false;
 		}
 	}
-
-	/*if ($_POST['action'] == 'insertData') {
-
-		if (isset($_POST['sqlStatements']) && isset($_POST['sqlParameters'])) {
-			// The first statement should be 
-			$resultArray = array();
-			$conn = pg_connect("hostaddr=$dbhost port=$dbport dbname=$dbname user=$username password=$password");
-			if (!$conn) {
-				echo "ERROR: Could not connect DB";
-				exit();
-			}
-
-			// Begin transation
-			pg_query($conn, 'BEGIN');
-
-			// First statement/params are for the encounters table and will return the new encounter ID
-			$encounterSQL = $_POST['sqlStatements'][0];
-			$encounterParams = $_POST['sqlParameters'][0];
-			for ($i = 0; $i < count($encounterParams); $i++) {
-				if ($encounterParams[$i] === '') {
-					$encounterParams[$i] = null;
-				}
-			}
-			runQueryWithinTransaction($conn, $encounterSQL, $encounterParams);
-			echo runQueryWithinTransaction($conn, "SELECT currval(pg_get_serial_sequence('encounters', 'id'))");
-			for ($i = 0; $i < count($_POST['params']); $i++) {
-				// Make sure any blank strings are converted to nulls
-				$params = $_POST['params'][$i];
-				for ($j = 0; $j < count($params); $j++) {
-					if ($params[$j] === '') {
-						$params[$j] = null;
-					}
-				}
-
-				$result = runQueryWithinTransaction($conn, $_POST['sqlStatements'][$i], $params);
-				if (strpos($result[0], 'ERROR') !== false || $result[0] === false) {
-					// roll back the previous queries
-					pg_query($conn, 'ROLLBACK');
-					echo $result, " from the query $i ", $_POST['queryString'][$i], ' with params ', json_encode($params);
-					exit();
-				}
-			}
-
-			// COMMIT the transaction
-			pg_query($conn, 'COMMIT');
-			echo "success";//
-
-		} else {
-			echo "either sqlStatements and/or sqlParameters not given";//false;
-		}
-	}*/
 
 
 	if ($_POST['action'] == 'paramQuery') {
@@ -267,23 +245,67 @@ if (isset($_POST['action'])) {
 		}
 	}
 
+	if ($_POST['action'] == 'deleteEncounter') {
+		if (isset($_POST['encounterID'])) {//$dbhost, $dbport, $dbname
+			$conn = pg_connect("hostaddr=$dbhost port=$dbport dbname=$dbname user=$username password=$password");
+			if (!$conn) {
+				echo "ERROR: Could not connect DB";
+				exit();
+			}
+			$result = pg_delete($conn, 'encounters', array('id' => $_POST['encounterID']));
+			if (!$result) {
+				echo "ERROR: could not delete encounter";
+			} else {
+				echo $result;
+			}
+		}
+	}
+
 	if ($_POST['action'] == 'readTextFile') {
 		if (isset($_POST['textPath'])) {
 			echo file_get_contents($_POST['textPath']);
 		}
 	}
 
+	if ($_POST['action'] == 'readAttachment') {
+		if (isset($_POST['filePath'])) {
+			echo readfile($_POST['filePath']);
+		}
+	}
+
 	if ($_POST['action'] == 'deleteFile') {
 		if (isset($_POST['filePath'])) {
-			echo deleteFile($_POST['filePath']) ? 'true' : 'false';
-			echo $_POST['filePath'];
+			$fileName = basename($_POST['filePath']);
+			echo deleteFile("$attachmentDir.$fileName") ? 'true' : 'false';
 		} else {
-			echo 'filepath not set or is null';
+			echo 'false';
 		}
 	}
 
 	if ($_POST['action'] == 'getUUID') {
 		echo uuid();
+	}
+
+	if ($_POST['action'] == 'makeThumbnail') {
+		if (isset($_POST['fileName']) && isset($_POST['fileTypeCode'])) {
+			$fileName = $_POST['fileName'];
+			$fileTypeCode = $_POST['fileTypeCode'];
+			//$fileBasename = end(explode(current(explode('.', $fileName)), ;
+			$thumbnailName = $fileBasename . '_thumbnail.jpg';
+			// Use ImageMagick if it's an image
+			$imgMagickPath = 'C:\\ProgramData\\ImageMagick-7.1.0-Q16-HDRI\\';
+			$imgCmd = $imgMagickPath . "magick $fileName -resize 200x200 $thumbnailName";
+			// Otherwise it's a video, so use ffmpeg
+			$videoCmd = $imgMagickPath . "ffmpeg -ss 00:00:01.00 -i $fileName -vf scale=200:200:force_original_aspect_ratio=decrease -vframes 1 attachments/$thumbnailName";
+			$cmdResult = runCmd($fileTypeCode == 1 ? $imgCmd : $videoCmd);
+			if ($cmdResult) {
+				echo $thumbnailName;
+			} else {
+				echo false;
+			}
+		} else {
+			echo "ERROR: parameters not set";
+		}
 	}
 }
 

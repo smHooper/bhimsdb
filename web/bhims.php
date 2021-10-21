@@ -2,7 +2,7 @@
 
 <?php
 
-include '../config/bhims-config.php';
+include '../../config/bhims-config.php';
 
 // Connect to the database
 
@@ -175,14 +175,34 @@ if (isset($_POST['action'])) {
 		}
 	}
 
+	// Get username and user role
 	if ($_POST['action'] == 'getUser') {
 		if ($_SERVER['AUTH_USER']) {
-			echo preg_replace("/^.+\\\\/", "", $_SERVER["AUTH_USER"]);
+			$user = preg_replace("/^.+\\\\/", "", strtolower($_SERVER["AUTH_USER"]));
     	} else {
-    		echo "no auth_user";
+    		echo "ERROR: no auth_user";
+    		exit();
     	}
+		$sql = "SELECT ad_username as username, role FROM users WHERE ad_username='$user'";
+		$userRole = runQuery($dbhost, $dbport, $dbname, $username, $password, $sql);
+		
+		// Check if the query result is valid. If not, the user probably doesn't exist in the table yet
+		$resultValid = false;
+		if (is_array($userRole)) {
+			$resultValid = isset($userRole[0]['username']);
+		}
+		if (!$resultValid) {
+			// Add the user
+			$sql = "INSERT INTO users (ad_username, role) VALUES ('$user', 1);";
+			runQuery($dbhost, $dbport, $dbname, $username, $password, $sql);
+			// Regardless of whether the query was successful, set the user's role to 'entry'
+			$userRole = array(array('username' => $user, 'role' => 1));
+		}
+
+		echo json_encode($userRole);
 	}
-	
+
+
 	if ($_POST['action'] == 'query') {
 
 		if (isset($_POST['queryString'])) {
@@ -191,6 +211,7 @@ if (isset($_POST['action'])) {
 		} else {
 			echo "ERROR: no query given";//false;
 		}
+
 	}
 
 

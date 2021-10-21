@@ -188,7 +188,7 @@ function configureMap(divID) {
 			encounter_locations 
 		ON encounters.id=encounter_locations.encounter_id
 		WHERE 
-			extract(year FROM encounters.start_date)=(extract(year FROM CURRENT_DATE) - 2) AND
+			extract(year FROM encounters.start_date)=(extract(year FROM CURRENT_DATE)) AND
 			latitude IS NOT NULL AND longitude IS NOT NULL
 	`;
 	fieldInfoDeferred.done(() => {
@@ -353,7 +353,7 @@ function configureDailyEncounterChart() {
 				SELECT 
 					generate_series(min(start_date), max(start_date), '1d')::date AS encounter_date 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now()) - 2
+				WHERE extract(year FROM start_date) = extract(year FROM now())
 			) series 
 		LEFT JOIN 
 			(
@@ -361,7 +361,7 @@ function configureDailyEncounterChart() {
 					start_date::date AS encounter_date, 
 					count(*) AS n_encounters 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now()) - 2 
+				WHERE extract(year FROM start_date) = extract(year FROM now())
 				GROUP BY encounter_date
 			) n 
 		USING (encounter_date) 

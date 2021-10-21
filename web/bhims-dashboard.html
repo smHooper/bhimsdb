@@ -236,16 +236,16 @@
 				url: 'bhims.php',
 				method: 'POST',
 				data: {action: 'getUser'},
-				cache: false,
-				success: function(usernameString){
-					// If authentication failed, do nothing
-					if (usernameString)  {
-						username = usernameString.trim().toLowerCase();
-						$('#username').text(username);
-					} 
+				cache: false
+			}).done(function(resultString) {
+				if (queryReturnedError(resultString)) {
+					throw 'User role query failed: ' + resultString;
+				} else {
+					const result = $.parseJSON(resultString);
+					$('#username').text(result[0].username);
 				}
-			})
-		})
+			});
+		});
 	</script>
 
 </body>

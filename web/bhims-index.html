@@ -24,11 +24,35 @@
 	</div>
 	<div id="index-button-row">
 		<div id="index-button-container">
-			<a class="generic-button index-button shadow-on-hover" href="bhims-entry.html">Enter a new encounter</a>
-			<a class="generic-button index-button shadow-on-hover" href="bhims-dashboard.html">View data</a>
+			<a id="entry-form-button" class="generic-button index-button shadow-on-hover" href="bhims-entry.html" role="button">Enter a new encounter</a>
+			<a id="dashboard-button" class="generic-button index-button shadow-on-hover hidden" href="bhims-dashboard.html" role="button">View data</a>
 		</div>
 	</div>
+	
+	<script src="js/bhims.js"></script>
+
+	<script>
+		$(document).ready(function(){
+			$.ajax({
+				url: 'bhims.php',
+				method: 'POST',
+				data: {action: 'getUser'},
+				cache: false
+			}).done(function(resultString) {
+				if (queryReturnedError(resultString)) {
+					throw 'User role query failed: ' + resultString;
+				} else {
+					const result = $.parseJSON(resultString);
+					if (result[0].role >= 2) {
+						$('#dashboard-button').removeClass('hidden');
+					}
+				}
+			});
+		});
+	</script>
 
 </body>
+
+
 
 </html>

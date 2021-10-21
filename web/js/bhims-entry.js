@@ -40,6 +40,7 @@ var BHIMSEntryForm = (function() {
 		this.fieldInfo = {};
 		this.fieldValues = {};
 		this.username = '';
+		this.userRole = 1;
 		this.backcountryUnitCoordinates = {};
 		this.placeNameCoordinates = {};
 		this.acceptedAttachmentExtensions = {};
@@ -760,7 +761,20 @@ var BHIMSEntryForm = (function() {
 			});
 
 			// Get username and store for INSERTing data in addition to filling the entered_by field
-			this.getUsername();
+			this.getUsername()
+				.then(() => {
+					// Set the view of the form according to user role
+					if (this.userRole < 2) { // >2 === assessment or admin
+						// Remove the asseessment section bcecause this user doesn't have 
+						//	the permission to assess the encounter
+						$('form-section.requires-assessment-role').remove();
+					} else {
+						// Remove locks on admin sections
+						$('.unlock-button, .locked-section-screen').remove();
+						$('.form-section.admin-section, .form-section.requires-assessment-role').removeClass('locked');
+						$('#input-assessed_by').val(this.username);
+					}
+				});
 
 			// Fill datetime_entered field
 			const datetimeEnteredField = $('#input-datetime_entered');
@@ -2313,13 +2327,14 @@ var BHIMSEntryForm = (function() {
 			data: {action: 'getUser'},
 			cache: false
 		}).done(function(resultString) {
-				resultString = resultString.trim();
-				if (resultString)  {
-					_this.username = resultString.toLowerCase();
-					$('#input-entered_by').val(_this.username);	
-				} else {
-					console.log('username query failed. result: ' + resultString)
-				}
+			if (queryReturnedError(resultString)) {
+				throw 'User role query failed: ' + resultString;
+			} else {
+				const result = $.parseJSON(resultString);
+				_this.username = result[0].username;
+				_this.userRole = result[0].role;
+				$('#input-entered_by').val(_this.username);	
+			}
 		});
 	}
 
@@ -2630,8 +2645,8 @@ var BHIMSEntryForm = (function() {
 							.addClass('hidden');
 
 					// Clear localStorage
-					// _this.fieldValues = {};
-					// window.localStorage.clear();
+					_this.fieldValues = {};
+					window.localStorage.clear();
 
 					// Send email notification
 					

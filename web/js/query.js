@@ -455,7 +455,7 @@ var BHIMSQuery = (function(){
 			this.selectResultMapPoint();
 
 			// Load any attachments
-			const attachments = selectedEncounterData.attachments;
+			const attachments = selectedEncounterData.attachments || [];
 			const $hasAttachmentsInput = $('#input-has_attachments');
 			if (attachments.length) $hasAttachmentsInput.val(1); //open the collapse
 			for (attachmentInfo of attachments) {
@@ -488,6 +488,9 @@ var BHIMSQuery = (function(){
 					.find('.row-details-card-collapse')
 						.collapse('show');
 			}
+
+			// Make sure the reactions select is visible (might not be if either initial_human_activity or initial_bear_activity is filled in)
+			$('#reactions-accordion').removeClass('hidden').addClass('show');
 		});
 
 	}
@@ -1620,13 +1623,13 @@ var BHIMSQuery = (function(){
 			url: 'bhims.php',
 			method: 'POST',
 			data: {action: 'getUser'},
-			cache: false,
-			success: function(usernameString){
-				// If authentication failed, do nothing
-				if (usernameString)  {
-					username = usernameString.trim().toLowerCase();
-					$('#username').text(username);
-				} 
+			cache: false
+		}).done(function(resultString) {
+			if (queryReturnedError(resultString)) {
+				throw 'User role query failed: ' + resultString;
+			} else {
+				const result = $.parseJSON(resultString);
+				$('#username').text(result[0].username);
 			}
 		});
 

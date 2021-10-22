@@ -173,10 +173,33 @@
 					<div class="col dashboard-col">
 						<div class="card dashboard-card">
 							
-							<div id="expand-map-button-container">
-								<button id="expand-map-button" class="icon-button" onclick="onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
-									<img src="imgs/maximize_window_icon_50px.svg"></img>
-								</button>
+							<div id="map-header-container">
+								<div id="map-legend">
+									<label class="map-legend-title col">Report age</label>
+									<div class="map-legend-content col">
+										<div class="map-legend-item">
+											<div class="map-legend-patch"></div>
+											<label class="map-legend-label">&lt; 7 days</label>
+										</div>
+										<div class="map-legend-item">
+											<div class="map-legend-patch"></div>
+											<label class="map-legend-label">7-14 days</label>
+										</div>
+										<div class="map-legend-item">
+											<div class="map-legend-patch"></div>
+											<label class="map-legend-label">14-21 days</label>
+										</div>
+										<div class="map-legend-item">
+											<div class="map-legend-patch"></div>
+											<label class="map-legend-label">&gt; 3 weeks</label>
+										</div>
+									</div>
+								</div>
+								<div id="expand-map-button-container">
+									<button id="expand-map-button" class="icon-button" onclick="onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">
+										<img src="imgs/maximize_window_icon_50px.svg"></img>
+									</button>
+								</div>
 							</div>
 							
 							<div class="map" id="encounter-map"></div>

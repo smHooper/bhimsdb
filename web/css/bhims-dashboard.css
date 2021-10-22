@@ -139,14 +139,52 @@
     flex: 1 1 auto;
     width: 100%;
 }
-#expand-map-button-container {
+#map-header-container {
 	width: 100%;
-	height: 2rem;
+	height: 3.5rem;
 	display: flex;
-	justify-content: flex-end;
+	justify-content: space-between;
+	padding-bottom: 10px;
+}
+.map-legend-title {
+	font-size: 16px;
+	font-weight: 500;
+}
+#map-legend-content, .map-legend-item {
+	height: 100%;
+	display: inline-flex;
+	align-items: center;
+}
+.map-legend-item {
+	justify-content: flex-start;
+	margin-right: 2rem;
+}
+/*fix stupid Bootstrap default padding*/
+#map-legend label {
+	margin-bottom: 0;
+}
+#map-legend .col { 
+	padding-left: 0;
+}
+.map-legend-patch {
+	height: 16px;
+	width: 16px;
+	border-radius: 16px;
+	line-height: 100%;
+	margin-right: 10px;
+}
+.map-legend-item:nth-child(1) > .map-legend-patch {background-color: #d1443e}
+.map-legend-item:nth-child(2) > .map-legend-patch {background-color: #dc663e}
+.map-legend-item:nth-child(3) > .map-legend-patch {background-color: #e7893c}
+.map-legend-item:nth-child(4) > .map-legend-patch {background-color: #f2ab3b}
+
+#expand-map-button-container {
+	height: 100%;
+	display: flex;
+	align-items: flex-end;
 }
 #expand-map-button {
-	height: 100%;
+	height: 2rem;
 }
 
 .leaflet-popup-data-container {

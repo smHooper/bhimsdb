@@ -68,13 +68,20 @@ function geojsonPointAsCircle(feature, latlng) {
 	Called on each point to set style and add a popup
 	*/
 
+	const age = feature.properties['Age of report'];
+	const color = 
+		age < 40 ? '#d1443e' :
+		age < 60 ? '#dc663e' :
+		age < 80 ? '#e7893c' :
+		'#f2ab3b';
+
 	var markerOptions = {
 		radius: 8,
 		weight: 1,
 		opacity: 1,
 		fillOpacity: 0.8,
-		fillColor: '#f56761',
-		color: '#f56761'
+		fillColor: color,
+		color: color
 	}
 
 	// Create a <p> element for each non-null property
@@ -96,7 +103,6 @@ function geojsonPointAsCircle(feature, latlng) {
 	const queryURL = `query.html?{"encounters": {"id": {"value": ${feature.id}, "operator": "="}}}`
 	var popup = L.popup({
 		autoPan: true,
-
 	}).setContent(`
 		<div class="leaflet-popup-data-container">
 			${popupContent}

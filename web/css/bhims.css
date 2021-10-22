@@ -336,6 +336,7 @@ button > img {
 
 .modal-img-header > .close {
   color: white;
+  filter: invert(100%);/*makes it white*/
 }
 
 .modal-img-body {

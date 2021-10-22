@@ -160,7 +160,7 @@
 										<canvas id="daily-encounters-chart" class="bhims-chart" height="310"></canvas>
 									</div>
 								</div>
-								<!-- for a horizontally scrollable chart, the axis is a separate plot outside the scrollable div-->
+								<!-- for a horizontally scrollable chart, the axis has to be a separate plot outside the scrollable div-->
 								<canvas id="daily-encounters-axis" class="bhims-chart" height="310" width="0"></canvas>
 							</div>
 						</div>
@@ -246,7 +246,7 @@
 
 			configureDailyEncounterChart();
 			
-			configureMap('encounter-map');
+			configureMap('encounter-map', modalDivID='modal-encounter-location-map');
 
 			// Scroll so the map is in view when clicked
 			$('#encounter-map').click(() => {

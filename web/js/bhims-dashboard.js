@@ -1,6 +1,7 @@
 'use strict';
 
-var mapData;
+var MAP_DATA;
+var MODAL_MAP;
 var FIELD_INFO = {};
 var LOOKUP_TABLES = {};
 
@@ -92,6 +93,9 @@ function geojsonPointAsCircle(feature, latlng) {
 		if (fieldInfo.html_input_type === 'select') {
 			const lookupTableName = fieldInfo.lookup_table || fieldInfo.field_name + 's';
 			value = (LOOKUP_TABLES[lookupTableName] || '')[feature.properties[key]] ||  '';
+		} else if (key === 'Age of report'){
+			value = feature.properties[key]
+			value += value == 1 ? ' day' : ' days';
 		} else {
 			value = feature.properties[key];
 		}
@@ -115,7 +119,7 @@ function geojsonPointAsCircle(feature, latlng) {
 }
 
 
-function configureMap(divID) {
+function configureMap(divID, modalDivID=null) {
 
 	var mapCenter, mapZoom;
 	const pageName = window.location.pathname.split('/').pop();
@@ -131,6 +135,16 @@ function configureMap(divID) {
 		center: mapCenter || [63.5, -150],
 		zoom: mapZoom || 9
 	});
+
+	var modalMap;
+	if (modalDivID) {
+		MODAL_MAP = L.map(modalDivID, {
+			editable: true,
+			scrollWheelZoom: true,
+			center: mapCenter || [63.5, -150],
+			zoom: mapZoom || 9
+		});
+	}
 
 	const fieldInfoSQL = `
 		SELECT 
@@ -178,9 +192,14 @@ function configureMap(divID) {
 		showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
 	});
 
-	var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+	var tileLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
 		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
 	}).addTo(map);
+	if (modalDivID) {
+		L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+		}).addTo(MODAL_MAP);
+	}
 
 	const sql = `
 		SELECT 
@@ -241,6 +260,12 @@ function configureMap(divID) {
 	        		var geojsonLayer = L.geoJSON(features, {
 	        			pointToLayer: geojsonPointAsCircle
 	        		}).addTo(map);
+	        		if (modalDivID) {
+	        			var geojsonLayer = L.geoJSON(features, {
+	        				pointToLayer: geojsonPointAsCircle
+	        			}).addTo(MODAL_MAP);
+	        		}
+	        		MAP_DATA = geojsonLayer;
 	        	}
 	        })
 	        .fail((xhr, status, error) => {
@@ -253,6 +278,26 @@ function configureMap(divID) {
 function onExpandMapButtonClick(e) {
 
 	e.preventDefault();
+
+	$('#map-modal')
+		.on('shown.bs.modal', e => {
+			// When the modal is shown, the map's size is not yet determined so 
+			//	Leaflet thinks it's much smaller than it is. As a result, 
+			//	only a single tile is shown. Reset the size after a delay to prevent this
+			MODAL_MAP.invalidateSize()
+			
+			// Center the map on the marker
+			MODAL_MAP.fitBounds(MAP_DATA.getBounds()) ///*** this doesn't quite work
+		})
+		/*.on('hidden.bs.modal', e => {
+			// Remove the marker when the modal is hidden
+			_this.MODAL_MAP.removeLayer(modalMarker);
+
+			//center form map on the marker. Do this here because it's less jarring 
+			//	for the user to see the map move to center when the modal is closed
+			_this.encounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
+		})*/
+		.modal() // Show the modal
 }
 
 // The animation function, which takes an Element
@@ -377,6 +422,25 @@ function configureDailyEncounterChart() {
 	//for click event -> query string. Needs to be defined in outer scope to be available to click event handler
 	var fullDates = []; 
 
+	const onBarClick = (e, _, chart) => {
+        const canvasPosition = Chart.helpers.getRelativePosition(e, chart);
+
+        // Substitute the appropriate scale IDs
+        const index = chart.scales.x.getValueForPixel(canvasPosition.x);
+        
+        const $tooltip = getChartTooltip(chart);
+        
+        // Set the href of the tooltip so the user can open. Do this here rather than in the 
+        //	tooltip handler because the fullDates array is available within this scope
+        $tooltip.find('a').attr('href', encodeURI(`query.html?{"encounters": {"start_date": {"value": "'${fullDates[index]}'", "operator": "="}}}`))
+
+    }
+
+    const onBarHover = (e, el) => {
+		// show pointer cursor
+		$(e.native.target).css("cursor", el[0] ? "pointer" : "default");
+	}
+
 	queryDB(sql, 'bhims')
 		.done((queryResultString) => {
         	let resultString = queryResultString.trim();
@@ -427,7 +491,8 @@ function configureDailyEncounterChart() {
 							tooltip: {
 								enabled: false,
 								position: 'nearest',
-								external: externalTooltipHandler
+								external: externalTooltipHandler,
+								events: ['click'] // make sure tooltip only shows when a bar is clicked
 							}
 			            },
 		                scales: {
@@ -438,23 +503,12 @@ function configureDailyEncounterChart() {
 		                        }
 		                    }
 		                },
-		                events: ['click'],
-		                onClick: (e) => {
-				            const canvasPosition = Chart.helpers.getRelativePosition(e, chart);
-
-				            // Substitute the appropriate scale IDs
-				            const index = chart.scales.x.getValueForPixel(canvasPosition.x);
-				            
-				            const $tooltip = getChartTooltip(chart);
-				            console.log(e.y)
-				            // Set the href of the tooltip so the user can open. Do this here rather than in the 
-				            //	tooltip handler because the fullDates array is available within this scope
-				            $tooltip.find('a').attr('href', encodeURI(`query.html?{"encounters": {"start_date": {"value": "'${fullDates[index]}'", "operator": "="}}}`))
-
-				        },
+		                onClick: onBarClick,
+				        onHover: onBarHover,
 		                aspectRatio: canvasWidth / $canvasWrapper.height(),
 		                animation: {
-		                    onComplete: function () {
+		                	// when the chart finishes drawing, set the scale of the independently drawn x-axis
+		                    onComplete: () => {
 		                        if (!rectangleSet) {
 		                            var scale = window.devicePixelRatio;                       
 
@@ -480,7 +534,7 @@ function configureDailyEncounterChart() {
 		                            rectangleSet = true;
 		                        }
 		                    },
-		                    onProgress: function () {
+		                    onProgress: () => {
 		                        if (rectangleSet) {
 		                            var yAxis = chart.scales.y
 		                            var copyWidth = yAxis.width - 10;
@@ -493,11 +547,7 @@ function configureDailyEncounterChart() {
 		                }
 		            }
 				});
-				// Add last 14 days
-				/*chart.data.datasets[0].data.push(...data.slice(-14));
-				chart.data.labels.push(...xlabels.slice(-14));
-        		const $canvasWrapper = $canvas.parent();
-        		$canvasWrapper.width($canvasWrapper.width() + (14 * 60));*/
+				// Scroll to the end (most recent)
         		const $outerWrapper = $canvas.closest('.scrollable-chart-outer-wrapper');
         		$outerWrapper.scrollLeft($outerWrapper[0].scrollWidth);
         	}

@@ -124,8 +124,12 @@
   transform: translate(-50%,-50%) rotate(45deg);
   background-color: rgba(255, 255, 255, 0.7);
 }
+.bhims-chart-tooltip .tooltip-arrow.top {
+	top: -12px;
+	transform: rotate(180deg);
+}
 
-
+/* map stuff*/
 .map-container {
 	display: flex;
     flex-direction: column;
@@ -138,6 +142,9 @@
     min-height: 350px;
     flex: 1 1 auto;
     width: 100%;
+}
+.modal-map {
+	height: 100%;
 }
 #map-header-container {
 	width: 100%;

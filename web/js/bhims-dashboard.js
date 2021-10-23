@@ -384,9 +384,18 @@ function externalTooltipHandler(context) {
 	const {offsetLeft: positionX, offsetTop: positionY} = chart.canvas;
 
 	// Display, position, and set styles for font
+	const tooltipHeight = $tooltip[0].scrollHeight;
+	var top = positionY + tooltip.caretY - tooltipHeight;
+	
+	// Check if the tooltip's position on top of the bar will push it outside the container
+	//	If so, move it down and add a class to put the caret on top
+	const tooltipOutsideView = top < 0;
+	if (tooltipOutsideView) top += tooltipHeight + tooltip.caretY;
+	$tooltip.find('.tooltip-arrow').toggleClass('top', tooltipOutsideView);
+	
 	$tooltip.removeClass('transparent');
 	$tooltip.css('left', positionX + tooltip.caretX + 'px');
-	$tooltip.css('top', positionY + tooltip.caretY - $tooltip[0].scrollHeight + 'px');
+	$tooltip.css('top', top + 'px');
 	$tooltip.css('font', tooltip.options.bodyFont.string);
 	$tooltip.css('padding', tooltip.options.padding + 'px ' + tooltip.options.padding + 'px');
 }

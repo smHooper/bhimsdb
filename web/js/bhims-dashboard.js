@@ -1,6 +1,7 @@
 'use strict';
 
 var MAP_DATA;
+var DASHBOARD_MAP;
 var MODAL_MAP;
 var FIELD_INFO = {};
 var LOOKUP_TABLES = {};
@@ -129,7 +130,7 @@ function configureMap(divID, modalDivID=null) {
 		mapZoom = currentStorage.encounterMapInfo.zoom;
 	}
 
-	var map = L.map(divID, {
+	DASHBOARD_MAP = L.map(divID, {
 		editable: true,
 		scrollWheelZoom: false,
 		center: mapCenter || [63.5, -150],
@@ -194,7 +195,7 @@ function configureMap(divID, modalDivID=null) {
 
 	var tileLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
 		attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
-	}).addTo(map);
+	}).addTo(DASHBOARD_MAP);
 	if (modalDivID) {
 		L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
 			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
@@ -259,7 +260,8 @@ function configureMap(divID, modalDivID=null) {
 					};
 	        		var geojsonLayer = L.geoJSON(features, {
 	        			pointToLayer: geojsonPointAsCircle
-	        		}).addTo(map);
+	        		}).addTo(DASHBOARD_MAP);
+	        		DASHBOARD_MAP.fitBounds(geojsonLayer.getBounds());
 	        		if (modalDivID) {
 	        			var geojsonLayer = L.geoJSON(features, {
 	        				pointToLayer: geojsonPointAsCircle
@@ -284,20 +286,12 @@ function onExpandMapButtonClick(e) {
 			// When the modal is shown, the map's size is not yet determined so 
 			//	Leaflet thinks it's much smaller than it is. As a result, 
 			//	only a single tile is shown. Reset the size after a delay to prevent this
-			MODAL_MAP.invalidateSize()
+			MODAL_MAP.invalidateSize();
 			
 			// Center the map on the marker
-			MODAL_MAP.fitBounds(MAP_DATA.getBounds()) ///*** this doesn't quite work
+			MODAL_MAP.fitBounds(MAP_DATA.getBounds());
 		})
-		/*.on('hidden.bs.modal', e => {
-			// Remove the marker when the modal is hidden
-			_this.MODAL_MAP.removeLayer(modalMarker);
-
-			//center form map on the marker. Do this here because it's less jarring 
-			//	for the user to see the map move to center when the modal is closed
-			_this.encounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
-		})*/
-		.modal() // Show the modal
+		.modal(); // Show the modal
 }
 
 // The animation function, which takes an Element

@@ -2,7 +2,17 @@
 body {
 	background-image: unset;
 }
-
+.header-menu-item-group {
+	width: 400px;
+	display: flex;
+	justify-content: center;
+}
+.header-menu-item-group:first-of-type {
+	justify-content: flex-start;
+}
+.header-menu-item-group:last-of-type {
+	justify-content: flex-end;
+}
 .header-menu-item-group .text-only-button {
 	color: white;
 }
@@ -543,6 +553,7 @@ body {
 	pointer-events: none;
 	cursor: default;
 	text-align: left;
+	font-style: italic;
 }
 #row-details-pane select.input-field.uneditable:disabled {
 	color: black;

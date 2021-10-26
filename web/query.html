@@ -45,10 +45,15 @@
 
 	<nav class="bhims-header-menu">
 		<div class="header-menu-item-group">
+			<button class="icon-button sidebar-collapse-button" title="Toggle sidebar menu">
+				<div class="sidebar-collapse-button-line"></div>
+				<div class="sidebar-collapse-button-line"></div>
+				<div class="sidebar-collapse-button-line"></div>
+			</button>
 			<a class="home-button" role="button" href="bhims-index.html">
 				<img src="imgs/bhims_icon_50px.svg" alt="home icon">
 			</a>
-			<h4 class="page-tile">BHIMS query</h4>
+			<h4 class="page-title">BHIMS query</h4>
 		</div>
 		<div class="header-menu-item-group" id="show-query-options-container">
 			<button id="show-query-options-button" class="text-only-button">
@@ -86,7 +91,7 @@
 	<main class="dashboard-main">
 
 		<!-- nav sidebar -->
-		<div class="main-container">
+		<div class="main-container-with-sidebar">
 			<nav class="sidebar">
 				<div class="sidebar-sticky">
 					<div class="sidebar-background"></div>
@@ -94,36 +99,36 @@
 
 						<li class="nav-item">
 							<a href="bhims-dashboard.html">
-								<img src="imgs/dashboard_icon_50px.svg">
-								<span>dashboard</span>
+								<img class="sidebar-nav-item-icon" src="imgs/dashboard_icon_50px.svg">
+								<span class="sidebar-nav-item-label">dashboard</span>
 							</a>
 						</li>
 
 						<li class="nav-item selected">
 							<a href="query.html">
-								<img src="imgs/query_icon_50px.svg">
-								<span>query data</span>
+								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
+								<span class="sidebar-nav-item-label">query data</span>
 							</a>
 						</li>
 
 						<li class="nav-item">
 							<a href="manage-users.html">
-								<img src="imgs/user_icon_50px.svg">
-								<span>manage users</span>
+								<img class="sidebar-nav-item-icon" src="imgs/user_icon_50px.svg">
+								<span class="sidebar-nav-item-label">manage users</span>
 							</a>
 						</li>
 
 						<li class="nav-item">
 							<a href="config.html">
-								<img src="imgs/settings_icon_50px.svg">
-								<span>configure app</span>
+								<img class="sidebar-nav-item-icon" src="imgs/settings_icon_50px.svg">
+								<span class="sidebar-nav-item-label">configure app</span>
 							</a>
 						</li>
 
 						<li class="nav-item">
 							<a href="bhims-entry-dena.html">
-								<img src="imgs/entry_form_icon_50px.svg">
-								<span>new encounter</span>
+								<img class="sidebar-nav-item-icon" src="imgs/entry_form_icon_50px.svg">
+								<span class="sidebar-nav-item-label">new encounter</span>
 							</a>
 						</li>
 

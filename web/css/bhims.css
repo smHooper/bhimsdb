@@ -334,9 +334,10 @@ button > img {
   padding: 0;
 }
 
-.modal-img-header > .close {
+.modal-img-header .close,
+.modal-img-body-header .close {
   color: white;
-  filter: invert(100%);/*makes it white*/
+  filter: invert(100%);/*makes black SVG imgs white*/
 }
 
 .modal-img-body {
@@ -513,7 +514,6 @@ audio.modal-img {
     padding-right: 20px;
     align-items: center;
 }
-
 .home-button {
   height: 45px;
   width: 45px;
@@ -524,7 +524,9 @@ audio.modal-img {
   height: 45px;
   width: 45px;
 }
-
+.page-title {
+  color: hsl(0deg 0% 69%);;
+}
 .flex-float-right {
   align-self: flex-end;
 }
@@ -554,25 +556,50 @@ main.dashboard-main {
   background: rgba(0, 0, 0, 0.2);
 }
 
+.main-container-with-sidebar {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  padding-top: 60px; /*for header menu bar*/
+}
+
 .main-content-wrapper {
-  position: relative;
+  /*position: relative;
   top: 60px;
-  padding: 10px 15px 10px 15px;
-  width: calc(100vw - 250px);
+  width: calc(100vw - 250px);*/
+  flex: auto;
+  max-width: 100%;
+  padding: 10px 15px;
   height: calc(100vh - 60px);
   overflow-y: auto;
   float: right;
 }
 
 nav.sidebar {
-  position: fixed;
+  /*position: fixed;
   top: 0;
   bottom: 0;
-  left: 0;
+  z-index: 100; /* Behind the navbar 
+  left: 0;*/
   width: 250px;
-  z-index: 100; /* Behind the navbar */
+  flex:  0 0 auto; /*sidebar will shrink slightly flex-shrink is not set to 0*/
   padding: 0;
   background-color: rgba(0, 0, 0, 0.75);
+  transition: 0.4s ease-in-out all;
+}
+nav.sidebar.collapsed {
+  width: 60px;
+}
+nav.sidebar .nav-item .sidebar-nav-item-icon,
+nav.sidebar .nav-item .sidebar-nav-item-label {
+  transition: 0.15s linear all;
+  opacity: 1;
+}
+nav.sidebar.collapsed .nav-item .sidebar-nav-item-icon {
+  margin-left: 0;
+}
+nav.sidebar.collapsed .nav-item .sidebar-nav-item-label {
+  opacity: 0;
 }
 .sidebar-sticky {
   position: -webkit-sticky;
@@ -582,7 +609,7 @@ nav.sidebar {
   width: 100%;
   overflow-x: hidden;
   overflow-y: auto; /* Scrollable contents if viewport is shorter than content. */
-  background-color:  #364a36;
+  background-color:  #292929;/*#364a36;*/
 }
 .sidebar-background {
   position: absolute;
@@ -606,8 +633,8 @@ nav.sidebar {
     position: relative;
 }
 .nav-item.selected {
-  box-shadow: inset -1px -7px 20px 1px rgb(0 0 0 / 70%);
-  box-shadow: inset -1px -7px 20px 1px hsl(120deg 17% 18% / 80%);
+  /*box-shadow: inset -1px -7px 20px 1px rgb(0 0 0 / 70%);*/
+  box-shadow: inset -1px -7px 20px 1px rgba(0,0,0,0.3)/*hsl(120deg 17% 18% / 80%)*/;
 }
 .nav-item a {
   display: block;
@@ -626,9 +653,8 @@ nav.sidebar {
   margin-left: 20px;
 }
 .nav-item:hover {
-  background-image: radial-gradient(circle at bottom 50% right 70%, rgba(0,0,0,0.15), rgba(0,0,0,1));
-
-  background-image: radial-gradient(circle at bottom 50% right 70%, hsl(120deg 17% 18% / 15%), hsl(120deg 17% 18% / 90%));
+  background-image: radial-gradient(circle at bottom 50% right 70%, rgba(0,0,0,0.15), rgba(0,0,0,0.6));
+  /*background-image: radial-gradient(circle at bottom 50% right 70%, hsl(120deg 17% 18% / 15%), hsl(120deg 17% 18% / 90%));*/
 }
 .nav-item a:hover, .nav-item.selected a {
   text-decoration: none;
@@ -638,7 +664,7 @@ nav.sidebar {
 .nav-item a:hover > img, .nav-item.selected img {
   filter: drop-shadow(0px 0px 6px hsl(198deg 84% 46%));
 }
-
+/*show a caret pointing to the selected item*/
 .sidebar-nav-group .nav-item.selected > a::after{
   border-right: 15px solid rgb(204, 204, 204);
   border-top: 15px solid transparent;
@@ -652,7 +678,61 @@ nav.sidebar {
   transition: opacity .15s ease-in;
   transform: translate(-15px, 7px);
  }
-
+.sidebar-collapse-button {
+  height: 100%;
+  width: 15px;
+  padding: 15px 0;
+  margin: 5px 10px 5px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /*transition: 0.2s ease-in-out 0.2s;*/
+}
+.sidebar-collapse-button.collapsed {
+  width: 40px;
+  margin-right: 20px;
+}
+/*Show as vertically aligned dots. When the menu is collapsed, 
+the button lines is expanded to show the action that will occur 
+when the user clicks the button*/
+.sidebar-collapse-button > .sidebar-collapse-button-line {
+  height: 7px;
+  width: 7px;
+  border-radius: 2px;
+  background-color: white;
+  opacity: 1;
+  transition: 0.2s ease-in-out all;
+}
+/*show as lines (i.e., hanburger menu)*/
+.sidebar-collapse-button.collapsed > .sidebar-collapse-button-line {
+  height: 3px;
+  width: 100%;
+  border-radius: 3px;
+}
+/*@keyframes collapse-sidebar-button {
+  0% {
+    height: 3px;
+    border-radius: 3px;
+    width: 100%;
+  }
+  60% {
+    width: 10px;
+    height: 10px;
+    border-radius: 10px;
+  }
+}
+@keyframes collapse-sidebar-button-icon {
+  0% {
+    height: 3px;
+    border-radius: 3px;
+    width: 100%;
+  }
+  100% {
+    width: 10px;
+    height: 10px;
+    border-radius: 10px;
+  }
+}*/
 
 /*--- */
 .blink {
@@ -677,7 +757,7 @@ nav.sidebar {
   width: 120px;
   height: 120px;
   -webkit-animation: spin 2s linear infinite;
-  animation: spin 2s linear infinite;
+  animation: spin 2s ease-in-out infinite;
 }
 
 

@@ -1691,6 +1691,10 @@ var BHIMSQuery = (function(){
 				});
 		});
 
+		$('.sidebar-collapse-button').click((e) => {
+			$('.sidebar-collapse-button, nav.sidebar').toggleClass('collapsed');
+			_this.queryResultMap.invalidateSize();
+		});
 		customizeQuery();
 		//getFieldInfo();
 	}

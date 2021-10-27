@@ -540,25 +540,43 @@ body {
 	transform: rotate(135deg);
 }
 
-/* Style inputs for toggling editablity */
+/******** Style inputs for toggling editablity ****************/
 #row-details-pane .input-field,
 #row-details-pane .field-label {
 	transition: .3s all;
 }
-#row-details-pane .input-field.uneditable {
+#row-details-pane .input-field.uneditable,
+#row-details-pane .field-container.uneditable .null-input-indicator,
+#row-details-pane .uneditable-units-text {
 	border-bottom: solid 2px rgba(0, 0, 0, 0);
 	text-indent: 0;
 	margin-bottom: .75rem;
 	appearance: none;
 	pointer-events: none;
 	cursor: default;
-	text-align: left;
+	text-align: left !important;/*necessary to override bootstrap .text-right*/
 	font-style: italic;
 }
+/*make sure $ does not overlap input for money fields*/
+#row-details-pane .input-field.money-field.uneditable .unit-symbol-left{
+	margin-left: 5px;
+	width: calc(100% - 35px);
+}
+#row-details-pane .field-container.uneditable {
+	margin-left: 0;
+}
+/*make sure narrative field extends 100% of width*/
+#row-details-pane textarea.input-field.uneditable {
+	width: 100%;
+	background-color: rgba(0,0,0,0);
+}
+/*override disabled color styling for selects*/
 #row-details-pane select.input-field.uneditable:disabled {
 	color: black;
 }
-#row-details-pane .input-field.uneditable ~ .field-label {
+/*place field labels above fields and set them to bold*/
+#row-details-pane .input-field.uneditable ~ .field-label,
+#row-details-pane .field-container.uneditable .field-label {
 	order: -2;
 	font-size: 15px;
 	font-weight: 500;
@@ -567,23 +585,55 @@ body {
 	white-space: nowrap;
 	margin-bottom: 0;
 	padding-left: 0;
+	transform: unset;
 }
-#row-details-pane .input-field.uneditable:not(:placeholder-shown) ~ .required-indicator {
+/* hide all required indicators*/
+#row-details-pane .field-container.uneditable .required-indicator {
 	display: none;
 }
+/*hide any fields that are blank and show as <null>*/
 #row-details-pane .input-field.uneditable:placeholder-shown,
 #row-details-pane select.input-field.uneditable.default,
-#row-details-pane .input-field.uneditable:placeholder-shown ~ .unit-symbol {
-	visibility: hidden;
+#row-details-pane .input-field.uneditable:placeholder-shown ~ .unit-symbol,
+#row-details-pane .field-container.uneditable .flex-field-container ~ .units-field-container {
+	display: none;
+}
+/* styling for any elements that are shown only when editing is disabled*/
+.null-input-indicator,
+.uneditable-units-text {
+	display: none;
+	font-style: italic;
+	font-size: 14px;
+	line-height: 30px;
+}
+#row-details-pane .field-container.uneditable .flex-field-container {
+	max-width: 100%;
+}
+#row-details-pane .input-field.uneditable:placeholder-shown ~ .null-input-indicator,
+#row-details-pane select.input-field.uneditable.default ~ .null-input-indicator,
+#row-details-pane .field-container.uneditable .uneditable-units-text {
+	display: block;
 }
 #row-details-pane .input-field.uneditable:placeholder-shown ~ .field-label,
 #row-details-pane select.input-field.uneditable.default ~ .field-label  {
-	padding-left: .5rem;
+	/*padding-left: .5rem;*/
 	visibility: visible;
 	color: black;
 	/*padding-top: .75rem;*/
 }
+/* handle units fields that should be right-justified*/
+#row-details-pane .input-with-unit-symbol.text-right.uneditable,
+#row-details-pane .input-field.text-right-when-valid.uneditable {
+	margin-right: 0;
+	flex: 0 1 auto;
+}
+#row-details-pane .field-container.uneditable .unit-symbol,
+#row-details-pane .field-container.uneditable .uneditable-units-text {
+	max-width: 100%;
+	flex: 1 1 auto;
+}
 
+/********** override styles from other bhims style sheets **********/
 .form-section {
 	height: unset;
 }

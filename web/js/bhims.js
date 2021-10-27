@@ -168,11 +168,17 @@ function queryReturnedError(queryResultString) {
 	return queryResultString.trim().startsWith('ERROR') || queryResultString.trim() === '["query returned an empty result"]';
 }
 
+
 /*
 Copy specified text to the clipboard
 */
 function copyToClipboard(text, modalMessage='') {
-	navigator.clipboard
+	const clipboard = navigator.clipboard;
+	if (!clipboard) {
+		showModal(`Your browser refused access to the clipboard. This feature only works with a HTTPS connection. Right-click and copy from <a href="${text}">this link</a> instead.`, 'Clipboard access denied');
+		return;
+	}
+	clipboard
 		.writeText(text)
 		.then(() => {
 			showModal(modalMessage || `Successfully copied ${text} to clipboard`, 'Copy successful');
@@ -180,4 +186,28 @@ function copyToClipboard(text, modalMessage='') {
 		.catch((err) => {
 			console.error(`Error copying text to clipboard: ${err}`);
 		});
+}
+
+
+/* 
+Helper functions to compute the width of a text string with a given font family, size, and weight
+(from: https://stackoverflow.com/a/21015393)
+*/
+function getTextWidth(text, font) {
+	// re-use canvas object for better performance
+	const canvas = getTextWidth.canvas || (getTextWidth.canvas = document.createElement("canvas"));
+	const context = canvas.getContext("2d");
+	context.font = font;
+	const metrics = context.measureText(text);
+
+	return metrics.width;
+}
+
+function getCanvasFont(el=document.body) {
+	const $el = $(el);
+	const fontWeight = $el.css('font-weight') 	|| 'normal';
+	const fontSize = $el.css('font-size') 		|| '16px';
+	const fontFamily = $el.css('font-family') 	|| 'Times New Roman';
+
+	return `${fontWeight} ${fontSize} ${fontFamily}`;
 }

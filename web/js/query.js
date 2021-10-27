@@ -384,13 +384,55 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.toggleFieldEditability = function(allowEdits) {
 		
-		$('.input-field')
-			.toggleClass('uneditable', !allowEdits)
-			.prop('readonly', !allowEdits)
+		const disableEdits = !allowEdits;
+		const fields = $('.input-field')
+			.toggleClass('uneditable', disableEdits)
+			.prop('readonly', disableEdits);
+		fields
 			.has('select') //"readonly" attribute doesn't work on selects, but "disabled" does
-				.prop('disabled', !allowEdits);
-		
-		$('.query-result-list-item.selected .save-edits-button').toggleClass('hidden', !allowEdits);
+				.prop('disabled', disableEdits);
+		for (const el of fields) {
+			$(el).parents('.field-container').last().toggleClass('uneditable', disableEdits);
+		}
+
+		$('.query-result-list-item.selected .save-edits-button').toggleClass('hidden', disableEdits);
+
+		// disable buttons and other interactive elements
+		$('.add-item-button, .delete-button, .file-input-label').toggleClass('hidden', disableEdits);
+		$('.map .leaflet-marker-pane .leaflet-marker-icon').toggleClass('leaflet-marker-draggable', allowEdits);
+		const markerContainer = $('.marker-container.collapse');
+		if (allowEdits && !entryForm.markerIsOnMap()) {
+			markerContainer.show();
+		} else {
+			markerContainer.hide();
+		}
+
+		// Make sure the narrative field editability is changed
+		$('#recorded-text-final').prop('contenteditable', allowEdits);
+
+		// Adjust any fields with units that need to be next to the value
+		const fieldsWithUnits = $('.input-with-unit-symbol.text-right, .flex-field-container .input-field.text-right-when-valid');
+		const fontString = getCanvasFont(fieldsWithUnits[0]);
+		if (disableEdits) {
+			for (const el of fieldsWithUnits) {
+				const width = Math.ceil(getTextWidth(el.value, fontString) + 10);
+				const $el = $(el).css('width', width + 'px');
+			}
+		} else {
+			fieldsWithUnits.css('width', '');//undo inline styles
+		}
+
+		//uneditable-units-text
+		for (const el of $('.units-field-container')) {
+			const $unitsContainer = $(el);
+			const $select = $unitsContainer.find('select.input-field');
+			const unitsValue = $select.val();
+			const $option = $select.find('option').filter((_, el) => {return el.value === unitsValue});
+			const displayValue = $option.text();
+			$unitsContainer.siblings('.flex-field-container')
+				.find('.uneditable-units-text')
+					.text(displayValue);
+		}
 	}
 
 
@@ -1689,6 +1731,17 @@ var BHIMSQuery = (function(){
 				).change(e => {
 					$(e.target).addClass('dirty');
 				});
+
+			// Add an element that shows the value of null fields as such when styled as uneditable
+			$('.input-field').siblings('.field-label').after('<span class="null-input-indicator">&lt;null&gt;</span>');
+
+			// Add an element for every .units-field-container, too, so the units for those fields can be displayed
+			//	next to the input's value when uneditable
+			$('.units-field-container')
+				.siblings('.flex-field-container')
+					.append(`
+						<span class="uneditable-units-text"></span>
+					`);
 		});
 
 		$('.sidebar-collapse-button').click((e) => {

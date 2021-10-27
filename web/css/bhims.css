@@ -665,7 +665,7 @@ nav.sidebar.collapsed .nav-item .sidebar-nav-item-label {
   filter: drop-shadow(0px 0px 6px hsl(198deg 84% 46%));
 }
 /*show a caret pointing to the selected item*/
-.sidebar-nav-group .nav-item.selected > a::after{
+.sidebar-nav-group .nav-item.selected > a::after {
   border-right: 15px solid rgb(204, 204, 204);
   border-top: 15px solid transparent;
   border-bottom: 15px solid transparent;
@@ -675,25 +675,29 @@ nav.sidebar.collapsed .nav-item .sidebar-nav-item-label {
   right: -17px;
   opacity: 1;
   top: 7px;
-  transition: opacity .15s ease-in;
+  transition: opacity .15s ease-in, transform 0.4s ease-in-out;
   transform: translate(-15px, 7px);
+  box-shadow: inset -1px -7px 20px 1px rgba(0,0,0,0.3)
  }
+.sidebar.collapsed .nav-item.selected > a::after {
+  transform: translate(-160px, 7px);
+}
 .sidebar-collapse-button {
   height: 100%;
   width: 15px;
   padding: 15px 0;
-  margin: 5px 10px 5px 0;
+  margin: 5px 20px 5px 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   /*transition: 0.2s ease-in-out 0.2s;*/
 }
 .sidebar-collapse-button.collapsed {
-  width: 40px;
+  width: 30px;
   margin-right: 20px;
 }
 /*Show as vertically aligned dots. When the menu is collapsed, 
-the button lines is expanded to show the action that will occur 
+the button lines are expanded to show the action that will occur 
 when the user clicks the button*/
 .sidebar-collapse-button > .sidebar-collapse-button-line {
   height: 7px;

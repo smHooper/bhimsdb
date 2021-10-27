@@ -2813,7 +2813,11 @@ function onThumbnailClick(e, loadFromMemory=true) {
 			.find('select')
 				.val();
 		if (fileType == 1) {
-			showModalImg($thumbnail.data('file-path') ? 'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop() : thumbnailSrc.replace('_thumbnail', '')); 
+			showModalImg(
+				$thumbnail.data('file-path') ? 
+				'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop() : 
+				thumbnailSrc.replace('_thumbnail', '')
+			); 
 		} else if (fileType.toString().match('2|3')) {
 			const url = loadFromMemory ? URL.createObjectURL(file) : 'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop();
 			const $el = fileType == 2 ? $('#modal-video-preview') : $('#modal-audio-preview');

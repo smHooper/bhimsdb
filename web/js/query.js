@@ -489,7 +489,7 @@ var BHIMSQuery = (function(){
 				.find('.card-link')
 				.addClass('collapsed');*/
 		const selectedEncounterData = this.queryResult[this.selectedID];
-
+		
 		this.getReactionByFromReactionCodes().then(() => {
 			this.fillFieldsFromQuery();
 			this.setAllImplicitBooleanFields();
@@ -506,9 +506,32 @@ var BHIMSQuery = (function(){
 				}	
 			}
 
+			// Get the dependent target selects (which, when changed, should toggle some field editability)
+			var dependentTargets = [];
+			for (const el of $('.input-field')) {
+				const targetID = $(el).data('dependent-target');
+				const $select = $(targetID);
+				if ($select.length && !dependentTargets.includes(targetID)) {
+					entryForm.toggleDependentFields($select);
+					// keep track of processed target selects
+					dependentTargets.push(targetID);
+				}
+			};
+			
+			// Show the right location field(s) based on which of these fields is filled in
+			const $locationTypeSelect = $('#input-location_type');
+			if (selectedEncounterData.road_mile != null) {
+				$locationTypeSelect.val('Road mile');
+			} else if (selectedEncounterData.backountry_unit_code != null) {
+				$locationTypeSelect.val('Backcountry unit');
+			} else if (selectedEncounterData.place_name_code != null) {
+				$locationTypeSelect.val('Place name');
+			}
+
 			const $attachmentsAccordion = $('#attachments-accordion');
 			setTimeout(()=>{$attachmentsAccordion.collapse('show')}, 500);
 			
+			// If lat/lon isn't set, show the draggable mnarker
 			if (!(selectedEncounterData.latitude && selectedEncounterData.longitude)) {
 				$('#encounter-marker-container').slideDown(0);//.collapse('show')
 			}
@@ -798,7 +821,7 @@ var BHIMSQuery = (function(){
 	Set onclick event for newly created result list items
 	*/
 	Constructor.prototype.onResultItemClick = function(e) {
-		
+
 		// Reset the form
 		//	clear accordions
 		$('.accordion .card:not(.cloneable, .form-section)').remove();
@@ -1685,7 +1708,7 @@ var BHIMSQuery = (function(){
 				const tableOptions = _this.queryOptions[tableName];
 			    if (Object.keys(tableOptions).length) options[tableName] = {...tableOptions};
 			}
-			const url = encodeURI(`${window.location.href}?${JSON.stringify(options)}`);
+			const url = encodeURI(`${window.location.href.split('?')[0]}?${JSON.stringify(options)}`);
 			copyToClipboard(url, `Permalink for this query successfully copied to clipboard`);
 		});
 

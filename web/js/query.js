@@ -24,16 +24,17 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.fillFieldsFromQuery = function() {
 
-		entryForm.fieldValues = this.queryResult[this.selectedID];
-		entryForm.fillFieldValues(entryForm.fieldValues);
+		//entryForm.fieldValues = this.queryResult[this.selectedID];
+		entryForm.fillFieldValues(this.queryResult[this.selectedID]);//entryForm.fieldValues);
 
 		// All distance values in the DB should be in meters so make sure the units match that
 		$('.short-distance-select').val('m')
 
 		// fillFieldValues() will trigger .change() events, including adding the .dirty class
-		//	to all .input-fields so undo that
-		$('.input-field').removeClass('dirty');
-
+		//	to all .input-fields so undo that. For some reason, reaction fields take a while
+		// 	to set so their change events will fire after the .dirty class is removed, so 
+		//	do this after a 1 second delay
+		setTimeout(()=>{$('.input-field').removeClass('dirty');}, 1000);
 	}
 
 
@@ -519,14 +520,14 @@ var BHIMSQuery = (function(){
 			};
 			
 			// Show the right location field(s) based on which of these fields is filled in
-			const $locationTypeSelect = $('#input-location_type');
+			/*const $locationTypeSelect = $('#input-location_type');
 			if (selectedEncounterData.road_mile != null) {
 				$locationTypeSelect.val('Road mile');
 			} else if (selectedEncounterData.backountry_unit_code != null) {
 				$locationTypeSelect.val('Backcountry unit');
 			} else if (selectedEncounterData.place_name_code != null) {
 				$locationTypeSelect.val('Place name');
-			}
+			}*/
 
 			const $attachmentsAccordion = $('#attachments-accordion');
 			setTimeout(()=>{$attachmentsAccordion.collapse('show')}, 500);
@@ -560,6 +561,51 @@ var BHIMSQuery = (function(){
 
 	}
 
+	/*
+	Load a new encounter after an encounter has already been selected. This needs 
+	to be separated from the onResultItemClick ecent handler to enable control flow 
+	from modal asking user to confirm edit saves
+	*/
+	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
+		// Reset the form
+		//	clear accordions
+		$('.accordion .card:not(.cloneable, .form-section)').remove();
+		
+		// 	Reset the entry form map
+		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
+		$('#input-location_type').val('Place name');
+		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
+		bhimsQuery.resetSelectDefault($('#input-location_accuracy'));//use bhimsQuery because it needs to reference the global from query.html
+		$('#input-datum').val(1); //WGS84
+
+		// Deselect the currently selected encounter and select the clicked one
+		$('.query-result-list-item.selected').removeClass('selected');
+		const $selectedItem = $('#' + newRecordItemID).closest('li').addClass('selected');
+		_this.selectedID = $selectedItem.data('encounter-id');
+
+		// Load data
+		_this.loadSelectedEncounter();
+	}
+
+	Constructor.prototype.confirmSaveEdits = function(afterActionCallbackStr='') {
+		//@param afterActionCallbackStr: string of code to be appended to html onclick attribute
+		const onConfirmClick = `
+			showLoadingIndicator();
+			bhimsQuery.saveEdits(); 
+		`;
+		
+		const footerButtons = `
+			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">Cancel</button>
+			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="bhimsQuery.discardEdits();${afterActionCallbackStr}">Discard</button>
+			<button class="generic-button modal-button primary-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}${afterActionCallbackStr}">Save</button>
+		`;
+		showModal(
+			'You have unsaved edits to this encounter. Would you like to <strong>Save</strong> or <strong>Discard</strong> them? Click <strong>Cancel</strong> to continue editing this encounter.',
+			'Save edits?',
+			'alert',
+			footerButtons
+		);
+	}
 
 	/*
 	Event handler for result item edit buttons
@@ -585,16 +631,19 @@ var BHIMSQuery = (function(){
 
 		// Check for any edits
 		if (isEditing) {
-			const $dirtyInputs = $('.input-field.dirty');
+			const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
 			if ($dirtyInputs.length) {
-			//const onConfirm = `_this.saveEdits`;
-			//showModal() // ask user if they want to save or discard edits
+				_this.confirmSaveEdits(`bhimsQuery.toggleFieldEditability(${!isEditing});`);
+			} else {
+				_this.toggleFieldEditability(!isEditing);
 			}
+		} else {
+			// If there are any .input-fields that are also .uneditable, turn on edits. 
+			//	Otherwise, rurn them off
+			_this.toggleFieldEditability(!isEditing);
 		}
 
-		// If there are any .input-fields that are also .uneditable, turn on edits. 
-		//	Otherwise, rurn them off
-		_this.toggleFieldEditability(!isEditing);
+
 	}
 
 
@@ -680,12 +729,28 @@ var BHIMSQuery = (function(){
 
 
 	/*
+	Helper function to discard user edits
 	*/
-	Constructor.prototype.onSaveButtonClick = function(e) {
-		
-		e.stopPropagation();
+	Constructor.prototype.discardEdits = function() {
+		// Loop through each dirty input and reset the value
+		const selectedID = this.selectedID;
+		const selectedEncounterData = this.queryResult[selectedID];
+		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
+		for (el of $dirtyInputs) {
+			const fieldName = el.name;
+			const queriedValue = selectedEncounterData[fieldName];
+			const $input = $(el);
+			$input.val(queriedValue); 
+		} 
+	}
+
+	/* 
+	Save user edits 
+	*/
+	Constructor.prototype.saveEdits = function() {
 		
 		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
+		var selectedEncounterData = this.queryResult[this.selectedID];
 
 		var oneToOneUpdates = {};
 		var oneToManyUpdates = {};
@@ -723,9 +788,12 @@ var BHIMSQuery = (function(){
 				const dbID = entryForm.fieldValues[tableName][index].id; // will be undefined if this is a new card
 				tableUpdates[index].id = dbID;
 				tableUpdates[index].values[fieldName] = inputValue;
+				//selectedEncounterData[tableName][index][fieldName] = inputValue;
 			} else {
 				if (!oneToOneUpdates[tableName]) oneToOneUpdates[tableName] = {};
 				oneToOneUpdates[tableName][fieldName] = inputValue;
+				// Save result to in-memory query result, so when this encounter is reloaded, it shows the 
+				//selectedEncounterData[fieldName] = inputValue;
 			}
 		}
 
@@ -771,7 +839,56 @@ var BHIMSQuery = (function(){
 			}
 		}
 
-		//$dirtyInputs.removeClass('dirty');
+		// Send queries to server
+		$.ajax({
+			url: 'bhims.php',
+			method: 'POST',
+			data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
+			cache: false
+		}).done((queryResultString) => {
+			queryResultString = queryResultString.trim();
+
+			//hideLoadingIndicator();
+
+			if (queryResultString !== 'success') {
+				showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.`, 'Unexpected error')
+				return;
+			} else {
+				$dirtyInputs.removeClass('dirty');
+				// Set values in the in-memory queried data so when this record is reloaded, it has the right values
+				for (const tableName in oneToOneUpdates) {
+					const updates = oneToOneUpdates[tableName];
+					for (const fieldName in updates) {
+						selectedEncounterData[fieldName] = updates[fieldName];
+					}
+				}
+				for (const tableName in oneToManyUpdates) {
+					const updates = oneToManyUpdates[tableName];
+					for (const index in updates) {
+						const rowValues = updates[index].values;
+						const selectedRowData = selectedEncounterData[tableName][index];
+						for (fieldName in rowValues) {
+							if (fieldName in selectedRowData) {
+								selectedRowData[fieldName] = rowValues[fieldName];
+							}
+						}
+					}
+				}
+				
+			}
+		}).fail((xhr, status, error) => {
+			showModal(`An unexpected error occurred while saving data to the database: ${error}.`, 'Unexpected error');
+		}).always(() => {hideLoadingIndicator()}); 
+	}
+
+
+	/*
+	Event handler for .save-button
+	*/
+	Constructor.prototype.onSaveButtonClick = function(e) {
+		
+		e.stopPropagation();
+		saveEdits();
 	}
 
 	/*
@@ -821,27 +938,18 @@ var BHIMSQuery = (function(){
 	Set onclick event for newly created result list items
 	*/
 	Constructor.prototype.onResultItemClick = function(e) {
-
-		// Reset the form
-		//	clear accordions
-		$('.accordion .card:not(.cloneable, .form-section)').remove();
 		
-		// 	Reset the entry form map
-		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
-		$('#input-location_type').val('Place name');
-		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
-		_this.resetSelectDefault($('#input-location_accuracy'));
-		$('#input-datum').val(1); //WGS84
+		const newResultID = e.target.closest('li').id;
 
-		// Deselect the currently selected encounter and select the clicked one
-		$('.query-result-list-item.selected').removeClass('selected');
-		const $selectedItem = $(e.target).closest('li').addClass('selected');
-		_this.selectedID = $selectedItem.data('encounter-id');
-
-		// Load data
-		_this.loadSelectedEncounter();
+		// Check if any inputs were changed
+		if ($('.input-field.dirty:not(.ignore-on-insert)').length) {
+			_this.confirmSaveEdits(`bhimsQuery.switchEncounterRecord('${newResultID}');`);
+		} else {
+			_this.switchEncounterRecord(newResultID);
+		}
 
 	}
+
 
 	/*
 	Show a point on the query result map as selected and zoom to it
@@ -1756,7 +1864,7 @@ var BHIMSQuery = (function(){
 				});
 
 			// Add an element that shows the value of null fields as such when styled as uneditable
-			$('.input-field').siblings('.field-label').after('<span class="null-input-indicator">&lt;null&gt;</span>');
+			$('.input-field').siblings('.field-label').after('<span class="null-input-indicator">&lt; null &gt;</span>');
 
 			// Add an element for every .units-field-container, too, so the units for those fields can be displayed
 			//	next to the input's value when uneditable

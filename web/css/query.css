@@ -221,6 +221,20 @@ body {
 	.select2-search__field {
 	color: white;
 }
+.select2-container--open {
+	z-index: 5000;
+}
+.select2-container > .select2-dropdown {
+	background: rgb(0,0,0);
+	color: white;
+}
+.select2-container--default .bhims-query-select2-dropdown-container .select2-results__option--selected {
+	background: rgba(100,100,100,0.4);
+}
+.select2-container--default .bhims-query-select2-dropdown-container .select2-results__option--highlighted.select2-results__option--selectable {
+	background: hsl(211 68% 52%);
+}
+
 .query-option-operator option {
 	/*color: black*/;
 	background: rgb(25, 25, 25);

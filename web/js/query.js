@@ -34,7 +34,10 @@ var BHIMSQuery = (function(){
 		//	to all .input-fields so undo that. For some reason, reaction fields take a while
 		// 	to set so their change events will fire after the .dirty class is removed, so 
 		//	do this after a 1 second delay
-		setTimeout(()=>{$('.input-field').removeClass('dirty');}, 1000);
+		setTimeout(()=>{
+			$('.input-field').removeClass('dirty');
+			hideLoadingIndicator('loadSelectedEncounter');
+		}, 1000);
 	}
 
 
@@ -489,6 +492,9 @@ var BHIMSQuery = (function(){
 			.siblings()
 				.find('.card-link')
 				.addClass('collapsed');*/
+
+		showLoadingIndicator('loadSelectedEncounter');
+
 		const selectedEncounterData = this.queryResult[this.selectedID];
 		
 		this.getReactionByFromReactionCodes().then(() => {
@@ -567,6 +573,7 @@ var BHIMSQuery = (function(){
 	from modal asking user to confirm edit saves
 	*/
 	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
+
 		// Reset the form
 		//	clear accordions
 		$('.accordion .card:not(.cloneable, .form-section)').remove();
@@ -1720,7 +1727,7 @@ var BHIMSQuery = (function(){
 							return;
 						}
 						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
-
+						toggleCopyQueryLinkButton();
 					});
 
 					// When a query option input loses focus, hide/show the copy-permalink button, depending on 

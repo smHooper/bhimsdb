@@ -565,12 +565,15 @@ var BHIMSEntryForm = (function() {
 				});
 				$('#submit-button').click(_this.onSubmitButtonClick);
 				$('.indicator-dot').click(_this.onIndicatorDotClick);
-				$('#expand-map-button').click(_this.onExpandMapButtonClick);
+
+				// query.js will hide the loading indicator on its own
+				hideLoadingIndicator();
 			}
+			
+			$('#expand-map-button').click(_this.onExpandMapButtonClick);
 
 			// Do all other configuration stuff
 			// Get field info
-			hideLoadingIndicator();
 
 			// Some accordions might be permanetnely hidden because the form is simplified, 
 			//	but the database still needs to respect the one-to-many relationship. In 

@@ -505,7 +505,7 @@ audio.modal-img {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  z-index: 9999;
+  z-index: 1000;
 }
 .header-menu-item-group {
     height: 100%;
@@ -660,9 +660,10 @@ nav.sidebar.collapsed .nav-item .sidebar-nav-item-label {
   text-decoration: none;
   color: hsl(198deg 84% 46%);
   color: hsl(198deg 100% 50%);
+  color:  hsl(188deg 100% 50%);
 }
 .nav-item a:hover > img, .nav-item.selected img {
-  filter: drop-shadow(0px 0px 6px hsl(198deg 84% 46%));
+  filter: drop-shadow(0px 0px 5px hsl(188deg 84% 60%));
 }
 /*show a caret pointing to the selected item*/
 .sidebar-nav-group .nav-item.selected > a::after {
@@ -761,7 +762,7 @@ when the user clicks the button*/
   width: 120px;
   height: 120px;
   -webkit-animation: spin 2s linear infinite;
-  animation: spin 2s ease-in-out infinite;
+  animation: spin 2s cubic-bezier(0.7, 0.25, 0.25, 0.7) infinite;
 }
 
 

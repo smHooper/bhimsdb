@@ -24,7 +24,6 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.fillFieldsFromQuery = function() {
 
-		//entryForm.fieldValues = this.queryResult[this.selectedID];
 		entryForm.fillFieldValues(this.queryResult[this.selectedID]);//entryForm.fieldValues);
 
 		// All distance values in the DB should be in meters so make sure the units match that
@@ -160,7 +159,7 @@ var BHIMSQuery = (function(){
 			encountersWhereClauses.push(clause)
 		}*/
 		const encountersWhereStatement = 'WHERE ' + encountersWhereClauses.join(' AND ');
-		var encountersDeferred = queryDB(`SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement}`)//LIMIT 50`)
+		var encountersDeferred = queryDB(`SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`)//LIMIT 50`)
 			.done(queryResultString => {
 				if (queryReturnedError(queryResultString)) { 
 					console.log(`error configuring main form: ${queryResultString}`);
@@ -215,7 +214,7 @@ var BHIMSQuery = (function(){
 					$('.encounter-permalink-button').click(e => {
 						const $button = $(e.target).closest('.query-result-edit-button');
 						const encounterID = $button.data('encounter-id');
-						const url = encodeURI(`${window.location.href}?{"encounters": {"id": {"value": ${encounterID}, "operator": "="}}}`);
+						const url = encodeURI(`${window.location.href.split('?')[0]}?{"encounters": {"id": {"value": ${encounterID}, "operator": "="}}}`);
 						copyToClipboard(url, `Permalink for encounter ${encounterID} successfully copied to clipboard`);
 					})
 				}
@@ -283,16 +282,121 @@ var BHIMSQuery = (function(){
 	/* 
 	Parse a URL query into an SQL query and process the result 
 	*/
-	Constructor.prototype.urlQueryToSQL = function() {
+	Constructor.prototype.urlQueryToSQL = function(optionConfigComplete) {
 
-		var queryParams = decodeURIComponent(window.location.search.slice(1));
+		var queryParamString = decodeURIComponent(window.location.search.slice(1));
 
 		// 
 		$.when(
-			this.runDataQuery(queryParams)
+			this.runDataQuery(queryParamString),
+			optionConfigComplete
 		).then( () => {
-
+			const queryParams = $.parseJSON(queryParamString);
 			//this.setReactionFieldsFromQuery();
+			// set query options
+			for (const tableName in queryParams) {
+				const tableParams = queryParams[tableName];
+				for (const fieldName in tableParams) {
+					const $optionElement = $(`#query-option-${fieldName}`);
+					
+					// If this field isn't one of the options (e.g., id), skip it
+					if (!$optionElement.length) continue;
+
+					const fieldParams = tableParams[fieldName];
+
+					if ($optionElement.hasClass('string-match-query-option')) {
+						// text, textarea, tel, or email
+						const $operatorElement = $optionElement.siblings('.query-option-operator');
+						const fieldValue = fieldParams.value.replace(/'/g, '');
+						if (fieldParams.operator === '=') {
+							// e.g., field = 'value'
+							$optionElement.val(fieldValue);
+							$operatorElement.val('equals');
+						} else if (fieldParams.operator === '<>') {
+							// e.g., field <> 'value'
+							$optionElement.val(fieldValue);
+							$operatorElement.val('notEqual');
+						} else if (fieldParams.operator === 'LIKE') {
+							if (fieldValue.endsWith("%") && !fieldValue.startsWith("%")) {
+								//e.g. field LIKE 'value%'
+								$operatorElement.val('startsWith');
+							} else if (fieldValue.startsWith("%") && !fieldValue.endsWith("%")) {
+								//e.g. field LIKE '%value'
+								$operatorElement.val('endsWith')
+							} else {
+								//e.g. field LIKE '%value%'
+								$operatorElement.val('contains')
+							}
+							// Remove percent symbol
+							$optionElement.val(fieldValue.replace(/%/g, ''));
+						} else if (fieldParams.operator === 'IS' && fieldValue === 'NULL') {
+							$optionElement.addClass('hidden');
+							$operatorElement.val('is null');
+						} else if (fieldParams.operator === 'IS NOT' && fieldValue === 'NULL') {
+							$optionElement.addClass('hidden');
+							$operatorElement.val('is not null');
+						} else {
+							console.log('could not understand type of string option for ' + fieldName)
+						}
+
+					} else if ($optionElement.hasClass('slider-container')) {
+						// numeric
+						const $sliderContainer = $optionElement;
+						const $inputs = $sliderContainer.find('.query-slider-label-container > input.slider-value');
+						const $minInput = $inputs.first();
+						const $maxInput = $inputs.last();
+						const valueString = fieldParams.value;
+						var values;
+						try { 
+							values = valueString.split('AND').map(value => {return parseInt(value.trim())});
+						} catch {
+							console.log(`could not parse numeric values from value string for ${fieldName}: ${valueString}`)
+						}
+						// Fill values and trigger change to set handles
+						$minInput.val(Math.max(values[0], $minInput.attr('min'))).change();
+						$maxInput.val(Math.min(values[1], $maxInput.attr('max'))).change();
+
+					} else if ($optionElement.hasClass('datetime-query-option')) {
+						// datetime field
+						const fieldValue = fieldParams.value.replace(/'/g, '');
+						const $operatorElement = $optionElement.siblings('.query-option-operator');
+						if (fieldParams.operator === 'BETWEEN') {
+							const $inputs = $optionElement.siblings('.query-option-double-value-container')
+								.removeClass('hidden')
+									.find('.query-option-input-field.double-value-field');
+							const valueString = fieldValue;
+							var values;
+							try { 
+								values = valueString.split('AND').map(value => {return value.trim()});
+							} catch {
+								console.log(`could not parse date/time values from value string for ${fieldName}: ${valueString}`)
+							}
+							$operatorElement.val('BETWEEN');
+							$inputs.first().val(values[0]);
+							$inputs.last().val(values[1]);
+						} else {
+							$optionElement.val(fieldValue);
+
+							$operatorElement.val(fieldParams.operator);
+						}
+					} else if ($optionElement.hasClass('select2-no-tag')) {
+						$optionElement.val(fieldParams.value.replace(/\(|\)/g, '').split(','))
+					} else {
+						console.log('could not understand type of option for ' + fieldName)
+					}
+
+					// Show this option
+					$optionElement.change();
+					$('.tab-field-list-container .field-list-item > .add-field-query-option-button')
+						.filter((_, el) => {return $(el).data('target') === ('#' + $optionElement.attr('id'))})
+							.parent()
+							.addClass('hidden');
+					$optionElement.closest('.query-option-container').removeClass('hidden');
+					$('#copy-query-link-button').removeClass('hidden');
+				}
+				this.queryOptions[tableName] = {...queryParams[tableName]};
+			}
+
 		});
 		
 	}
@@ -1290,6 +1394,8 @@ var BHIMSQuery = (function(){
 
 		// valueRangeDeferreds should all resolve to the query result string, so process 
 		//	each one and save the result to the numericFieldRanges object
+		const configurationComplete = $.Deferred();
+
 		$.when(
 			...valueRangeDeferreds
 		).then(() => {
@@ -1375,8 +1481,9 @@ var BHIMSQuery = (function(){
 									$optionContent = $(`
 										<div class="query-option-container hidden">
 											<div class="query-option-condition-container">
-												<select class="query-option-operator string-match-query-option" value="equals">
+												<select class="query-option-operator string-match-query-option text-string-query-option" value="equals">
 													<option value="equals">equals</option>
+													<option value="notEqual">does not equal</option>
 													<option value="startsWith">starts with</option>
 													<option value="endsWith">ends with</option>
 													<option value="contains">contains</option>
@@ -1403,15 +1510,8 @@ var BHIMSQuery = (function(){
 													<div class="query-slider-label-container">
 														<input class="slider-value slider-value-low" type="number" value=${thisMin} min=${thisMin} max=${thisMax}>
 														<input class="slider-value slider-value-high" type="number" value=${thisMax} min=${thisMin} max=${thisMax}>
-														<!--<label class="query-slider-label">${thisMin}</label>
-														<label class="query-slider-label">${thisMax}</label>-->
 													</div>
 												</div>
-												<!-- text boxes
-												<div class="slider-value-input-container">
-													<input class="slider-value slider-value-low" type="number" value=${thisMin} min=${thisMin} max=${thisMax}>
-													<input class="slider-value slider-value-high" type="number" value=${thisMax} min=${thisMin} max=${thisMax}>
-												</div>-->
 											</div>	
 										</div>	
 									`)
@@ -1625,6 +1725,9 @@ var BHIMSQuery = (function(){
 							case 'equals':
 								queryClause = {value: `'${value}'`, operator: '='};//`${tableName}.${fieldName} = '${value}'`;
 								break;
+							case "notEqual":
+								queryClause = {value: `'${value}'`, operator: '<>'};
+								break;
 							case 'startsWith':
 								queryClause = {value: `'${value}%'`, operator: 'LIKE'};// `${tableName}.${fieldName} LIKE '${value}%'`;
 								break;
@@ -1651,9 +1754,9 @@ var BHIMSQuery = (function(){
 						/*Set the slider values when the input changes*/
 						const $input = $(e.target);
 						const index = $input.index();
-						var value = $input.val();
-						const dbMin = $input.attr('min');
-						const dbMax = $input.attr('max');
+						var value = parseInt($input.val());
+						const dbMin = parseInt($input.attr('min'));
+						const dbMax = parseInt($input.attr('max'));
 						if (index == 0 && value < dbMin) {
 							showModal(`The value entered is less than the minimum value found in the database. Try entering a value greater than ${dbMin}.`, 'Invalid value entered');
 							value = dbMin;
@@ -1669,6 +1772,13 @@ var BHIMSQuery = (function(){
 
 						const $sliderRange = $parent.find('.slider-container').first();
 						_this.setSliderHandleLabel($sliderRange, index, value);
+
+						// Set query option
+						const tableName = $sliderRange.data('table-name');
+						const fieldName = $sliderRange.data('field-name');
+						var values = $input.parent().find('input.slider-value').map((_, el) => {return el.value});
+						_this.queryOptions[tableName][fieldName] = {value: `${values[0]} AND ${values[1] + 1}`, operator: 'BETWEEN'};
+						toggleCopyQueryLinkButton();
 					}).keyup(e => {
 						/* Change the width of the input when the length of it changes*/
 						$target = $(e.target)
@@ -1739,9 +1849,12 @@ var BHIMSQuery = (function(){
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();
 				}
+				configurationComplete.resolve(true);
 				hideLoadingIndicator();
 			})
 		})
+
+		return configurationComplete;
 	}
 
 	/*
@@ -1835,22 +1948,14 @@ var BHIMSQuery = (function(){
 		).then(() => {
 			
 			this.sectionsToAccordion();
-
+			const configurationComplete = this.configureQueryOptions();
+			
 			if (window.location.search) {
-				this.urlQueryToSQL();
-				// Set value for all boolean fields that show/hide accordions
-				/*for (const el of $('.accordion.collapse')) {
-					this.setImplicitBooleanField($(el));
-				}
-				this.setReactionFieldsFromQuery();*/
-
-				//update result map
+				this.urlQueryToSQL(configurationComplete);
 			} else {
 				$('#show-query-options-container').addClass('open');
 
 			}
-
-			this.configureQueryOptions();
 
 			// Make changes to form to redo/undo some of the entry configuration stuff
 			//	Remove the lock from any locked sections

@@ -849,7 +849,7 @@ var BHIMSEntryForm = (function() {
 			// Value is either a string/number corresponding to a single field or an object 
 			//	containing a series of values corresponding to an accordion with potentially 
 			//	several cards
-			if (typeof(value) === 'object') { // corresponds to an accordion
+			if (typeof(value) === 'object' && value !== null) { // corresponds to an accordion
 				// Loop through each object and add a card/fill fields 
 				const $accordion = $('.accordion:not(.hidden)')
 					.filter((_, el) => {return $(el).data('table-name') === key})

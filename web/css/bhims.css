@@ -337,9 +337,10 @@ button > img {
 .modal-img-header .close,
 .modal-img-body-header .close {
   color: white;
+}
+.modal-img-body-header .close img {
   filter: invert(100%);/*makes black SVG imgs white*/
 }
-
 .modal-img-body {
   height: 100%;
   width: 100%;

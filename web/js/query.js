@@ -15,6 +15,7 @@ var BHIMSQuery = (function(){
 		this.queryResultMap = null;
 		this.queryOptions = {};
 		this.tableSortColumns = {};
+		this.encounterIDs = [];
 		_this = this; // scope hack for event handlers that take over "this"
 	}
 
@@ -98,13 +99,18 @@ var BHIMSQuery = (function(){
 		});
 	}
 
-	/*
 
-	*/
-	Constructor.prototype.setEncounterMarkerState = function() {
-		if (entryForm.markerIsOnMap()) {
+	Constructor.prototype.queryEncounterIDs = function() {
 
-		}
+		return queryDB('SELECT id FROM encounters').done(queryResultString => {
+			if (queryReturnedError(queryResultString)) { 
+				console.log(`error query encounters table: ${queryResultString}`);
+			} else {
+				for (row of $.parseJSON(queryResultString)) {
+					this.encounterIDs.push(row.id);
+				}
+			}
+		})
 	}
 
 
@@ -213,7 +219,7 @@ var BHIMSQuery = (function(){
 					$('.encounter-permalink-button').click(e => {
 						const $button = $(e.target).closest('.query-result-edit-button');
 						const encounterID = $button.data('encounter-id');
-						const url = encodeURI(`${window.location.href.split('?')[0]}?{"encounters": {"id": {"value": ${encounterID}, "operator": "="}}}`);
+						const url = encodeURI(`${window.location.href.split('?')[0]}?{"encounters": {"id": {"value": "(${encounterID})", "operator": "IN"}}}`);
 						copyToClipboard(url, `Permalink for encounter ${encounterID} successfully copied to clipboard`);
 					})
 				}
@@ -872,7 +878,7 @@ var BHIMSQuery = (function(){
 
 		//TODO: need to handle attachment changes/new attachments
 		//TODO: also need to make sure all required fields are filled in somehow 
-		
+
 		var oneToOneUpdates = {};
 		var oneToManyUpdates = {};
 		for (const input of $dirtyInputs) {
@@ -1435,6 +1441,7 @@ var BHIMSQuery = (function(){
 					const otherQueryOptions = [
 						{id: 998, table_name: 'attachments', field_name: 'file_size_kb', html_input_type: 'number', html_id: 'input-file_size_kb', display_name: 'File size (kb)', description: 'File size of the attachment'},
 						{id: 999, table_name: 'attachments', field_name: 'client_file_name', html_input_type: 'text', html_id: 'input-client_file_name', display_name: 'File name', description: 'Name of the attached file'},
+						{id: 0, table_name: 'encounters', field_name: 'id', html_input_type: 'select', html_id: null, display_name: 'Encounter ID', description: 'Database ID of this record in the "encounters" table'}
 					];
 					numericFieldRanges.attachments = {};
 					numericFieldRanges.attachments.file_size_kb = {min: 1, max: 1000000};
@@ -1587,13 +1594,7 @@ var BHIMSQuery = (function(){
 									break;
 								case 'select':
 									//collection of checkboxes
-									const $select = $('#' + option.html_id);
-									const $selectOptions = $select.find('option')
-										.filter((_, el) => {return el.value != ''});
-									//const selectOptionValues = $selectOptions.map((_, el) => {return {value: el.value, text: el.innerHTML}});
-									/*const selectOptionHTML = $selectOptions.map((_, el) => {
-										return `<option value="${el.value}">${el.innerHTML}</option>`
-									}).join('\n');*/
+									
 									$optionContent = $(`
 										<div class="query-option-container hidden">
 											<div class="query-option-condition-container checkbox-option-group">
@@ -1602,6 +1603,15 @@ var BHIMSQuery = (function(){
 											</div>
 										</div>
 									`);
+									var $selectOptions;
+									if (option.display_name === 'Encounter ID') {
+										// map an <option> from each ID
+										$selectOptions = $(this.encounterIDs.map((id) => {return `<option value=${id}>${id}</option>`}).join(''));
+									} else {
+										const $select = $('#' + option.html_id);
+										$selectOptions = $select.find('option')
+											.filter((_, el) => {return el.value != ''});
+									}
 									$optionContent.find('select').append($selectOptions.clone());
 									break;
 								default:
@@ -1955,7 +1965,8 @@ var BHIMSQuery = (function(){
 			...this.getLookupValues(), 
 			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false),
 			this.getJoinedDataTables(),
-			this.getTableSortColumns()
+			this.getTableSortColumns(),
+			this.queryEncounterIDs()
 		).then(() => {
 			
 			this.sectionsToAccordion();

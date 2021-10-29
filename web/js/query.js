@@ -113,14 +113,6 @@ var BHIMSQuery = (function(){
 
 		showLoadingIndicator();
 
-		// Remove any items from a previous query
-		$('#query-result-list').empty();
-		//this.queryResultMapData.remove();
-		this.queryResult = {};
-
-		// for some reason accordions also occasionally get cleared before being reloaded with new data, so do that manually
-		$('.accordion.form-item-list .card:not(.cloneable)').remove();
-
 		var deferreds = [$.Deferred()];
 		// Get encounters table
 		if (typeof(sqlQueryParameters) === 'string') {
@@ -158,17 +150,24 @@ var BHIMSQuery = (function(){
 			const clause = `encounters.${fieldName} ${operator} ${value}`;
 			encountersWhereClauses.push(clause)
 		}*/
+		var encounterResult = {};
 		const encountersWhereStatement = 'WHERE ' + encountersWhereClauses.join(' AND ');
 		var encountersDeferred = queryDB(`SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`)//LIMIT 50`)
 			.done(queryResultString => {
 				if (queryReturnedError(queryResultString)) { 
-					console.log(`error configuring main form: ${queryResultString}`);
+					console.log(`error query encounters table: ${queryResultString}`);
 				} else {
 					var liElements = [];
-					const result = $.parseJSON(queryResultString);
-					//this.queryResult.encounters = {};
+					encounterResult = $.parseJSON(queryResultString);
+
+					// Unload any previous data since we know the query returned something
+					this.queryResult = {}; 
+					$('#query-result-list').empty();
+					// for some reason accordions also occasionally get cleared before being reloaded with new data, so do that manually
+					$('.accordion.form-item-list .card:not(.cloneable)').remove();
+
 					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
-					for (const encounter of result) {
+					for (const encounter of encounterResult) {
 						
 						this.queryResult[encounter.id] = {...encounter};
 						//this.queryResult.encounters[encounter.id] = {...encounter};
@@ -220,6 +219,14 @@ var BHIMSQuery = (function(){
 				}
 			}
 		).then(() => {
+
+			// If the encounters query was empty, warn the user and exit
+			if (!Object.keys(encounterResult).length) {
+				showModal('Your query did not return any results. Try changing the query parameters.', 'Empty query result');
+				deferreds[0].resolve();
+				hideLoadingIndicator();
+				return;
+			}
 
 			// Get all table names from accordions
 			const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
@@ -480,10 +487,9 @@ var BHIMSQuery = (function(){
 
 		}).addTo(this.queryResultMap);
 
-		// Zoom to fit data on map
-		this.queryResultMap
-			.fitBounds(this.queryResultMapData.getBounds())
-			.setZoom(Math.min(this.queryResultMap.getZoom(), 15));
+		// Zoom to fit data on map. maxZoom is property set when the map is created in confiureMap()
+		// 	so no need to worry/check that it will zoom in too far (beyond the range of the tile layer)
+		this.queryResultMap.fitBounds(this.queryResultMapData.getBounds());
 	}
 
 
@@ -507,6 +513,7 @@ var BHIMSQuery = (function(){
 
 		// disable buttons and other interactive elements
 		$('.add-item-button, .delete-button, .file-input-label').toggleClass('hidden', disableEdits);
+		$('.add-item-container').toggleClass('show', allowEdits);
 		$('.map .leaflet-marker-pane .leaflet-marker-icon').toggleClass('leaflet-marker-draggable', allowEdits);
 		const markerContainer = $('.marker-container.collapse');
 		if (allowEdits && !entryForm.markerIsOnMap()) {
@@ -863,6 +870,9 @@ var BHIMSQuery = (function(){
 		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
 		var selectedEncounterData = this.queryResult[this.selectedID];
 
+		//TODO: need to handle attachment changes/new attachments
+		//TODO: also need to make sure all required fields are filled in somehow 
+		
 		var oneToOneUpdates = {};
 		var oneToManyUpdates = {};
 		for (const input of $dirtyInputs) {
@@ -999,7 +1009,7 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.onSaveButtonClick = function(e) {
 		
 		e.stopPropagation();
-		saveEdits();
+		_this.saveEdits();
 	}
 
 	/*
@@ -1257,7 +1267,8 @@ var BHIMSQuery = (function(){
 			editable: true,
 			scrollWheelZoom: true,
 			center: mapCenter || [63.5, -150],
-			zoom: mapZoom || 9
+			zoom: mapZoom || 9,
+			maxZoom: 15
 		});
 
 		var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {

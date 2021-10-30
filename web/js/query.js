@@ -102,33 +102,25 @@ var BHIMSQuery = (function(){
 
 	Constructor.prototype.queryEncounterIDs = function() {
 
-		return queryDB('SELECT id FROM encounters').done(queryResultString => {
+		return queryDB(`SELECT id FROM encounters`).done(queryResultString => {
 			if (queryReturnedError(queryResultString)) { 
 				console.log(`error query encounters table: ${queryResultString}`);
 			} else {
 				for (row of $.parseJSON(queryResultString)) {
 					this.encounterIDs.push(row.id);
 				}
+				$('#query-result-count > .query-result-count-text').text(this.encounterIDs.length);
 			}
 		})
 	}
 
-
-	/* Query all data tables */
-	Constructor.prototype.runDataQuery = function(sqlQueryParameters) {
-
-		showLoadingIndicator();
-
-		var deferreds = [$.Deferred()];
-		// Get encounters table
-		if (typeof(sqlQueryParameters) === 'string') {
-			try {
-				sqlQueryParameters = $.parseJSON(sqlQueryParameters);
-			} catch {
-				console.log('could not parse queryParameters string: ' + sqlQueryParameters);
-				return;
-			}
-		}
+	/*
+	Helper function to get SQL statement for querying encounters table given sqlQueryParameters.
+	Returns an array of two elements: the SQL, and WHERE clauses for any related tables that have 
+	query parameters set
+	*/
+	Constructor.prototype.getEncountersSQL = function(sqlQueryParameters) {
+		
 		var encountersWhereClauses = [];
 		var joinClauses = [];
 		var whereClauses = {};
@@ -150,15 +142,32 @@ var BHIMSQuery = (function(){
 			}
 		}
 
-		/*for (const fieldName in sqlQueryParameters.encounters) {
-			const value = sqlQueryParameters.encounters[fieldName].value;
-			var operator = sqlQueryParameters.encounters[fieldName].operator;
-			const clause = `encounters.${fieldName} ${operator} ${value}`;
-			encountersWhereClauses.push(clause)
-		}*/
+		const encountersWhereStatement = encountersWhereClauses.length ? 'WHERE ' + encountersWhereClauses.join(' AND ') : '';
+		const encountersSQL = `SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`;
+		
+		return  [encountersSQL, whereClauses];
+	}
+
+
+	/* Query all data tables */
+	Constructor.prototype.runDataQuery = function(sqlQueryParameters) {
+
+		showLoadingIndicator();
+
+		var deferreds = [$.Deferred()];
+		// Get encounters table
+		if (typeof(sqlQueryParameters) === 'string') {
+			try {
+				sqlQueryParameters = $.parseJSON(sqlQueryParameters);
+			} catch {
+				console.log('could not parse queryParameters string: ' + sqlQueryParameters);
+				return;
+			}
+		}
+		
+		const [encountersSQL, whereClauses] = this.getEncountersSQL(sqlQueryParameters);
 		var encounterResult = {};
-		const encountersWhereStatement = 'WHERE ' + encountersWhereClauses.join(' AND ');
-		var encountersDeferred = queryDB(`SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`)//LIMIT 50`)
+		var encountersDeferred = queryDB(encountersSQL)
 			.done(queryResultString => {
 				if (queryReturnedError(queryResultString)) { 
 					console.log(`error query encounters table: ${queryResultString}`);
@@ -1342,6 +1351,45 @@ var BHIMSQuery = (function(){
 	}
 
 
+	/*
+	Return a count of encounter records that will be returned with the given query params
+	*/
+	Constructor.prototype.countQueryEncounters = function() {
+
+		const [sql, _] = this.getEncountersSQL(this.queryOptions);
+		const countSQL = `SELECT count(*) FROM (${sql}) AS t;`;
+		return queryDB(countSQL).done(queryResultString => {
+			if (queryReturnedError(queryResultString)) { 
+				console.log(`error query encounters table: ${queryResultString}`);
+			} else {
+				const result = $.parseJSON(queryResultString);
+				if (result.length) {
+					const count = parseInt(result[0].count);
+					const isSameAsTotal = count === this.encounterIDs.length;
+					const $countText = $('#query-encounters-count')
+					$('#query-result-count').toggleClass('invisible', isSameAsTotal)
+					$countText.text(count);
+					if (!isSameAsTotal) runCountUpAnimations();
+				}
+
+			}
+		});
+	}
+
+
+	Constructor.prototype.onQueryOptionChange = function() {
+		
+		// If this was the last query option, hide the copy-permalink button
+		var queryOptionsSpecified = false;
+		for (const tableName in _this.queryOptions) {
+			if (Object.keys(_this.queryOptions[tableName]).length) queryOptionsSpecified = true;
+		}
+		$('#copy-query-link-button').toggleClass('invisible', !queryOptionsSpecified);
+		
+		_this.countQueryEncounters();
+	}
+
+
 	Constructor.prototype.configureQueryOptions = function() {
 		
 		showLoadingIndicator()
@@ -1647,15 +1695,6 @@ var BHIMSQuery = (function(){
 						$button.closest('.field-list-item').addClass('hidden');
 					});
 
-					toggleCopyQueryLinkButton = () => {
-						// If this was the last query option, hide the copy-permalink button
-						var queryOptionsSpecified = false;
-						for (const tableName in _this.queryOptions) {
-							if (Object.keys(_this.queryOptions[tableName]).length) queryOptionsSpecified = true;
-						}
-						$('#copy-query-link-button').toggleClass('hidden', !queryOptionsSpecified);
-					}
-
 					$('.remove-query-option-button').click(e => {
 						const $button = $(e.target).closest('.remove-query-option-button');
 						const $container = $button.closest('.query-option-container')
@@ -1703,7 +1742,7 @@ var BHIMSQuery = (function(){
 						//remove option from query
 						delete _this.queryOptions[tableName][fieldName];
 
-						toggleCopyQueryLinkButton();
+						_this.onQueryOptionChange();
 					});
 
 					$('.query-option-operator.datetime-query-option').change(e => {
@@ -1799,7 +1838,7 @@ var BHIMSQuery = (function(){
 						const fieldName = $sliderRange.data('field-name');
 						var values = $input.parent().find('input.slider-value').map((_, el) => {return el.value});
 						_this.queryOptions[tableName][fieldName] = {value: `${values[0]} AND ${values[1] + 1}`, operator: 'BETWEEN'};
-						toggleCopyQueryLinkButton();
+						_this.onQueryOptionChange();
 					}).keyup(e => {
 						/* Change the width of the input when the length of it changes*/
 						$target = $(e.target)
@@ -1858,14 +1897,12 @@ var BHIMSQuery = (function(){
 							return;
 						}
 						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
-						toggleCopyQueryLinkButton();
+						_this.onQueryOptionChange();
 					});
 
 					// When a query option input loses focus, hide/show the copy-permalink button, depending on 
 					//	whether there user has any query options specified
-					$('.query-option-input-field').blur(() => {
-						toggleCopyQueryLinkButton();
-					});
+					$('.query-option-input-field').blur(_this.onQueryOptionChange);
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();

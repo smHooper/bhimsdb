@@ -211,3 +211,51 @@ function getCanvasFont(el=document.body) {
 
 	return `${fontWeight} ${fontSize} ${fontFamily}`;
 }
+
+
+
+function animateCountUp(el, nFrames, frameDuration, easeFunction=(t) => t, maxVal=null) {
+	/*
+	Animate counting of an element with numeric text
+	*/
+	let frame = 0;
+	const countTo = maxVal || parseInt(el.innerHTML, 10);
+	// Start the animation running 60 times per second
+	const counter = setInterval( () => {
+		frame++;
+		// Calculate our progress as a value between 0 and 1
+		// Pass that value to our easing function to get our
+		// progress on a curve
+		const progress = easeFunction(frame / nFrames);
+		// Use the progress value to calculate the current count
+		const currentCount = Math.round(countTo * progress);
+
+		// If the current count has changed, update the element
+		if (parseInt(el.innerHTML, 10) !== currentCount) {
+			el.innerHTML = currentCount;
+		}
+
+		// If we’ve reached our last frame, stop the animation
+		if (frame === nFrames) {
+			clearInterval(counter);
+		}
+	}, frameDuration );
+}
+
+// Run the animation on all elements with a class of ‘countup’
+function runCountUpAnimations(animationDuration=500, framesPerSecond=60, easeFunction=(t) => t * ( 2 - t )) {
+	/*
+	From: https://jshakespeare.com/simple-count-up-number-animation-javascript-react/
+	animationDuration: How long you want the animation to take, in ms
+	framesPerSecond: number of times the number will change per second
+	easeFunction: 
+	*/
+
+	// Calculate how long each ‘frame’ should last if we want to update the animation 60 times per second
+	const frameDuration = 1000 / framesPerSecond;
+	// Use that to calculate how many frames we need to complete the animation
+	const nFrames = Math.round(animationDuration / frameDuration);
+	for (const el of $('.count-up')) {
+		animateCountUp(el, nFrames, frameDuration);
+	}
+}

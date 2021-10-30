@@ -73,12 +73,17 @@
 					<!-- <div class="query-options-tab-backdrop"></div> -->
 				</div>
 				<div id="query-options-drawer-footer">
-					<button id="run-query-button" class="generic-button" aria-label="Run query">run query</button>
-					<button id="copy-query-link-button" class="generic-button icon-button hidden">
-						<i class="fas fa-link fa-2x">
-						</i>
-						<strong>get query link</strong>
-					</button>
+					<div id="query-options-drawer-footer-content">
+						<div id="query-result-count" class="invisible">
+							returns <span id="query-encounters-count" class="query-result-count-text count-up"></span> of <span id="total-encounters-count" class="query-result-count-text"></span> encounters
+						</div>
+						<button id="run-query-button" class="generic-button run-query-button" aria-label="Run query">run query</button>
+						<button id="copy-query-link-button" class="generic-button icon-button invisible">
+							<i class="fas fa-link fa-2x">
+							</i>
+							<strong>get query link</strong>
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>

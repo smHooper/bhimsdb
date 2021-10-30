@@ -212,6 +212,9 @@ button > img {
   opacity: 0;
   pointer-events: none;
 }
+.invisible {
+  visibility: hidden;
+}
 
 .blur {
   -webkit-filter: blur(5px); /* Chrome, Safari, Opera */

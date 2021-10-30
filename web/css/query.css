@@ -360,9 +360,6 @@ body {
 	justify-content: space-between;
 	margin-top: 20px;
 }
-/*#query-options-drawer .slider-value-input-container > input.slider-value {*/
-
-
 
 #query-options-drawer .datetime-query-option::-webkit-calendar-picker-indicator {
     filter: invert(1);/*set calendar/time picker icon white*/
@@ -379,7 +376,22 @@ body {
 #show-query-options-container.open #query-options-drawer-footer {
 	display: flex;
 }
-
+#query-options-drawer-footer-content {
+	display: flex;
+	justify-content: space-between;
+	height: 100%;
+	align-items: center;
+}
+#query-options-drawer-footer-content > *:not(.run-query-button) {
+	margin: 0 40px;
+	width: 250px;
+}
+#query-result-count {
+	font-size: 16px;
+}
+#query-result-count .query-result-count-text {
+	font-weight: 600;
+}
 /* main layout */
 .main-content-wrapper {
 	display: flex;

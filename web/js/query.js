@@ -461,7 +461,7 @@ var BHIMSQuery = (function(){
 				'#f73830' ://'#f56761' : //red
 				'#f3ab3a'; //orange
 		}
-		const styleFunc = (feature) => {
+		const styleFunc = feature => {
 			return {
 				radius: 8,
 				weight: 1,

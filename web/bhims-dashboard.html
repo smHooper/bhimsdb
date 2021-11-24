@@ -27,6 +27,7 @@
 	<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
 		integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
 		crossorigin=""></script>
+	<script src="https://unpkg.com/leaflet-lasso@2.2.6/dist/leaflet-lasso.umd.min.js"></script><!--lasso selection plug-in-->
 
 	<!-- chart.js -->
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.2.0/chart.min.js"></script>
@@ -134,20 +135,24 @@
 							<div class="review-bars-container">
 								<div class="needs-review-bar-container">
 									<label class="needs-review-bar-label" for="needs-partial-review-bar">needs full review</label>
-									<div id="needs-full-review-bar" class="needs-review-bar" title="Proportion of entries needing full review">
-									</div>
-									<div id="needs-full-review-text" class="needs-review-text">
-										<h3 class="count-up">7</h3>
-									</div>
+									<a id="needs-full-review-bar-container" class="review-bar-and-text-container" target="_blank">
+										<div id="needs-full-review-bar" class="needs-review-bar" title="Proportion of entries needing full review">
+										</div>
+										<div id="needs-full-review-text" class="needs-review-text">
+											<h3 class="count-up">7</h3>
+										</div>
+									</a>
 								</div>
 
 								<div class="needs-review-bar-container">
 									<label class="needs-review-bar-label" for="needs-partial-review-bar">needs partial review</label>
-									<div id="needs-partial-review-bar" class="needs-review-bar" title="Proportion of partially reviewed entries">
-									</div>
-									<div id="needs-partial-review-text" class="needs-review-text">
-										<h3 class="count-up">3</h3>
-									</div>
+									<a id="needs-partial-review-bar-container" class="review-bar-and-text-container" target="_blank">
+										<div id="needs-partial-review-bar" class="needs-review-bar" title="Proportion of partially reviewed entries">
+										</div>
+										<div id="needs-partial-review-text" class="needs-review-text">
+											<h3 class="count-up">3</h3>
+										</div>
+									</a>
 								</div>
 							</div>
 						</div>
@@ -199,6 +204,9 @@
 											<label class="map-legend-label">&gt; 3 weeks</label>
 										</div>
 									</div>
+								</div>
+								<div id="selected-records-link-container">
+									<a id="view-selected-records-link" class="invisible" href="#" target="_blank">View selected records</a>
 								</div>
 								<div id="expand-map-button-container">
 									<button id="expand-map-button" class="icon-button" onclick="onExpandMapButtonClick(event)"  title="Expand map" aria-label="Expand map">

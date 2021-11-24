@@ -1,35 +1,40 @@
 'use strict';
 
-var MAP_DATA;
-var DASHBOARD_MAP;
-var MODAL_MAP;
-var FIELD_INFO = {};
-var LOOKUP_TABLES = {};
+var MAP_DATA,
+	DASHBOARD_MAP,
+	MODAL_MAP_DATA = L.geoJSON(),
+	MODAL_MAP,
+	FIELD_INFO = {},
+	LOOKUP_TABLES = {};
 
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
+	
 	const sql = `
 		SELECT 
 			status, 
+			string_agg(id::text, ',') AS encounter_ids,
 			count(*) 
 		FROM 
 			(
 				WITH n_null AS (
-					SELECT num_nulls(${ratingColumns.join(', ')}) 
+					SELECT
+						encounters.id, 
+						num_nulls(${ratingColumns.join(', ')}) 
 					FROM assessment 
 					INNER JOIN encounters ON assessment.encounter_id=encounters.id 
 					WHERE 
-						probable_cause_code IS NULL OR 
-						management_classification_code IS NULL 
+						${ratingColumns.map(c => {return c + ' IS NULL'}).join(' OR ')} 
 					ORDER BY start_date
-			) 
-			SELECT 
-				CASE 
-					WHEN n_null.num_nulls = ${ratingColumns.length} THEN 'full' 
-					ELSE 'partial' 
-				END AS status 
-			FROM n_null
-		) t 
+				) 
+				SELECT 
+					CASE 
+						WHEN n_null.num_nulls = ${ratingColumns.length} THEN 'full' 
+						ELSE 'partial' 
+					END AS status,
+					id
+				FROM n_null
+			) t 
 		GROUP BY status;
 	`;
 
@@ -43,18 +48,25 @@ function configureReviewCard() {
         		let queryResult = $.parseJSON(resultString);
         		let needsFullReview, needsPartialReview;
         		for (let row of queryResult) {
+        			row.count = parseInt(row.count);
         			if (row.status == 'full') {
-        				needsFullReview = parseInt(row.count);
+        				needsFullReview = {...row};
         			} else {
-        				needsPartialReview = parseInt(row.count);
+        				needsPartialReview = {...row};
         			}
         		}
-        		const total = needsFullReview + needsPartialReview;
-        		$('#needs-partial-review-bar').css('width', `${(needsPartialReview / total) * 100}%`);
-				$('#needs-full-review-bar').css('width', `${(needsFullReview / total) * 100}%`);
+        		const total = needsFullReview.count + needsPartialReview.count;
+        		const partialReviewURL = `query.html?{"encounters": {"id": {"value": "(${needsPartialReview.encounter_ids})", "operator": "IN"}}}`;
+        		const fullReviewURL = `query.html?{"encounters": {"id": {"value": "(${needsFullReview.encounter_ids})", "operator": "IN"}}}`;
+        		$('#needs-partial-review-bar').css('width', `${(needsPartialReview.count / total) * 100}%`)
+        			.closest('.review-bar-and-text-container')
+        				.attr('href', encodeURI(partialReviewURL));
+				$('#needs-full-review-bar').css('width', `${(needsFullReview.count / total) * 100}%`)
+        			.closest('.review-bar-and-text-container')
+        				.attr('href', encodeURI(fullReviewURL));
 				$('#n-needs-review').text(total);
-				$('#needs-partial-review-text > h3').text(needsPartialReview);
-				$('#needs-full-review-text > h3').text(needsFullReview);
+				$('#needs-partial-review-text > h3').text(needsPartialReview.count);
+				$('#needs-full-review-text > h3').text(needsFullReview.count);
 
 				runCountUpAnimations();
         	}
@@ -69,22 +81,6 @@ function geojsonPointAsCircle(feature, latlng) {
 	/*
 	Called on each point to set style and add a popup
 	*/
-
-	const age = feature.properties['Age of report'];
-	const color = 
-		age < 40 ? '#d1443e' :
-		age < 60 ? '#dc663e' :
-		age < 80 ? '#e7893c' :
-		'#f2ab3b';
-
-	var markerOptions = {
-		radius: 8,
-		weight: 1,
-		opacity: 1,
-		fillOpacity: 0.8,
-		fillColor: color,
-		color: color
-	}
 
 	// Create a <p> element for each non-null property
 	var popupContent = '';
@@ -115,9 +111,42 @@ function geojsonPointAsCircle(feature, latlng) {
 		<a href="${encodeURI(queryURL)}" target="_blank">View record</a>
 	`);
 	
-	return L.circleMarker(latlng, markerOptions)
+	return L.circleMarker(latlng)
 		.bindPopup(popup);
 }
+
+
+/*
+Helper function to handle selections in either the main or modal map
+*/
+function mapSelectionChanged(e) {
+	// De-select any points
+	MAP_DATA.resetStyle();
+	MODAL_MAP_DATA.resetStyle();
+
+	const selectedLayers = e.layers;
+	const selectedIDs = [];
+	// Set style of selected points
+	for (const layer of selectedLayers) {
+		layer.setStyle({color: '#42d6e6', fillColor: '#42d6e6'})
+		const featureID = layer.feature.id;
+		selectedIDs.push(featureID);
+
+		// Set style for layer in other map
+		const otherData = e.target.boxZoom._container.id === 'encounter-map' ? MODAL_MAP_DATA : MAP_DATA;
+		otherData.eachLayer(otherLayer => {
+			if (otherLayer.feature.id === featureID) {
+				otherLayer.setStyle({color: '#42d6e6', fillColor: '#42d6e6'});
+			}
+		});
+	};
+
+	// Show the link to view these records, setting the URL of the <a> tag
+	const selectedRecordsURL = `query.html?{"encounters": {"id": {"value": "(${selectedIDs.join(',')})", "operator": "IN"}}}`;
+	$('#view-selected-records-link').toggleClass('invisible', selectedLayers.length === 0);
+	$('#view-selected-records-link').attr('href', encodeURI(selectedRecordsURL));
+}
+
 
 
 function configureMap(divID, modalDivID=null) {
@@ -136,8 +165,18 @@ function configureMap(divID, modalDivID=null) {
 		center: mapCenter || [63.5, -150],
 		zoom: mapZoom || 9
 	});
+	const dashboardLassoControl = L.control.lasso().addTo(DASHBOARD_MAP);
 
-	var modalMap;
+	// Handle selection events
+	DASHBOARD_MAP.on('lasso.finished', e => {
+		mapSelectionChanged(e);
+	});
+
+	var modalMap, 
+		modalLassoControl = {
+			enable: ()=>{console.log('modal not configured')}, 
+			disable: ()=>{console.log('modal not configured')}
+		};
 	if (modalDivID) {
 		MODAL_MAP = L.map(modalDivID, {
 			editable: true,
@@ -145,7 +184,30 @@ function configureMap(divID, modalDivID=null) {
 			center: mapCenter || [63.5, -150],
 			zoom: mapZoom || 9
 		});
+		MODAL_MAP.on('lasso.finished', e => {
+			mapSelectionChanged(e);
+		});
+		modalLassoControl = L.control.lasso().addTo(MODAL_MAP);
 	}
+
+	// When selection is enabled or disabled in either map, mirror the change in the inactive map
+	
+	DASHBOARD_MAP.on('lasso.enabled', () => {
+		$('.leaflet-control-lasso').addClass('selected');
+		modalLassoControl.enable();
+	});	
+	DASHBOARD_MAP.on('lasso.disabled', () => {
+		$('.leaflet-control-lasso').removeClass('selected');
+		modalLassoControl.diable();
+	});
+	MODAL_MAP.on('lasso.enabled', () => {
+		$('.leaflet-control-lasso').addClass('selected');
+		dashboardLassoControl.enable();
+	});	
+	MODAL_MAP.on('lasso.disabled', () => {
+		$('.leaflet-control-lasso').removeClass('selected');
+		dashboardLassoControl.disable();
+	});
 
 	const fieldInfoSQL = `
 		SELECT 
@@ -250,21 +312,36 @@ function configureMap(divID, modalDivID=null) {
 	        			});
 	        		}
 
-	        		const markerOptions = {
-					    radius: 8,
-					    fillColor: "#ff7800",
-					    color: "#000",
-					    weight: 1,
-					    opacity: 1,
-					    fillOpacity: 0.8
-					};
+					const getColor = age => { 
+						const color =  
+							age < 7 ? '#d1443e' :
+							age < 14 ? '#dc663e' :
+							age < 21 ? '#e7893c' :
+							'#f2ab3b';
+						return color;
+					}
+					const styleFunc = feature => {
+						const reportAge = parseInt(feature.properties['Age of report']);
+						const style = {
+							radius: 8,
+							weight: 1,
+							opacity: 1,
+							fillOpacity: 0.8,
+							fillColor: getColor(reportAge),
+							color: getColor(reportAge)
+						}
+						return style;
+					}
 	        		var geojsonLayer = L.geoJSON(features, {
+	        			style: styleFunc,
 	        			pointToLayer: geojsonPointAsCircle
 	        		}).addTo(DASHBOARD_MAP);
 	        		DASHBOARD_MAP.fitBounds(geojsonLayer.getBounds());
+	        		
 	        		if (modalDivID) {
-	        			var geojsonLayer = L.geoJSON(features, {
-	        				pointToLayer: geojsonPointAsCircle
+	        			MODAL_MAP_DATA = L.geoJSON(features, {
+	        				pointToLayer: geojsonPointAsCircle,
+	        				style: styleFunc
 	        			}).addTo(MODAL_MAP);
 	        		}
 	        		MAP_DATA = geojsonLayer;

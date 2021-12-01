@@ -3,9 +3,8 @@
 <?php
 
 include '../../config/bhims-config.php';
-
-// Connect to the database
-
+error_reporting(-1);
+ini_set('display_errors', 'On');
 
 function runQuery($ipAddress, $port, $dbName, $username, $password, $queryStr, $parameters=array()) {
 	/*return result of a postgres query as an array*/
@@ -31,10 +30,11 @@ function runQueryWithinTransaction($conn, $queryStr, $parameters=array()) {
 
 	$result = pg_query_params($conn, $queryStr, $parameters);
 	if (!$result) {
-		$err = pg_last_error();
+		$err = array(pg_last_error($conn));
 	  	return $err;
 	}
-
+	$pgFetch = pg_fetch_all($result);
+	return $pgFetch ? $pgFetch : null;
 }
 
 
@@ -55,25 +55,23 @@ function runCmd($cmd) {
 		array('bypass_shell' => false)
 	);
 
-	$resultObj; 
-
 	if (is_resource($process)) {
 
-	    $resultObj->stdout = stream_get_contents($pipes[1]);
+	    $stdout = stream_get_contents($pipes[1]);
 	    fclose($pipes[1]);
 
-	    $resultObj->stderr = stream_get_contents($pipes[2]);
+	    $stderr = stream_get_contents($pipes[2]);
 	    fclose($pipes[2]);
 
 	    $returnCode = proc_close($process);
 
-	    if ($returnCode) {
-	    	return json_encode($resultObj);
-	    } else {
-	    	return false;
-	    }
+		return array(
+			"stdout" => $stdout,
+			"stderr" => $stderr
+		);
+
 	} else {
-		return false;//json_encode($_SERVER);
+		return false;
 	}
 }
 
@@ -162,7 +160,6 @@ if (isset($_FILES['uploadedFile'])) {
 
 if (isset($_POST['action'])) {
 
-
 	// write json data to the server
 	if ($_POST['action'] == 'writeJSON') {
 		// check that both the json string and the path to write the json to were given
@@ -226,9 +223,10 @@ if (isset($_POST['action'])) {
 					exit();
 				}
 
-				// Begin transations
+				// Begin transaction
 				pg_query($conn, 'BEGIN');
 
+				$resultArray = array();
 				for ($i = 0; $i < count($_POST['params']); $i++) {
 					// Make sure any blank strings are converted to nulls
 					$params = $_POST['params'][$i];
@@ -238,17 +236,20 @@ if (isset($_POST['action'])) {
 						}
 					}
 					$result = runQueryWithinTransaction($conn, $_POST['queryString'][$i], $params);
-					if (strpos($result, 'ERROR') !== false) {
+					if (strpos(json_encode($result), 'ERROR') !== false) {
 						// roll back the previous queries
 						pg_query($conn, 'ROLLBACK');
 						echo $result, " from the query $i ", $_POST['queryString'][$i], ' with params ', json_encode($params);
 						exit();
 					}
+
+					$resultArray[$i] = $result;
 				}
 
 				// COMMIT the transaction
 				pg_query($conn, 'COMMIT');
-				echo "success";
+
+				echo json_encode($resultArray);
 
 			} else {
 				$params = $_POST['params'];
@@ -305,28 +306,6 @@ if (isset($_POST['action'])) {
 
 	if ($_POST['action'] == 'getUUID') {
 		echo uuid();
-	}
-
-	if ($_POST['action'] == 'makeThumbnail') {
-		if (isset($_POST['fileName']) && isset($_POST['fileTypeCode'])) {
-			$fileName = $_POST['fileName'];
-			$fileTypeCode = $_POST['fileTypeCode'];
-			//$fileBasename = end(explode(current(explode('.', $fileName)), ;
-			$thumbnailName = $fileBasename . '_thumbnail.jpg';
-			// Use ImageMagick if it's an image
-			$imgMagickPath = 'C:\\ProgramData\\ImageMagick-7.1.0-Q16-HDRI\\';
-			$imgCmd = $imgMagickPath . "magick $fileName -resize 200x200 $thumbnailName";
-			// Otherwise it's a video, so use ffmpeg
-			$videoCmd = $imgMagickPath . "ffmpeg -ss 00:00:01.00 -i $fileName -vf scale=200:200:force_original_aspect_ratio=decrease -vframes 1 attachments/$thumbnailName";
-			$cmdResult = runCmd($fileTypeCode == 1 ? $imgCmd : $videoCmd);
-			if ($cmdResult) {
-				echo $thumbnailName;
-			} else {
-				echo false;
-			}
-		} else {
-			echo "ERROR: parameters not set";
-		}
 	}
 }
 

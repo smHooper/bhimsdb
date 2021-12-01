@@ -198,7 +198,7 @@ function configureMap(divID, modalDivID=null) {
 	});	
 	DASHBOARD_MAP.on('lasso.disabled', () => {
 		$('.leaflet-control-lasso').removeClass('selected');
-		modalLassoControl.diable();
+		modalLassoControl.disable();
 	});
 	MODAL_MAP.on('lasso.enabled', () => {
 		$('.leaflet-control-lasso').addClass('selected');

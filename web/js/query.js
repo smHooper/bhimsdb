@@ -33,11 +33,11 @@ var BHIMSQuery = (function(){
 		// fillFieldValues() will trigger .change() events, including adding the .dirty class
 		//	to all .input-fields so undo that. For some reason, reaction fields take a while
 		// 	to set so their change events will fire after the .dirty class is removed, so 
-		//	do this after a 1 second delay
-		setTimeout(()=>{
+		//	do this after a 2 second delay
+		/*setTimeout(()=>{
 			$('.input-field').removeClass('dirty');
 			hideLoadingIndicator('loadSelectedEncounter');
-		}, 1000);
+		}, 2000);*/
 	}
 
 
@@ -537,6 +537,20 @@ var BHIMSQuery = (function(){
 			markerContainer.hide();
 		}
 
+		// Hide any "add item" buttons if they're controlling select is set to "No"
+		for (const button of $('.add-item-button')) {
+			const $button = $(button);
+			const targetID = $button.data('dependent-target'); 
+			const targetValue = $button.data('dependent-value');
+			if (targetID) { // if true, the .add-item-button is inside a collapse 
+				const collapseCommand = $(targetID).val() == targetValue && allowEdits ?
+					'show' :
+					'hide';
+				$button.closest('.add-item-container').collapse(collapseCommand);
+			}
+		}
+
+
 		// Make sure the narrative field editability is changed
 		$('#recorded-text-final').prop('contenteditable', allowEdits);
 
@@ -606,6 +620,7 @@ var BHIMSQuery = (function(){
 		}).fail((xhr, status, error) => {
 			console.log(`Could not read ${attachmentInfo.file_path} because ${error}`)
 		})
+		
 	}
 
 	/*
@@ -631,6 +646,7 @@ var BHIMSQuery = (function(){
 
 			// Load any attachments
 			const attachments = selectedEncounterData.attachments || [];
+			entryForm.fieldValues.attachments = [...attachments];
 			const $hasAttachmentsInput = $('#input-has_attachments');
 			if (attachments.length) $hasAttachmentsInput.val(1); //open the collapse
 			for (attachmentInfo of attachments) {
@@ -890,6 +906,7 @@ var BHIMSQuery = (function(){
 
 		var oneToOneUpdates = {};
 		var oneToManyUpdates = {};
+		//var fileUploads = {};
 		for (const input of $dirtyInputs) {
 			const $input = $(input);
 			const inputValue = $input.val();
@@ -914,6 +931,9 @@ var BHIMSQuery = (function(){
 			if ($accordion.length) {
 				// If this is the first time a field has been changed in this 
 				//	table, oneToManyUpdates[tableName] will be undefined
+				/*var updateStorageVar = tableName === 'attachments' ? fileUploads : oneToManyUpdates;
+				if (!oneToManyUpdates[tableName]) updateStorageVar[tableName] = {};
+				const tableUpdates = updateStorageVar[tableName];*/
 				if (!oneToManyUpdates[tableName]) oneToManyUpdates[tableName] = {};
 				const tableUpdates = oneToManyUpdates[tableName];
 
@@ -921,15 +941,19 @@ var BHIMSQuery = (function(){
 				const index = $input.attr('id').match(/\d+$/)[0];
 				
 				if (!tableUpdates[index]) tableUpdates[index] = {id: undefined, values: {}};
-				const dbID = entryForm.fieldValues[tableName][index].id; // will be undefined if this is a new card
-				tableUpdates[index].id = dbID;
+				// If this tableName doesn't exists as a key in the entryForm's fieldValues,
+				//	this is the first card in this accordion and the first row in a 1-to-many
+				//	relationship for this table and this encounter. In that case, the id will 
+				//	remain undefined. Otherwise, set the ID so the item can be updated
+				if (entryForm.fieldValues[tableName] != undefined) {
+					if (index in entryForm.fieldValues[tableName]) {
+						tableUpdates[index].id = entryForm.fieldValues[tableName][index].id; // will be undefined if this is a new card
+					}
+				} 
 				tableUpdates[index].values[fieldName] = inputValue;
-				//selectedEncounterData[tableName][index][fieldName] = inputValue;
 			} else {
 				if (!oneToOneUpdates[tableName]) oneToOneUpdates[tableName] = {};
 				oneToOneUpdates[tableName][fieldName] = inputValue;
-				// Save result to in-memory query result, so when this encounter is reloaded, it shows the 
-				//selectedEncounterData[fieldName] = inputValue;
 			}
 		}
 
@@ -949,72 +973,178 @@ var BHIMSQuery = (function(){
 			sqlStatements.push(sql);
 			sqlParameters.push(parameters);
 		} 
-		for (const tableName in oneToManyUpdates) {
-			// Otherwise either UPDATE the proper row or INSERT if this is a new row
-			const updates = oneToManyUpdates[tableName];
-			for (const cardID in updates) {
-				const dbID = updates[cardID].id;
-				var values = updates[cardID].values;
-				if (dbID === undefined) {
-					// new row that needs to be INSERTed
-					// Add the encounter_id field, since all related records need this
-					values['encounter_id'] = _this.selectedID;
-					
-					const sortedFields = Object.keys(values).sort();
-					var parameters = sortedFields.map(f => values[f]);
-					parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
-					sql = `INSERT INTO ${tableName} (${sortedFields.join(', ')}) VALUES ${parametized}`;
-					sqlStatements.push(sql);
-					sqlParameters.push(parameters);
-				} else {
-					// just a regular UPDATE
-					var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
-					sqlStatements.push(sql);
-					sqlParameters.push(parameters);			
+
+		// Gather info from any attachments where the actual attachment (not associated fields)
+		//	were updated
+		var failedFiles = [];
+		var fileUploadDeferreds = [];
+		if ('attachments' in oneToManyUpdates) {
+			updates = oneToManyUpdates.attachments;
+			for (const attachmentIndex in updates) {
+				if ('uploadedFile' in updates[attachmentIndex].values) {
+					const uploadInfo = updates[attachmentIndex];
+					const $fileInput = $('#attachment-upload-' + attachmentIndex);
+					const fileInput = $fileInput[0];
+					const fileName = $fileInput.siblings('.filename-label').text();
+					const filePath = $fileInput.closest('.card').find('.file-thumbnail').data('file-path');
+					const timestamp = getFormattedTimestamp();
+					fileUploadDeferreds.push(
+						saveAttachment(fileInput)
+							.done(resultString => {
+								if (resultString.trim().startsWith('ERROR')) {
+									failedFiles.push(fileName);
+									return false;
+								} else {
+									const result = $.parseJSON(resultString);
+									const thisFile = fileInput.files[0];
+									delete uploadInfo.values.uploadedFile;
+									updates[attachmentIndex] = {
+										id: uploadInfo.id,
+										values: {
+											client_file_name: fileName,
+											file_path: result.filePath,//should be the saved filepath (with UUID)
+											file_size_kb: Math.floor(thisFile.size / 1000),
+											mime_type: thisFile.type,
+											attached_by: entryForm.username,//retrieved in window.onload()
+											datetime_attached: timestamp,
+											last_changed_by: entryForm.username,
+											datetime_last_changed: timestamp,
+											thumbnail_filename: result.thumbnailFilename || null,
+											...uploadInfo.values
+										}
+									}
+									
+									const $thumbnail = $fileInput.parent()
+										.siblings('.file-preview-container')
+											.find('.file-thumbnail');
+									if (result.thumbnailFilename) $thumbnail.attr('src', 'attachments/' + result.thumbnailFilename);
+									$thumbnail.data('file-path', result.filePath);
+
+									// delete old file 
+									if (filePath) {
+										//$.ajax({...})
+									}
+								}
+							})
+							.fail((xhr, status, error) => {
+									console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
+									failedFiles.push(fileName);
+							})
+					);
 				}
 			}
 		}
 
-		// Send queries to server
-		$.ajax({
-			url: 'bhims.php',
-			method: 'POST',
-			data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
-			cache: false
-		}).done((queryResultString) => {
-			queryResultString = queryResultString.trim();
-
-			//hideLoadingIndicator();
-
-			if (queryResultString !== 'success') {
-				showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.`, 'Unexpected error')
+		
+		$.when(
+			...fileUploadDeferreds
+		).done(() => {
+			
+			if (failedFiles.length) {
+				const message = `
+					The following files could not be saved to the server:<br>
+					<ul>
+						<li>${failedFiles.join('</li><li>')}</li>
+					</ul>
+					<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
+				hideLoadingIndicator();
+				showModal(message, 'File uploads failed');
 				return;
-			} else {
-				$dirtyInputs.removeClass('dirty');
-				// Set values in the in-memory queried data so when this record is reloaded, it has the right values
-				for (const tableName in oneToOneUpdates) {
-					const updates = oneToOneUpdates[tableName];
-					for (const fieldName in updates) {
-						selectedEncounterData[fieldName] = updates[fieldName];
+			}
+
+			// Create SQL statements for all other updates
+			for (const tableName in oneToManyUpdates) {
+				// Either UPDATE the proper row or INSERT if this is a new row
+				const updates = oneToManyUpdates[tableName];
+				for (const cardID in updates) {
+					const dbID = updates[cardID].id;
+					var values = updates[cardID].values;
+					if (dbID === undefined) {
+						// new row that needs to be INSERTed
+						// Add the encounter_id field, since all related records need this
+						values['encounter_id'] = _this.selectedID;
+						
+						const sortedFields = Object.keys(values).sort();
+						var parameters = sortedFields.map(f => values[f]);
+						parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
+						sql = `INSERT INTO ${tableName} (${sortedFields.join(', ')}) VALUES (${parametized}) RETURNING id;`;
+						sqlStatements.push(sql);
+						sqlParameters.push(parameters);
+					} else {
+						// just a regular UPDATE
+						var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
+						sqlStatements.push(sql);
+						sqlParameters.push(parameters);			
 					}
 				}
-				for (const tableName in oneToManyUpdates) {
-					const updates = oneToManyUpdates[tableName];
-					for (const index in updates) {
-						const rowValues = updates[index].values;
-						const selectedRowData = selectedEncounterData[tableName][index];
-						for (fieldName in rowValues) {
-							if (fieldName in selectedRowData) {
-								selectedRowData[fieldName] = rowValues[fieldName];
-							}
+			}
+
+
+			// Send queries to server
+			$.ajax({
+				url: 'bhims.php',
+				method: 'POST',
+				data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
+				cache: false
+			}).done((queryResultString) => {
+				queryResultString = queryResultString.trim();
+
+				//hideLoadingIndicator();
+
+				if (queryReturnedError(queryResultString)) {
+					showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.`, 'Unexpected error')
+					return;
+				} else {
+					// For any INSERTs, the result will contain the id from the associated table for the new record
+					const result = $.parseJSON(queryResultString);
+
+					$dirtyInputs.removeClass('dirty');
+					// Set values in the in-memory queried data so when this record is reloaded, it has the right values
+					for (const tableName in oneToOneUpdates) {
+						const updates = oneToOneUpdates[tableName];
+						for (const fieldName in updates) {
+							selectedEncounterData[fieldName] = updates[fieldName];
 						}
 					}
+					// Keep track of which SQL update is being processed so that the returned ID can be assigned 
+					//	to the entryForm.fieldValues for any INSERTed rows. The purpose of this is so that if the
+					//	user makes a change to a card that was added during this session, the saveEdits function 
+					//	will know that this is now an UPDATE, not an INSERT.
+					var updateIndex = Object.keys(oneToOneUpdates).length;
+
+					for (const tableName in oneToManyUpdates) {
+						const updates = oneToManyUpdates[tableName];
+						for (const index in updates) {
+							const rowValues = updates[index].values;
+							// Only INSERTs will return an ID. Otherwise, the return result will be null
+							if (result[updateIndex]) rowValues.id = result[updateIndex].id;
+							
+							// If this was an insert, no record exists in the queried data yet
+							if (!selectedEncounterData[tableName]) {
+								selectedEncounterData[tableName] = [];
+							}
+							const selectedRowData = selectedEncounterData[tableName][index];
+							if (!selectedRowData) {
+								selectedEncounterData[tableName][index] = {...rowValues};
+							} else {
+								for (fieldName in rowValues) {
+									if (fieldName in selectedRowData) {
+										selectedRowData[fieldName] = rowValues[fieldName];
+									}
+								}
+							}
+							updateIndex ++; //increment to match the returned result from the queries
+						}
+						entryForm.fieldValues[tableName] = [...selectedEncounterData[tableName]]
+					}
+
+
+					
 				}
-				
-			}
-		}).fail((xhr, status, error) => {
-			showModal(`An unexpected error occurred while saving data to the database: ${error}.`, 'Unexpected error');
-		}).always(() => {hideLoadingIndicator()}); 
+			}).fail((xhr, status, error) => {
+				showModal(`An unexpected error occurred while saving data to the database: ${error}.`, 'Unexpected error');
+			}).always(() => {hideLoadingIndicator()}); 
+		})
 	}
 
 
@@ -1969,6 +2099,16 @@ var BHIMSQuery = (function(){
 
 		showLoadingIndicator();
 
+		window.addEventListener('fields-full', e => {
+			console.log(e.detail);
+			setTimeout(
+				()=>{
+					$('.input-field').removeClass('dirty');
+					hideLoadingIndicator('loadSelectedEncounter');
+				}, 
+				2000
+			);
+		})
 		// Get username
 		$.ajax({
 			url: 'bhims.php',
@@ -1998,6 +2138,11 @@ var BHIMSQuery = (function(){
 			copyToClipboard(url, `Permalink for this query successfully copied to clipboard`);
 		});
 
+		// Set attribute to indicate that the initial .change event triggered by fillFieldValues() has or 
+		//	has not been triggered. This is neessary so the .change event registered below knows whether 
+		//	or not to add the .dirty class
+		$('.input-field').data('manual-change-triggered', false);
+		
 		$.when(
 			...this.getLookupValues(), 
 			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false),
@@ -2031,7 +2176,15 @@ var BHIMSQuery = (function(){
 				.filter(
 					(_, el) => {return !$(el).is('.ignore-on-insert, .short-distance-select')}
 				).change(e => {
-					$(e.target).addClass('dirty');
+					// Add the .dirty class only if the fillFieldValues has called the .change event on this input-field
+					const $target = $(e.target);
+					const manualChangeAlreadyTriggered = $target.data('manual-change-triggered');
+					if (!manualChangeAlreadyTriggered && manualChangeAlreadyTriggered !== undefined) {
+						$target.removeClass('.dirty');
+						$target.data('manual-change-triggered', true);
+					} else {
+						$target.addClass('dirty');
+					}
 				});
 
 			// Add an element that shows the value of null fields as such when styled as uneditable

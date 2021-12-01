@@ -483,7 +483,7 @@ input.input-with-unit-symbol:invalid ~ .unit-symbol {
 	display: none;
 }
 .add-item-container.collapse.show {
-	display: flex;
+	display: flex !important;
 }
 
 .form-footer {

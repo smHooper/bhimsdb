@@ -840,6 +840,8 @@ var BHIMSEntryForm = (function() {
 
 		var key, index, fieldName;//initialize vars instantiated in for statements
 
+		const fieldsFullEvent = new CustomEvent('fields-full', {detail: Date()});
+
 		for (const key in fieldValues) {
 			const value = fieldValues[key];
 			
@@ -928,7 +930,10 @@ var BHIMSEntryForm = (function() {
 					});
 
 			}
-		}
+			
+		} 
+
+		window.dispatchEvent(fieldsFullEvent);
 	}
 
 
@@ -2203,6 +2208,11 @@ var BHIMSEntryForm = (function() {
 						.text(fileName);
 				_this.attachmentFiles[sourceInput.id] = sourceInput.files;
 				$progressBar.css('width', '0px');
+
+				// Make sure the onclick event will show this content. This is only a concern for query.html. 
+				//	For that page onThumbnailClick() needs to know to read the content from the file input, 
+				//	not the server URL in the event that the user has uploaded a new file in place of an old one
+				$destinationImg.attr('onclick', 'onThumbnailClick(event, loadFromMemory=true)');
 			}
 
 			if (file.type.match('image')) {
@@ -2426,7 +2436,7 @@ var BHIMSEntryForm = (function() {
 		const timestamp = getFormattedTimestamp();
 		for (const fileInput of $attachmentInputs) {
 			if (fileInput.files.length) {
-				const thisFile = fileInput.files[0]
+				const thisFile = fileInput.files[0];
 				const fileName = thisFile.name;
 				const thumbnailName = `${fileName.split('.')[0]}_thumbnail.jpg`;
 				const fileTypeCode = $(fileInput).closest('.card').find('select').val();
@@ -2438,11 +2448,9 @@ var BHIMSEntryForm = (function() {
 									return false;
 								} else {
 									const result = $.parseJSON(resultString);
-									const $card = $(fileInput).closest('.card');
 									const filePath = result.filePath.replace(/\//g, '\\');//replace forward slashes with backslash
 									const filename = filePath.split('/').pop();
 									const fileExtension = filename.split('.').pop();
-									const thumbnailFilename = filename.replace('.' + fileExtension, '_thumbnail.jpg');
 									const fileInfo = {
 										client_file_name: fileName,
 										file_path: result.filePath,//should be the saved filepath (with UUID)
@@ -2454,34 +2462,10 @@ var BHIMSEntryForm = (function() {
 										datetime_last_changed: timestamp,
 										thumbnail_filename: result.thumbnailFilename || null
 									};
-									
-									// If this is an audio file, just return
-									/*if (fileTypeCode === 3) {
-										fileInfo.thumbnail_filename = '../imgs/audio_thumbnail.jpg';
-									} else {
-										// Otherwise, make the thumbnail
-										$.ajax({
-											url: 'bhims.php',
-											method: 'POST',
-											data: {
-												action: 'makeThumbnail', 
-												fileName: filePath, 
-												fileTypeCode: fileTypeCode
-											}
-										}).done(result => {
-											result = result.trim()
-											if (result !== 'false') {
-												// Should return the thumbnail name, so set the property for this object
-												fileInfo.thumbnail_filename = result;
-											}
-										}).fail((xhr, status, error) => {
-											console.log(`Thumbnail creation for ${fileName} failed with status ${status} because ${error}`);
-											failedFiles.push(fileName);
-										});
-									}*/
 
 									// Get input values for all input fields except file input (which has 
 									//	the name "uploadedFile" used by php script)
+									const $card = $(fileInput).closest('.card');
 									for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
 										const fieldName = inputField.name;
 										if (fieldName in _this.fieldInfo) {
@@ -2633,14 +2617,12 @@ var BHIMSEntryForm = (function() {
 					data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
 					cache: false
 				}).done((queryResultString) => {
-					queryResultString = queryResultString.trim();
 
 					hideLoadingIndicator();
-
-					if (queryResultString !== 'success') {
-						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+					if (queryReturnedError(queryResultString)) {
+						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 						return;
-					} 
+					}
 
 					$('.submition-confirmation-container')
 						.removeClass('hidden')

@@ -16,6 +16,7 @@ var BHIMSQuery = (function(){
 		this.queryOptions = {};
 		this.tableSortColumns = {};
 		this.encounterIDs = [];
+		this.fieldsFull = false;
 		_this = this; // scope hack for event handlers that take over "this"
 	}
 
@@ -716,6 +717,10 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
 
+		// Reset flag to prevent confirm message from showing when a user switches 
+		//	to a new record before .dirty class can be removed from inputs
+		this.fieldsFull = false;
+
 		// Reset the form
 		//	clear accordions
 		$('.accordion .card:not(.cloneable, .form-section)').remove();
@@ -781,7 +786,7 @@ var BHIMSQuery = (function(){
 		// Check for any edits
 		if (isEditing) {
 			const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
-			if ($dirtyInputs.length) {
+			if ($dirtyInputs.length && _this.fieldsFull) {
 				_this.confirmSaveEdits(`bhimsQuery.toggleFieldEditability(${!isEditing});`);
 			} else {
 				_this.toggleFieldEditability(!isEditing);
@@ -1208,7 +1213,7 @@ var BHIMSQuery = (function(){
 		const newResultID = e.target.closest('li').id;
 
 		// Check if any inputs were changed
-		if ($('.input-field.dirty:not(.ignore-on-insert)').length) {
+		if ($('.input-field.dirty:not(.ignore-on-insert)').length && _this.fieldsFull) {
 			_this.confirmSaveEdits(`bhimsQuery.switchEncounterRecord('${newResultID}');`);
 		} else {
 			_this.switchEncounterRecord(newResultID);
@@ -2104,6 +2109,7 @@ var BHIMSQuery = (function(){
 			setTimeout(
 				()=>{
 					$('.input-field').removeClass('dirty');
+					_this.fieldsFull = true;
 					hideLoadingIndicator('loadSelectedEncounter');
 				}, 
 				2000

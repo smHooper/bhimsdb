@@ -206,7 +206,7 @@ var BHIMSEntryForm = (function() {
 											<h5 ${cardLinkAttributes}">${accordionInfo.card_link_label_text}</h5>
 										</div>
 										<div class="card-link-content">
-											<button class="delete-button icon-button" type="button" onclick="entryForm.onDeleteCardClick(event)" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
+											<button class="delete-button delete-card-button icon-button" type="button" data-item-name="${accordionInfo.item_name}" aria-label="Delete ${accordionInfo.item_name}">
 												<i class="fas fa-trash fa-lg"></i>
 											</button>
 											<i class="fa fa-chevron-down pull-right"></i>
@@ -334,6 +334,7 @@ var BHIMSEntryForm = (function() {
 			// Add event handlers
 			//onAddNewItemClick
 			//$('.card-header .delete-button').click(this.onDeleteCardClick)
+			$('.delete-card-button').click(_this.onDeleteCardClick);
 
 			// Add stuff that can't easily be automated/stored in the DB
 			// Do stuff with utility flag classes
@@ -1502,6 +1503,49 @@ var BHIMSEntryForm = (function() {
 		})
 	}
 
+	/*
+	Helper method to delete a card from an accordion. The meat of the event handler has to 
+	be separated from the actual handler so that query.js has access to it with the ability 
+	to pass a different onclick handler for the confirm button
+	*/
+	Constructor.prototype.deleteCard = function($deleteButton, onConfirmClickString=null) {
+		
+		//if the actual target clicked was the icon, bubble up to the button
+		if ($deleteButton.hasClass('fas')) 
+			$deleteButton = $deleteButton.closest('.delete-button');
+		
+		const itemName = $deleteButton.data('item-name');
+		const $card = $deleteButton.closest('.card');
+		const cardID = $card.attr('id');
+
+		// Check if this this card is optional by looking for a dependent-target. 
+		//	If it has one, that means it is collapsible and therefore optional
+		const dependentInputID = $card.closest('.accordion')
+			.data('dependent-target');
+		const isLastCard = $card.siblings('.card').length === 1; //has 1 sibling because last one is the .cloneable card
+
+		if (isLastCard && !dependentInputID) {
+			showModal(`This is the only ${itemName} listed thus far, and you must enter at least one.`, `Invalid operation`);
+		} else {
+			// If an onConfirmClick string was provided (this is being called from the query page), use that.
+			// 	Otherwise, if the user confirms the delete, fade it out after .5 sec then reset the remaining 
+			//	card labels. If not, just collapse the accordion so that if the user changes their mind about 
+			//	this card, the data are still loaded in memory
+			const onConfirmClick = 
+				onConfirmClickString || (
+					isLastCard && dependentInputID ? 
+					`$('${dependentInputID}').val(0).change();` : 
+					`entryForm.onConfirmDeleteCardClick('${cardID}');`
+				)
+			;
+			const footerButtons = `
+				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
+				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
+			`;
+			showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
+		}
+	}
+
 
 	/*
 	Actual handler for card deletions from an accordion
@@ -1511,29 +1555,8 @@ var BHIMSEntryForm = (function() {
 		e.preventDefault();
 		e.stopPropagation();
 
-		var $button = $(e.target);
-		if ($button.hasClass('fas')) 
-			$button = $button.closest('.delete-button');//if the actual target clicked was the icon, bubble up to the button
-		
-		const itemName = $button.data('item-name');
-		const $card = $button.closest('.card');
-		const cardID = $card.attr('id');
-
-		const dependentInputID = $card.closest('.accordion')
-			.data('dependent-target');
-		const isLastCard = $card.siblings('.card').length === 1;
-
-		if (isLastCard && !dependentInputID) {
-			showModal(`This is the only ${itemName} listed thus far, and you must enter at least one.`, `Invalid operation`);
-		} else {
-			// If the user confirms the delete, fade it out after .5 sec then reset the remaining card labels
-			const onConfirmClick = isLastCard && dependentInputID ? `$('${dependentInputID}').val(0).change();` : `entryForm.onConfirmDeleteCardClick('${cardID}');`
-			const footerButtons = `
-				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
-				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
-			`;
-			showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
-		}
+		var $deleteButton = $(e.target);
+		_this.deleteCard($deleteButton);
 	}
 
 

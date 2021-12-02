@@ -132,29 +132,6 @@ function showModal(message, title, modalType='alert', footerButtons='') {
 	const $modal = $('#alert-modal').empty()
 		.append($(innerHTML))
 		.modal();
-
-	/*const $modal = $(`
-		<div class="modal fade" id="${modalID}" tabindex="-1" role="dialog" aria-labelledby="${modalID}-label" aria-hidden="true">
-		  <div class="modal-dialog" role="document">
-		    <div class="modal-content">
-		      <div class="modal-header">
-		        <h5 class="modal-title">${title}</h5>
-		        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
-		          <span aria-hidden="true">&times;</span>
-		        </button>
-		      </div>
-		      <div class="modal-body">
-		        <p>${message}</p>
-		      </div>
-		      <div class="modal-footer">
-		      	${footerButtons}
-		      </div>
-		    </div>
-		  </div>
-		</div>
-		`)
-		.appendTo('body')
-		.modal(); //bootstrap modal plugin method to show modal*/
 	
 	$modal.find('.close-modal').click(function() {
 		$modal.modal('hide');

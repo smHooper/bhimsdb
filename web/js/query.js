@@ -31,14 +31,6 @@ var BHIMSQuery = (function(){
 		// All distance values in the DB should be in meters so make sure the units match that
 		$('.short-distance-select').val('m')
 
-		// fillFieldValues() will trigger .change() events, including adding the .dirty class
-		//	to all .input-fields so undo that. For some reason, reaction fields take a while
-		// 	to set so their change events will fire after the .dirty class is removed, so 
-		//	do this after a 2 second delay
-		/*setTimeout(()=>{
-			$('.input-field').removeClass('dirty');
-			hideLoadingIndicator('loadSelectedEncounter');
-		}, 2000);*/
 	}
 
 
@@ -624,6 +616,95 @@ var BHIMSQuery = (function(){
 		
 	}
 
+
+	/*
+	Delete a row from a joined table represented in an accordion card
+	*/
+	Constructor.prototype.deleteDBRecordFromCard = function(tableName, databaseID, cardID) {
+
+		showLoadingIndicator('deleteDBRecordFromCard');
+		const failMessage = 
+			`The record fromt the ${tableName} table could not be deleted.` + 
+			` Make sure you're connected to the NPS network and try again.` + 
+			` If the problem persists, contact your system administrator.`
+		;
+		queryDB(
+			`DELETE FROM ${tableName} WHERE id=${databaseID};`
+		).done(queryResultString => {
+			if (queryResultString.trim().startsWith('ERROR')) {
+				console.log(queryResultString);
+				setTimeout(
+					()=> {
+						showModal(failMessage, 'Database error')
+					},
+					1000
+				);
+			} else {
+				// Check if this is the last card before calling onConfirmDeleteCardClick 
+				//	because the removal happens asynchronously, and it would be impossible 
+				//	to know if that has happened or not before checking if this is the last card
+				const $card = $('#' + cardID);
+				const $accordion = $card.closest('.accordion');
+				const isLastCard = $card.siblings().length === 1;
+				const cardIndex = $card.index() - 1;
+
+				// Remove the card
+				entryForm.onConfirmDeleteCardClick(cardID);
+				
+				// If this accordion is also a collapse (i.e., depends on a boolean select), 
+				//	set the boolean select to "No"
+				const dependentTargetID = $accordion.data('dependent-target');
+				if (dependentTargetID && isLastCard) $(dependentTargetID).val(0).change();
+
+				// Remove object from in-memory data
+				const selectedTableData = _this.queryResult[_this.selectedID][tableName];
+				selectedTableData.splice(cardIndex, 1);
+				entryForm.fieldValues[tableName] = [...selectedTableData];
+			}
+		}).fail((xhr, status, error) => {
+			console.log(`Could not delete record ${databaseID} from ${tableName} because ${error}`);
+			setTimeout(
+				()=> {
+					showModal(failMessage, 'Database error')
+				},
+				1000
+			);
+		}).always(() => {hideLoadingIndicator('deleteDBRecordFromCard');})
+
+	}
+
+
+	/*
+	Event handler for card delete buttons. This handler replaces the entryForm.onDeleteCardClick
+	*/
+	Constructor.prototype.onDeleteCardClick = function(e) {
+
+		e.preventDefault();
+		e.stopPropagation();
+
+		var $deleteButton = $(e.target);
+		const $card = $deleteButton.closest('.card');
+		const cardID = $card.attr('id');
+		
+		//////// test what happens with cardID if middle card is deleted
+
+		const cardIndex = $card.index() - 1; // minus 1 because this includes .cloneable card
+		const tableName = $card.closest('.accordion').data('table-name');
+		const selectedData = _this.queryResult[_this.selectedID];
+		var onConfirmClick;
+		// If the data only live in memory (i.e., the user recently added this card), they won't be in the queried data
+		if (tableName in selectedData) {
+			const tableRows = selectedData[tableName];
+			// Check if data for this card exist in the DB already
+			if (cardIndex in tableRows) {
+				const dbID = tableRows[cardIndex].id
+				if (dbID !== undefined) onConfirmClick = `bhimsQuery.deleteDBRecordFromCard('${tableName}', ${dbID}, '${cardID}');`;
+			}
+		}
+		entryForm.deleteCard($deleteButton, onConfirmClick);
+	}
+
+
 	/*
 	*/
 	Constructor.prototype.loadSelectedEncounter = function() {
@@ -704,8 +785,14 @@ var BHIMSQuery = (function(){
 						.collapse('show');
 			}
 
-			// Make sure the reactions select is visible (might not be if either initial_human_activity or initial_bear_activity is filled in)
+			// Make sure the reactions select is visible (might not be if either 
+			//	initial_human_activity or initial_bear_activity is filled in)
 			$('#reactions-accordion').removeClass('hidden').addClass('show');
+
+			// Remove the entryForm's event listener for all .delete-card-buttons 
+			//	and add one that will actually delete the database record
+			$('.delete-card-button').off('click')
+				.click(_this.onDeleteCardClick);
 		});
 
 	}
@@ -904,6 +991,11 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.saveEdits = function() {
 		
 		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
+		if ($dirtyInputs.length === 0) {
+			hideLoadingIndicator();
+			return;
+		}
+
 		var selectedEncounterData = this.queryResult[this.selectedID];
 
 		//TODO: need to handle attachment changes/new attachments
@@ -943,7 +1035,7 @@ var BHIMSQuery = (function(){
 				const tableUpdates = oneToManyUpdates[tableName];
 
 				// Get the index of this card within the accordion
-				const index = $input.attr('id').match(/\d+$/)[0];
+				const index = $input.closest('.card').index() - 1;//attr('id').match(/\d+$/)[0];
 				
 				if (!tableUpdates[index]) tableUpdates[index] = {id: undefined, values: {}};
 				// If this tableName doesn't exists as a key in the entryForm's fieldValues,
@@ -1122,7 +1214,7 @@ var BHIMSQuery = (function(){
 						for (const index in updates) {
 							const rowValues = updates[index].values;
 							// Only INSERTs will return an ID. Otherwise, the return result will be null
-							if (result[updateIndex]) rowValues.id = result[updateIndex].id;
+							if (result[updateIndex]) rowValues.id = result[updateIndex][0].id;
 							
 							// If this was an insert, no record exists in the queried data yet
 							if (!selectedEncounterData[tableName]) {
@@ -1142,9 +1234,6 @@ var BHIMSQuery = (function(){
 						}
 						entryForm.fieldValues[tableName] = [...selectedEncounterData[tableName]]
 					}
-
-
-					
 				}
 			}).fail((xhr, status, error) => {
 				showModal(`An unexpected error occurred while saving data to the database: ${error}.`, 'Unexpected error');
@@ -1159,6 +1248,7 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.onSaveButtonClick = function(e) {
 		
 		e.stopPropagation();
+		showLoadingIndicator();
 		_this.saveEdits();
 	}
 

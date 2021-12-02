@@ -18,6 +18,7 @@ function runQuery($ipAddress, $port, $dbName, $username, $password, $queryStr, $
 	$result = pg_query_params($conn, $queryStr, $parameters);
 	if (!$result) {
 	  	echo pg_last_error();
+	  	return array();
 	}
 
 	$resultArray = pg_fetch_all($result) ? pg_fetch_all($result) : array("query returned an empty result");
@@ -258,9 +259,12 @@ if (isset($_POST['action'])) {
 						$params[$j] = null;
 					}
 				}
-				$result = runQuery($dbhost, $dbport, $dbname, $username, $password, $_POST['queryString'], $params);
-				
-				echo json_encode($result);	
+				try {
+					$result = runQuery($dbhost, $dbport, $dbname, $username, $password, $_POST['queryString'], $params);
+					echo json_encode($result);
+				} catch (Exception $e) {
+					echo __LINE__.$e->getMessage();
+				}
 			}
 		} else {
 			echo "either sqlStatements and/or sqlParameters not given";//false;

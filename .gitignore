@@ -1,5 +1,6 @@
 # compiled python3 scripts
 py/__pycache__/*
+py/resource/__pycache__/*
 
 # illustrator and PS files
 *.psd
@@ -13,3 +14,14 @@ web/*/Thumbs.db
 web/attachments/*
 
 web/phpinfo.php
+
+web/export_cache/*
+
+# PyCharm
+.idea/
+
+#Pyenv
+.python-version
+
+# virtualenv
+.venv/

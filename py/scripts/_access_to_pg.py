@@ -1,13 +1,11 @@
 import sys
 import os
 import re
-import sqlalchemy
 import pyodbc
 import warnings
 import pandas as pd
-from datetime import datetime
 
-import db_utils
+from py.resource import db_utils
 
 pd.options.mode.chained_assignment = None # Turn off setting as copy warning
 

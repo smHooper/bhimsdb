@@ -1,5 +1,6 @@
 import sqlalchemy
 
+
 def connect_pg_db(connection_txt):
 
     connection_info = {}

@@ -1,11 +1,8 @@
 import sys
-import os
-import re
-import sqlalchemy
 import pyodbc
 import pandas as pd
 
-import db_utils
+from py.resource import db_utils
 
 
 def main(akro_db_path, dena_db_path, connection_txt):

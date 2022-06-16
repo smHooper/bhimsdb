@@ -1,5 +1,5 @@
 """
-IMPORTANT NOTE: This file is NOT meant to be a comprehensive sqlalchemy ORM version of the BHMIMS database.
+IMPORTANT NOTE: This file is NOT meant to be a comprehensive sqlalchemy ORM version of the BHIMS database.
 It is only used to define relationships between tables important for data exportation.
 """
 
@@ -113,7 +113,7 @@ class ReactionCode(Base, CodeMixin):
     __tablename__ = 'reaction_codes'
 
 
-class ReportProbableCause(Base, CodeMixin):
+class ReportedProbableCause(Base, CodeMixin):
     __tablename__ = 'reported_probable_cause_codes'
 
 
@@ -156,7 +156,7 @@ class Attachment(Base):
 
     file_type_code = Column(INTEGER, ForeignKey(FileTypeCode.code))
 
-    file_type = country = relationship(FileTypeCode, lazy='joined')
+    file_type = relationship(FileTypeCode, lazy='joined')
 
 
 class Bear(Base):
@@ -216,7 +216,7 @@ class Encounter(Base):
     human_group_type_code = Column(INTEGER, ForeignKey(HumanGroupTypeCode.code))
     initial_bear_action_code = Column(INTEGER, ForeignKey(InitialBearActionCode.code))
     initial_human_action_code = Column(INTEGER, ForeignKey(InitialHumanActionCode.code))
-    reported_probable_cause_code = Column(INTEGER, ForeignKey(ReportProbableCause.code))
+    reported_probable_cause_code = Column(INTEGER, ForeignKey(ReportedProbableCause.code))
     was_making_noise = Column(INTEGER, ForeignKey(BooleanResponseCode.code))
 
     # NOTE: foreign_key args required because BooleanResponseCode is foreign keyed to multiple columns creating
@@ -231,7 +231,7 @@ class Encounter(Base):
     human_group_type = relationship(HumanGroupTypeCode, lazy='joined')
     initial_bear_action = relationship(InitialBearActionCode, lazy='joined')
     initial_human_action = relationship(InitialHumanActionCode, lazy='joined')
-    reported_probable_cause = relationship(ReportProbableCause, lazy='joined')
+    reported_probable_cause = relationship(ReportedProbableCause, lazy='joined')
     made_noise = relationship(BooleanResponseCode, foreign_keys=[was_making_noise], lazy='joined')
 
 

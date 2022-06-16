@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 import py.resource.config as config
 from py.resource.tables import model_dict
 
-# TODO: encounters
+
 BHIMS_CODE_NAMES = {
     'assessment.management_action_code': 'management_action_codes.name as management_action',
     'assessment.management_classification_code': 'management_classification_codes.name as management_classification',
@@ -56,6 +56,18 @@ BHIMS_CODE_NAMES = {
     'encounter_locations.place_name_code': 'place_name_codes.name as place_name',
     'encounter_locations.road_name_code': 'road_name_codes.name as road_name',
     'encounter_locations.visibility_code': 'visibility_codes.name as visibility',
+    'encounters.bear_charged': 'boolean_response_codes.name as bear_charged_boolean',
+    'encounters.bear_cohort_code': 'bear_cohort_codes.name as bear_cohort',
+    'encounters.bear_obtained_food': 'boolean_response_codes.name as bear_obtained_food_boolean',
+    'encounters.bear_spray_was_effective': 'boolean_response_codes.name as bear_spray_was_effective_boolean',
+    'encounters.bear_spray_used': 'boolean_response_codes.name as bear_spray_used_boolean',
+    'encounters.food_present_code': 'food_present_codes.name as food_present',
+    'encounters.general_human_activity_code': 'general_human_activity_codes.name as general_human_activity',
+    'encounters.human_group_type_code': 'human_group_type_codes.name as human_group_type',
+    'encounters.initial_bear_action_code': 'initial_bear_action_codes.name as initial_bear_action',
+    'encounters.initial_human_action_code': 'initial_human_action_codes.name as initial_human_action',
+    'encounters.reported_probable_cause_code': 'reported_probable_cause_codes.name as reported_probable_cause',
+    'encounters.was_making_noise': 'boolean_response_codes.name as was_making_noise_boolean',
     'people.country_code': 'country_codes.name as country',
     'reactions.reaction_code': 'reaction_codes.name as reaction',
     'structure_interactions.structure_interaction_code': 'structure_interaction_codes.name as structure_interaction',
@@ -64,9 +76,8 @@ BHIMS_CODE_NAMES = {
 
 
 def build_query_string(table: str, selects: List, joins: Optional[List] = None, wheres: Optional[List] = None) -> str:
-    """
-    Given all sql query components, build a raw sql query string.
-    IMPORTANT NOTE: All joins are inner joins and all where clauses will be ANDed together.
+    """Given all sql query components, build a raw sql query string.
+    IMPORTANT NOTE: All joins are left joins and all where clauses will be ANDed together.
 
     Args:
         table: The name of the table to query.
@@ -87,12 +98,21 @@ def build_query_string(table: str, selects: List, joins: Optional[List] = None, 
 
 
 def generate_query_parameters(query_json: Dict) -> Dict:
-    """
+    """From the php query parameters json, build the proper sql query parameters.
+
     Args:
-        query_json:
+        query_json: The parameters json passed from the php front-end.
 
     Returns:
+        A dictionary of select, join, and where clauses per table.
 
+        {
+            'bears': {
+                'selects': []
+                'wheres': []
+                'joins': []
+            } ...
+        }
     """
     query_components = {}
 
@@ -144,12 +164,10 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-e', '--environment', required=True,
                         help='The environment in which to run the script.')
-    parser.add_argument('-r', '--request_id', required=True, type=int,
-                        help='Unique ID number for the data export request.')
+    parser.add_argument('-r', '--request_id', required=True,
+                        help='Unique ID value for the data export request.')
     parser.add_argument('-i', '--input', required=True, type=json.loads,
                         help='Input SQL json.')
-    parser.add_argument('-o', '--output', default='//INPDENATERM01/bhims/production/web/export_cache',
-                        help='Absolute path to where the output file should be saved.')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output query details.')
     args = parser.parse_args()
@@ -165,7 +183,12 @@ if __name__ == "__main__":
 
     query_params = generate_query_parameters(args.input)
 
-    with pd.ExcelWriter(f"{args.output}/bhims_export_{args.request_id}.xlsx", engine='xlsxwriter') as writer:
+    # Remove any tables requested for a specific environment.
+    table_exclusions = config.read('script', 'table_exclusions').split(',')
+    for exclusion in table_exclusions:
+        query_params.pop(exclusion, None)
+
+    with pd.ExcelWriter(f"{config.read('script', 'export_cache')}/bhims_export_{args.request_id}.xlsx", engine='xlsxwriter') as writer:
         for table, params in query_params.items():
             query = build_query_string(table=table,
                                        selects=params['selects'],

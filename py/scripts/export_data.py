@@ -77,7 +77,7 @@ BHIMS_CODE_NAMES = {
 
 def build_query_string(table: str, selects: List, joins: Optional[List] = None, wheres: Optional[List] = None) -> str:
     """Given all sql query components, build a raw sql query string.
-    IMPORTANT NOTE: All joins are left joins and all where clauses will be ANDed together.
+    NOTE: All joins are left joins and all where clauses will be ANDed together.
 
     Args:
         table: The name of the table to query.
@@ -123,15 +123,14 @@ def generate_query_parameters(query_json: Dict) -> Dict:
 
     # Parse out and generate the selection fields and where clauses required for every table query from the query json.
     #
-    # NOTE: Every table that needs to be queried will have a json in the fields attribute. If all fields are
-    # requested, fields=['*'] will be returned which will work with this logic. If there are now filters for a table,
-    #  no where clauses will appear in the json criteria attribute.
+    # NOTE: Every table that needs to be queried will have a json in the fields attribute. If there are no filters for
+    #  a table, no where clauses will appear in the json criteria attribute.
     for table, fields in fields_dict.items():
 
         # ---- SELECTS ---- #
 
         # Specify the table name in front of each field to be as explicit as possible as some tables will be joined.
-        selects = [f"{table}.id"]
+        selects = [f"{table}.id", f"{table}.encounter_id"] if table != 'encounters' else [f"{table}.id"]
         selects.extend([f"{table}.{field}" for field in fields])
 
         if include_codes:

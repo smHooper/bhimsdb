@@ -28,7 +28,7 @@ Example Input:
 import json
 from argparse import ArgumentParser
 from urllib.parse import quote
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy import create_engine
@@ -97,6 +97,48 @@ def build_query_string(table: str, selects: List, joins: Optional[List] = None, 
     return query_string
 
 
+def select_encounters(criteria_dict: Dict) -> Tuple:
+    """Determine which encounter ids to filter all tables on.
+
+    Example: If the user asked for encounters with female bears, we need to get the ids of all encounters had a female
+    bear (not exclusively) and then filter all other tables by those encounter ids.
+
+    Args:
+        criteria_dict: the filtering criteria portion of parameters json passed from the php front-end.
+
+        {
+            "encounter_locations":{
+                "backcountry_unit_code": {"value":"(31, 74)","operator":"IN"}
+            },
+            "encounters": {
+                "group_size_encounter": {"value":"2","operator":">"},
+                "bear_charged": {"value": "1", "operator": "="}
+            } ...
+        }
+
+    Returns:
+        encounter_ids: A list of encounter ids to filter each table query by.
+    """
+    wheres = []
+    joins = []
+
+    for table, criteria in criteria_dict.items():
+
+        if table != 'encounters':
+            joins.append(f"{table} on {table}.encounter_id = encounters.id")
+
+        for field, field_filter in criteria.items():
+            wheres.append(f"{table}.{field} {field_filter['operator']} {field_filter['value']}")
+
+    query = build_query_string(table='encounters',
+                               selects=['distinct(encounters.id)'],
+                               wheres=wheres,
+                               joins=joins)
+    encounter_ids = tuple(r[0] for r in engine.execute(query))
+
+    return encounter_ids
+
+
 def generate_query_parameters(query_json: Dict) -> Dict:
     """From the php query parameters json, build the proper sql query parameters.
 
@@ -121,6 +163,9 @@ def generate_query_parameters(query_json: Dict) -> Dict:
     criteria_dict = query_json['criteria']
     db_models = model_dict()
 
+    # Determine encounter_ids to filter by if there are filtering criteria.
+    encounter_ids = select_encounters(criteria_dict) if criteria_dict else None
+
     # Parse out and generate the selection fields and where clauses required for every table query from the query json.
     #
     # NOTE: Every table that needs to be queried will have a json in the fields attribute. If there are no filters for
@@ -140,10 +185,10 @@ def generate_query_parameters(query_json: Dict) -> Dict:
         # ---- WHERES ---- #
 
         wheres = []
-        criteria = criteria_dict.get(table)
-        if criteria:
-            for field, field_filter in criteria.items():
-                wheres.append(f"{table}.{field} {field_filter['operator']} {field_filter['value']}")
+        if table == 'encounters' and encounter_ids:
+            wheres = [f"encounters.id in {encounter_ids}"]
+        elif table != 'encounters' and encounter_ids:
+            wheres = [f"{table}.encounter_id in {encounter_ids}"]
 
         # ---- JOINS ---- #
 

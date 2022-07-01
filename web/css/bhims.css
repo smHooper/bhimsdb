@@ -53,6 +53,8 @@ html, body {
   min-width: 75px;
   border-radius: 0.5rem;
   margin-bottom: 0px;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .icon-button, .text-only-button {
@@ -76,6 +78,7 @@ html, body {
 button.generic-button:focus, 
 button.icon-button:focus, 
 button.text-only-button:focus,
+button.export-data-tab-button:focus,
 img.modal-img:focus,
 video.modal-img:focus,
 audio.modal-img:focus,
@@ -202,18 +205,17 @@ button > img {
 }
 
 .vertical-scroll {
-  overflow-y: auto;
+  overflow-y: auto !important;
 }
-
 .hidden {
-  display: none;
+  display: none !important;
 }
 .transparent {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 .invisible {
-  visibility: hidden;
+  visibility: hidden !important;
 }
 
 .blur {

@@ -52,14 +52,15 @@ body {
 	width: 100%;
 	height: calc(100% - 100px);
 }
-#show-query-options-container .tabs { 
+.tabs { 
 	float: none;
 	list-style: none;
 	position: relative;
 	text-align: left;
 	display: none;
 }
-#show-query-options-container.open .tabs {
+#show-query-options-container.open .tabs,
+#export-field-options-body .tabs {
 	display: inline-block;
 	padding: 0;
 	margin-bottom: 0;
@@ -70,17 +71,17 @@ body {
 	height: 100%;
 	width: 100%;
 }
-#show-query-options-container .tabs > li {
+.tabs > li {
 	float: left;
 	display: flex;
 }
-#show-query-options-container .tabs input[type="radio"].tab-button {
+.tabs input[type="radio"].tab-button {
 	position: absolute;
 	top: 0;
 	left: -9999px;
 }
 
-#show-query-options-container .tabs .tab-label {
+.tabs .tab-label {
 	display: block;
 	padding: 14px 21px;
 	border-radius: 2px 2px 0 0;
@@ -94,10 +95,13 @@ body {
 	margin-bottom: 0;
 	height: 60px;
 }
-#show-query-options-container .tabs .tab-label:hover {
+.tabs .tab-label.active {
+	color: hsl(188deg 100% 50%);
+}
+.tabs .tab-label:hover {
 	background:  rgba(30, 30, 30, 0.95);
 }
-#show-query-options-container .tabs .tab-content {
+.tabs .tab-content {
 	z-index: 2;
 	display: none; 
 	overflow: auto;
@@ -115,10 +119,10 @@ body {
 	margin-top: 60px;
 	/*column-width: 300px;*/
 }
-#show-query-options-container .tabs input[type="radio"]:checked + .tab-label {
+.tabs input[type="radio"]:checked + .tab-label {
 	background: rgba(40, 40, 40, 0.95);
 }
-#show-query-options-container .tabs input[type="radio"]:checked ~ .tab-content {
+.tabs input[type="radio"]:checked ~ .tab-content {
 	display: flex;
 	column-gap: 60px;
 	row-gap: 15px;
@@ -392,22 +396,32 @@ body {
 #query-result-count .query-result-count-text {
 	font-weight: 600;
 }
+
+
 /* main layout */
 .main-content-wrapper {
 	display: flex;
-	flex-wrap: nowrap;
-	padding: 0;
+	flex-direction: column;
+	padding: 10px 15px 0 15px;
 }
-
-
+.main-content-body {
+	display: flex;
+	flex: 1 1 100%;
+	height: 100%;
+	padding-bottom: 10px;
+	min-height: 0;
+}
 .query-result-pane {
 	padding: 0 1rem;
-	height: 100%;
+	max-height: 100%;
+	flex: 1 1 100%;
 }
+
 #result-summary-pane {
 	display: flex;
 	flex-wrap: wrap;
 	padding-left: 0;
+	/*width: 33.333%;*/
 }
 .result-summary-container {
 	width: 100%;
@@ -492,6 +506,7 @@ body {
   padding-top: 15px;
 }
 
+/*________ map ___________*/
 .map {
 	min-height: 350px;
 	flex: 1 1 auto;
@@ -501,12 +516,155 @@ body {
 #query-result-map-container .map {
 	min-height:  100%;
 }
+/*^^^^^^^^^ map ^^^^^^^^^^^*/
 
+
+/*_________export button footer_________*/
+.data-export-footer {
+	height: 60px;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+}
+#data-export-modal.show {
+	display: flex !important;
+	justify-content: center;
+}
+#data-export-modal .close {
+	color: #FFF;
+	text-shadow: 0 1px 0 #000;
+}
+.modal-dialog.data-export-modal-dialog {
+	margin-top: 0;
+	margin-bottom: 0;
+	margin-right: unset;
+	margin-left: unset;
+	min-width: 1050px; /*min to prevent tabs from exceeding width of the modal*/
+}
+.modal-dialog.data-export-modal-dialog.expanded {
+	max-width: 90%;
+}
+.modal-dialog.data-export-modal-dialog .modal-content {
+	border-radius: 10px;
+	background: rgba(50, 50, 50);
+	color: white;
+}
+.export-option-container {
+	width: 50%;
+	display: inline-flex;
+	padding-right: 20px;
+}
+.export-option-label {
+	font-weight: 500;
+}
+.export-option-container .input-field {
+	flex: 1 1 100%;
+	color: rgb(230,230,230);
+	border-bottom: 2px solid rgba(255,255,255,0.3);
+}
+.export-option-container .input-field:hover, 
+.export-option-container .input-field:focus {
+	border-bottom: 2px solid rgba(255,255,255,0.5) !important;
+	color: white;
+}
+.export-option-container .input-field > option {
+	background: black;
+}
+.export-option-container .input-field > option:hover {
+	background-color: #0b3766;
+}
+.export-option-label,
+.export-option-container .input-field {
+	font-size: 18px;
+}
+.export-field-options-container {
+	margin-top: 40px;
+}
+
+.export-field-collapse-container {
+	width: 100%;
+}
+.export-tab-content {
+	width: 100%;
+}
+#data-export-modal .tabs {
+	position: static;
+	display: flex;
+}
+
+.data-export-table-tab {
+	background-color: rgb(0, 0, 0);
+	transition: 0.25s all;
+	padding: 5px;
+}
+.data-export-table-tab:hover {
+	background: rgb(30,30,30);
+}
+.data-export-table-tab.selected {
+	background-color: rgb(40, 40, 40);
+	border-radius: 10px 10px 0 0;
+	box-shadow: 3px -6px 6px 0px rgb(0 0 0 / 30%);
+	position: relative;
+	z-index: 10;
+}
+#data-export-modal .export-data-tab-button {
+	border: none;
+	background: none;
+	padding: 0;
+}
+.export-tab-label {
+	color: white;    
+	text-overflow: ellipsis;
+	transition: 0.25s all;
+}
+.data-export-table-tab.selected .export-tab-label {
+	color: hsl(188deg 100% 50%);
+}
+.remove-table-tab-button,
+.remove-export-field-button,
+.include-export-table-button,
+.include-export-field-button {
+	opacity: 0;
+	color: white;
+	transition: 0.3s all;
+}
+
+.remove-table-tab-button {
+	/*margin-right: 10px;*/
+}
+
+.export-field-options-container .data-export-table-tab:hover .remove-table-tab-button,
+.export-field-options-container .data-export-table-tab.selected .remove-table-tab-button,
+.export-field-options-container .field-list-item:hover .remove-export-field-button, 
+.export-field-options-container .field-list-item:hover .include-export-field-button {
+	opacity: 1;
+}
+#data-export-modal .tab-content {
+	width: 100%;
+	height: unset;
+}
+.export-tab-content {
+	background-color: rgb(40, 40, 40);
+}
+#data-export-modal .tab-field-list-container {
+	margin-top: 0;
+	padding: 15px;
+}
+#data-export-modal .modal-footer {
+	justify-content: center;
+	margin-top: 20px;
+}
+
+/*^^^^^^^^ export button footer ^^^^^^^^*/
+
+
+/*_________details pane___________*/
 #row-details-pane {
 	background-color: rgb(230, 230, 230);
 	overflow-y: auto;
 	padding-top: 1rem;
 	padding-right: 0;
+	/*width: 66.66667%;*/
 }
 
 .form-section.card {
@@ -658,6 +816,7 @@ body {
 	max-width: 100%;
 	flex: 1 1 auto;
 }
+/*^^^^^^^^^^ details pane ^^^^^^^^*/
 
 /********** override styles from other bhims style sheets **********/
 .form-section {

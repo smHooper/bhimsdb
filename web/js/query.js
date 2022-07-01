@@ -223,7 +223,10 @@ var BHIMSQuery = (function(){
 						const encounterID = $button.data('encounter-id');
 						const url = encodeURI(`${window.location.href.split('?')[0]}?{"encounters": {"id": {"value": "(${encounterID})", "operator": "IN"}}}`);
 						copyToClipboard(url, `Permalink for encounter ${encounterID} successfully copied to clipboard`);
-					})
+					});
+
+					// Show export button
+					$('.data-export-footer').removeClass('hidden').attr('aria-hidden', false);
 				}
 			}
 		).then(() => {
@@ -285,8 +288,7 @@ var BHIMSQuery = (function(){
 			$.when(...deferreds).then(() =>  {
 				this.loadSelectedEncounter();
 				this.addMapData();
-				hideLoadingIndicator();
-			});
+			}).always(hideLoadingIndicator());
 		});
 
 		return deferreds;
@@ -401,13 +403,13 @@ var BHIMSQuery = (function(){
 					}
 
 					// Show this option
-					$optionElement.change();
 					$('.tab-field-list-container .field-list-item > .add-field-query-option-button')
 						.filter((_, el) => {return $(el).data('target') === ('#' + $optionElement.attr('id'))})
 							.parent()
 							.addClass('hidden');
 					$optionElement.closest('.query-option-container').removeClass('hidden');
 					$('#copy-query-link-button').removeClass('hidden');
+					$optionElement.change();
 				}
 				this.queryOptions[tableName] = {...queryParams[tableName]};
 			}
@@ -1602,7 +1604,7 @@ var BHIMSQuery = (function(){
 	}
 
 
-	Constructor.prototype.onQueryOptionChange = function() {
+	Constructor.prototype.onQueryOptionChange = function(e) {
 		
 		// If this was the last query option, hide the copy-permalink button
 		var queryOptionsSpecified = false;
@@ -1611,6 +1613,16 @@ var BHIMSQuery = (function(){
 		}
 		$('#copy-query-link-button').toggleClass('invisible', !queryOptionsSpecified);
 		
+		// Make the tab label appear selected
+		const $target = $(e.target);
+		const $tabContent = $target.closest('.tab-content');
+		$tabContent
+			.siblings('.tab-label')
+			.toggleClass('active', 
+				$tabContent.find('.query-option-container:not(.hidden)').length > 0
+			);
+
+		// Change the query count preview
 		_this.countQueryEncounters();
 	}
 
@@ -1701,7 +1713,8 @@ var BHIMSQuery = (function(){
 				FROM data_entry_fields 
 				WHERE 
 					is_enabled AND 
-					(table_name IS NOT NULL OR css_class LIKE '%boolean-collapse-trigger%') 
+					table_name IS NOT NULL AND 
+					css_class NOT LIKE '%boolean-collapse-trigger%' 
 				ORDER BY table_name, display_order;
 			`; 
 			queryDB(queryOptionSQL).then(queryResultString => {
@@ -1728,40 +1741,92 @@ var BHIMSQuery = (function(){
 
 					for (tableName in queryOptionConfig) {
 						this.queryOptions[tableName] = {};
+						const titlecaseTableName = `${tableName[0].toUpperCase()}${tableName.slice(1).replace('_', ' ')}`;
 						const $tab = $(`
 							<li>
 								<input id="tab-${tableName}" class="tab-button" type="radio" name="tabs">
 								<label id="tab-label-${tableName}" for="tab-${tableName}"
 									class="tab-label" 
 									role="tab" 
-									aria-selected="true" 
+									aria-selected="false" 
 									aria-controls="tab-content-${tableName}" 
 									tabindex="0">
-									${tableName[0].toUpperCase()}${tableName.slice(1).replace('_', ' ')}
+									${titlecaseTableName}
 							    </label>
 							    <div id="tab-content-${tableName}" 
 									class="tab-content" 
 									role="tabpanel" 
 									aria-labelledby="tab-label-${tableName}" 
-									aria-hidden="false"
-								>
+									aria-hidden="false">
 									<div class="tab-field-list-container"></div
 								</div>
 							</li>
 						   `).appendTo('#query-options-drawer-body > .tabs');
 
+						const $exportTab = $(`
+							<li id="export-tab-${tableName}" class="data-export-table-tab" data-table-name="${tableName}">
+								<button id="export-tab-button-${tableName}" class="tab-label export-data-tab-button" role="tab" data-toggle="collapse" data-target="#export-tab-content-${tableName}" aria-controls="export-tab-content-${tableName}" tabindex="0">
+									<span class="export-tab-label">${titlecaseTableName}</span>
+									<button class="icon-button remove-table-tab-button" role="button" data-target="#removed-table-${tableName}">
+										<i class="fas fa-md fa-times"></i>
+									</button>
+							    </button>
+							</li>
+					   `).appendTo('#export-field-options-body > .tabs')
+						const $contentCollapse = $(`
+						    <div id="export-tab-content-${tableName}" class="export-tab-content collapse" role="tabpanel" aria-labelledby="export-tab-label-${tableName}" data-table-name="${tableName}"aria-hidden="true">
+								<div class="tab-field-list-container export-fields-list"></div>
+								<div class="tab-field-list-container removed-fields-list">
+									<h5 class="field-list-header w-100 mt-2 hidden">Removed fields</h5>
+								</div>
+							</div>
+						`).appendTo('.export-field-collapse-container');
+
+						// Add table to list of (currently hidden) removed tables so they can be toggled on
+						//	when the user clicks the "remove" button in the tab label
+						$(`
+							<label id="removed-table-${tableName}" class="field-list-item hidden" data-table-name="${tableName}">
+								<span>${titlecaseTableName}</span>
+								<button id="button-add-${tableName}" class="icon-button include-export-table-button" data-target="#export-tab-${tableName}" aria-label="Add table to export" title="Add ${titlecaseTableName} to export">
+									<i class="fas fa-plus"></i>
+								</button>
+							</label>
+						`).appendTo('.export-field-options-footer');
+
+						// Configure options for each field
 						for (option of queryOptionConfig[tableName]) {
 							const fieldName = option.field_name;
 							var $optionContent = null;
 
+							// Add query option
 							$(`
 								<label class="field-list-item">
-									<button id="button-add-${option.field_name}" class="icon-button add-field-query-option-button" data-target="#query-option-${option.field_name}" aria-label="Add query option">
+									<button id="button-add-${fieldName}" class="icon-button add-field-query-option-button" data-target="#query-option-${fieldName}" aria-label="Add query option">
 										<i class="fa fa-plus" aria-hidden="true"></i>
 									</button>
 									<span>${option.display_name}</span>
 								</label>
 							`).appendTo($tab.find('.tab-field-list-container'));
+
+							// Add export option for removing this field
+							$(`
+								<label id="included-field-${fieldName}" class="field-list-item">
+									<span>${option.display_name}</span>
+									<button id="button-remove-${fieldName}" class="icon-button remove-export-field-button" data-target="#removed-field-${fieldName}" data-field-name="${fieldName}" aria-label="Remove field from export">
+										<i class="fas fa-times"></i>
+									</button>
+								</label>
+							`).appendTo($contentCollapse.find('.tab-field-list-container.export-fields-list'));
+							
+							// Add export option to add this field back in
+							$(`
+								<label id="removed-field-${fieldName}" class="field-list-item hidden">
+									<span>${option.display_name}</span>
+									<button id="button-add-${fieldName}" class="icon-button include-export-field-button" data-target="#included-field-${fieldName}" aria-label="Add field to export" title="Add ${option.display_name} field to export">
+										<i class="fas fa-plus"></i>
+									</button>
+								</label>
+							`).appendTo($contentCollapse.find('.tab-field-list-container.removed-fields-list'));
 
 							// Configure option depending on html_input_type
 							switch (option.html_input_type) {
@@ -1781,7 +1846,7 @@ var BHIMSQuery = (function(){
 													<option value="is null">is null</option>
 													<option value="is not null">is not null</option>
 												</select>
-												<input id="query-option-${option.field_name}" class="query-option-input-field string-match-query-option" type="text" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+												<input id="query-option-${fieldName}" class="query-option-input-field string-match-query-option" type="text" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
 											</div>
 										</div>
 									`); 
@@ -1797,7 +1862,7 @@ var BHIMSQuery = (function(){
 									$optionContent = $(`
 										<div class="query-option-container hidden">
 											<div class="query-option-condition-container">
-												<div id="query-option-${option.field_name}" class="slider-container query-option-input-field" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+												<div id="query-option-${fieldName}" class="slider-container query-option-input-field" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
 													<div class="query-slider-label-container">
 														<input class="slider-value slider-value-low" type="number" value=${thisMin} min=${thisMin} max=${thisMax}>
 														<input class="slider-value slider-value-high" type="number" value=${thisMax} min=${thisMin} max=${thisMax}>
@@ -1836,7 +1901,7 @@ var BHIMSQuery = (function(){
 											sliderValueInput.value = sliderValue;
 										},
 										stop: (e, slider) => {
-
+											_this.onQueryOptionChange(e);
 										}
 									}
 									
@@ -1854,8 +1919,10 @@ var BHIMSQuery = (function(){
 													<option value="<=">is before</option>
 													<option value=">=">is after</option>
 													<option value="BETWEEN">is between</option>
+													<option value="is null">is null</option>
+													<option value="is not null">is not null</option>
 												</select>
-												<input id="query-option-${option.field_name}" class="query-option-input-field single-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" >
+												<input id="query-option-${fieldName}" class="query-option-input-field single-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" >
 												<div class="query-option-double-value-container hidden">
 													<input class="query-option-input-field double-value-field low-value-field datetime-query-option" type="${option.html_input_type}" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}" aria-hidden="true">
 													<span>and</span>
@@ -1871,7 +1938,7 @@ var BHIMSQuery = (function(){
 									$optionContent = $(`
 										<div class="query-option-container hidden">
 											<div class="query-option-condition-container checkbox-option-group">
-												<select id="query-option-${option.field_name}" class="input-field query-option-input-field select2-no-tag" multiple="multiple" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
+												<select id="query-option-${fieldName}" class="input-field query-option-input-field select2-no-tag" multiple="multiple" data-field-name="${fieldName}" data-table-name="${tableName}" data-display-name="${option.display_name}">
 												</select>
 											</div>
 										</div>
@@ -1906,6 +1973,9 @@ var BHIMSQuery = (function(){
 
 						}
 					}
+
+
+
 					$('.select2-no-tag').select2({
 						tokenSeparators: [',', ' '],
 						dropdownCssClass: 'bhims-query-select2-dropdown-container',
@@ -1967,7 +2037,7 @@ var BHIMSQuery = (function(){
 						//remove option from query
 						delete _this.queryOptions[tableName][fieldName];
 
-						_this.onQueryOptionChange();
+						_this.onQueryOptionChange(e);
 					});
 
 					$('.query-option-operator.datetime-query-option').change(e => {
@@ -2062,8 +2132,8 @@ var BHIMSQuery = (function(){
 						const tableName = $sliderRange.data('table-name');
 						const fieldName = $sliderRange.data('field-name');
 						var values = $input.parent().find('input.slider-value').map((_, el) => {return el.value});
-						_this.queryOptions[tableName][fieldName] = {value: `${values[0]} AND ${values[1] + 1}`, operator: 'BETWEEN'};
-						_this.onQueryOptionChange();
+						_this.queryOptions[tableName][fieldName] = {value: `${values[0]} AND ${parseInt(values[1]) + 1}`, operator: 'BETWEEN'};
+						_this.onQueryOptionChange(e);
 					}).keyup(e => {
 						/* Change the width of the input when the length of it changes*/
 						$target = $(e.target)
@@ -2102,9 +2172,14 @@ var BHIMSQuery = (function(){
 							const value = $valueField.val(); 
 							
 							// exit if the user hasn't entered a value yet
-							if (value == null || value === '') return;
-
-							queryClause = {value: value, operator: operatorValue};//`${tableName}.${fieldName} ${operatorValue} '${value}'`
+							if (value == null || value === '') {
+								if (operatorValue.includes('null')) {
+									
+								} else {
+									return;
+								}
+							}
+							queryClause = {value: `'${value}'`, operator: operatorValue};//`${tableName}.${fieldName} ${operatorValue} '${value}'`
 						}
 						this.queryOptions[tableName][fieldName] = queryClause;
 					});
@@ -2122,20 +2197,89 @@ var BHIMSQuery = (function(){
 							return;
 						}
 						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
-						_this.onQueryOptionChange();
+						_this.onQueryOptionChange(e);
 					});
 
 					// When a query option input loses focus, hide/show the copy-permalink button, depending on 
-					//	whether there user has any query options specified
+					//	whether the user has any query options specified
 					$('.query-option-input-field').blur(_this.onQueryOptionChange);
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();
+
+					// make sure all other export collapses collapse when a new one is clicked
+					$('.export-data-tab-button').click(e => {
+						const $button = $(e.target).closest('.export-data-tab-button');
+						const $tab = $button.closest('.data-export-table-tab');
+						
+						// If this tab isn't selected, deselect the currently selected one
+						if (!$tab.is('.selected')) {
+							$('.data-export-table-tab.selected').removeClass('selected');
+						}
+						$tab.toggleClass('selected');
+
+						const targetCollapseID = $button.data('target');
+						$(`.export-tab-content.collapse.show:not(${targetCollapseID})`).collapse('hide');
+					});
+
+					// Event handlers to toggle removed/included tables and fields
+					// 	The user is not allowed to remove the encounters table because it's required in the exported data 
+					$('.remove-table-tab-button:not([data-target="#removed-table-encounters"])').click(e => {
+						const $button = $(e.target).closest('button');
+						const $tab = $button.closest('.data-export-table-tab').addClass('hidden');
+						const $collapse = $($tab.find('.export-data-tab-button').data('target'))
+							.addClass('hidden');
+						const $removedTableTarget = $($button.data('target'));
+						$removedTableTarget.removeClass('hidden');
+					});
+					// Instead of just disabling or removing the remove-table button, tell the user why they can't exclude it
+					$('.remove-table-tab-button[data-target="#removed-table-encounters"]').click(() => {
+						showModal(
+							'The Encounters table is required in the export and cannot be excluded. You can, however, exclude specific fields from the Encounters table (except for Encounter ID, which is also required).', 
+							'Encounters table required');
+					})
+					$('.include-export-table-button').click(e => {
+						const $button = $(e.target).closest('button');
+						$button.closest('.field-list-item').addClass('hidden');
+						const $tab = $($button.data('target')).removeClass('hidden');
+						const $collapse = $($tab.find('.export-data-tab-button').data('target'))
+							.removeClass('hidden');
+						const $removedTableTarget = $($button.data('target'));
+						$removedTableTarget.removeClass('hidden');
+					});
+					// Same thing as the encounters table: the encounter id field is required
+					$('.remove-export-field-button:not([data-field-name="id"])').click(e => {
+						const $button = $(e.target).closest('button');
+						$button.closest('.field-list-item').addClass('hidden');
+						const $removedFieldTarget = $($button.data('target'));
+						$removedFieldTarget.removeClass('hidden');
+						// Show the header for the removed fields, since one was removed
+						$button.closest('.export-tab-content')
+							.find('.removed-fields-list > .field-list-header')
+							.removeClass('hidden');
+					});
+					$('.remove-export-field-button[data-field-name="id"]').click(() => {
+						showModal('The Encounter ID field is required in the export and cannot be excluded.', 'Encounter ID field required');
+					});
+					$('.include-export-field-button').click(e => {
+						const $button = $(e.target).closest('button');
+						$button.closest('.field-list-item').addClass('hidden');
+						const $includeFieldTarget = $($button.data('target'));
+						$includeFieldTarget.removeClass('hidden');
+						// Toggle the header as visible or not depending on if there are any visible removed fields
+						$button.closest('.export-tab-content')
+							.find('.removed-fields-list > .field-list-header')
+							.toggleClass('hidden', !$('.removed-fields-list .field-list-item:not(.hidden)').length);
+					});
 				}
+				
+				// Make sure a tab of the field export options tabs is shown
+				$('.export-data-tab-button').first().click();
+
 				configurationComplete.resolve(true);
 				hideLoadingIndicator();
 			})
-		})
+		});
 
 		return configurationComplete;
 	}
@@ -2186,6 +2330,69 @@ var BHIMSQuery = (function(){
 		}
 	}
 
+	/* Helper method to retrieve user-specified query options */
+	Constructor.prototype.getQueryOptions = function() {
+		var options = {};
+		for (const tableName in _this.queryOptions) {
+			const tableOptions = _this.queryOptions[tableName];
+		    if (Object.keys(tableOptions).length) options[tableName] = {...tableOptions};
+		}
+
+		return options;
+	}
+
+
+	Constructor.prototype.prepareExport = function() {
+
+		showLoadingIndicator('prepareExport');
+
+		const sqlCriteria = this.getQueryOptions();
+		const exportDBCodes = $('#input-export_codes').val() === 'yes';
+		const exportAllFields = $('#input-select_fields').val() === 'all';
+		
+		var exportFields = {};
+		const $tabs = $('#data-export-modal .data-export-table-tab' + (exportAllFields ? '' : ':not(.hidden)'));
+		for (const tab of $tabs) {
+			const $tab = $(tab);
+			const tableName = $tab.data('table-name');
+			const $tabContent = $(`.export-tab-content[data-table-name="${tableName}"]`);
+			
+			// If any fields were removed for this table, find out which ones to include
+			const fieldSelector = exportAllFields ? 
+				'.export-fields-list .remove-export-field-button' :
+				'.export-fields-list .field-list-item:not(.hidden) .remove-export-field-button'
+			;
+			const fields = $tabContent.find(fieldSelector)
+				.map((_, el) => $(el).data('field-name'))
+				.get();
+			exportFields[tableName] = fields;
+		}
+
+		const exportParams = JSON.stringify({
+			include_codes: exportDBCodes,
+			criteria: sqlCriteria,
+			fields: exportFields 
+		});
+
+		return $.ajax({
+			url: 'bhims.php',
+			method: 'POST',
+			data: {action: 'exportData', exportParams: exportParams},
+			cache: false
+		}).done(resultString => {
+			if (resultString.trim().startsWith('Traceback')) {
+				showMOdal('An unexpected error with the export occurred', 'Export error')
+				console.log(resultString)
+			} else {
+				window.location.href = resultString.trim();
+			}
+		}).fail((xhr, status, error) => {
+			console.log(error)
+		}).always(() => {
+			hideLoadingIndicator();
+		});
+	}
+
 
 	/*
 	Configure the page
@@ -2194,6 +2401,8 @@ var BHIMSQuery = (function(){
 
 		showLoadingIndicator();
 
+		// fillFieldValues dispatches a custom event indicating that all fields are filled
+		//	After that happens, wait for .change events to finish, then remove the .dirty classs
 		window.addEventListener('fields-full', e => {
 			console.log(e.detail);
 			setTimeout(
@@ -2205,6 +2414,7 @@ var BHIMSQuery = (function(){
 				2000
 			);
 		})
+
 		// Get username
 		$.ajax({
 			url: 'bhims.php',
@@ -2220,16 +2430,18 @@ var BHIMSQuery = (function(){
 			}
 		});
 
+		// Data export modal: when the field selection tabs are shown, expand the modal
+		$('#input-select_fields').change(e => {
+			const value = e.target.value;
+			$('.data-export-modal-dialog').toggleClass('expanded', value === 'subset');
+		})
+
 		this.queryResultMap = this.configureMap('query-result-map');
 		
 		$('#show-query-options-button').click(this.onShowQueryOptionsClick);
 		$('#run-query-button').click(this.onRunQueryClick);
 		$('#copy-query-link-button').click(() => {
-			var options = {};
-			for (const tableName in _this.queryOptions) {
-				const tableOptions = _this.queryOptions[tableName];
-			    if (Object.keys(tableOptions).length) options[tableName] = {...tableOptions};
-			}
+			const options = this.getQueryOptions();
 			const url = encodeURI(`${window.location.href.split('?')[0]}?${JSON.stringify(options)}`);
 			copyToClipboard(url, `Permalink for this query successfully copied to clipboard`);
 		});
@@ -2293,6 +2505,14 @@ var BHIMSQuery = (function(){
 					.append(`
 						<span class="uneditable-units-text"></span>
 					`);
+		});
+
+		$('.data-export-button').click(() => {
+			$('#data-export-modal').modal({backdrop: 'static'})
+		});
+
+		$('#prepare-export-button').click(() => {
+			this.prepareExport();
 		});
 
 		$('.sidebar-collapse-button').click((e) => {

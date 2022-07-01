@@ -45,7 +45,7 @@ function runCmd($cmd) {
 	
 	$pipes = array();
 	$process = proc_open(
-		"powershell.exe -Command " . $cmd, 
+		$cmd, 
 		array(
 			0 => array("pipe", "r"), //STDIN
 		    1 => array('pipe', 'w'), // STDOUT

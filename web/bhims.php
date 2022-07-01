@@ -43,8 +43,9 @@ function runCmd($cmd) {
 	// can't get this to work for python commands because conda throws
 	// an error in conda-script (can't import cli.main)
 	
+	$pipes = array();
 	$process = proc_open(
-		$cmd, 
+		"powershell.exe -Command " . $cmd, 
 		array(
 			0 => array("pipe", "r"), //STDIN
 		    1 => array('pipe', 'w'), // STDOUT
@@ -53,7 +54,7 @@ function runCmd($cmd) {
 		$pipes,
 		NULL,
 		NULL,
-		array('bypass_shell' => false)
+		array('bypass_shell' => true)
 	);
 
 	if (is_resource($process)) {
@@ -115,6 +116,11 @@ function uuid() {
 }
 
 
+function getAttachmentDir() {
+	$rootDir = strpos(getcwd(), 'git') ? 'git' : 'prod';
+	return preg_replace("/prod/", $rootDir, $attachmentDir);
+}
+
 // File upload with submit
 if (isset($_FILES['uploadedFile'])) {
 	
@@ -122,7 +128,8 @@ if (isset($_FILES['uploadedFile'])) {
 	$fileNameParts = explode('.', $fileName);
 	$fileExt = end($fileNameParts);
 	$uuid = uuid();
-	$uploadFilePath = "$attachmentDir/$uuid.$fileExt";
+	$attachmentDirPath = getAttachmentDir();
+	$uploadFilePath = "$attachmentDirPath/$uuid.$fileExt";
 
 	if (move_uploaded_file($_FILES['uploadedFile']['tmp_name'], $uploadFilePath)) {
 		//$fileTypeCode = $_POST['fileTypeCode'];
@@ -287,6 +294,29 @@ if (isset($_POST['action'])) {
 		}
 	}
 
+	if ($_POST['action'] == 'exportData') {
+		if (isset($_POST['exportParams'])) {
+			// Call the export script and redirectoy stderr to a text file. After the script finishes, 
+			//	read that text file to check if the script ran successfully or not. If the stderrr 
+			//	text file is blnak, then the run was sucessful. 
+			$params = json_encode($_POST['exportParams']);
+			$cacheDir = "export_cache";
+			$runID = uniqid();
+			// set stderr text file path with the unique ID for this run so that in case an old stderr.txt file was never properly cleaned up, there's no confusion 
+			$stderrPath = $cacheDir . "/stderr" . $runID . ".txt";
+			$cmd = "conda activate bhims && python ../py/scripts/export_data.py -e dev -r $runID -i $params 2> $stderrPath";
+
+			// run the command
+			$result = shell_exec($cmd);//
+
+			// read stderr text file
+			$stderr = file_get_contents($stderrPath);
+			deleteFile($stderrPath);
+			$exportFilePath = $cacheDir . "/bhims_export_" . $runID . ".xlsx";
+			echo $stderr . "\n" . $exportFilePath;
+		}
+	}
+
 	if ($_POST['action'] == 'readTextFile') {
 		if (isset($_POST['textPath'])) {
 			echo file_get_contents($_POST['textPath']);
@@ -302,7 +332,8 @@ if (isset($_POST['action'])) {
 	if ($_POST['action'] == 'deleteFile') {
 		if (isset($_POST['filePath'])) {
 			$fileName = basename($_POST['filePath']);
-			echo deleteFile("$attachmentDir.$fileName") ? 'true' : 'false';
+			$attachmentDirPath = getAttachmentDir();
+			echo deleteFile("$attachmentDirPath.$fileName") ? 'true' : 'false';
 		} else {
 			echo 'false';
 		}

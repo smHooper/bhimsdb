@@ -33,8 +33,8 @@
 		crossorigin=""></script>
 
 	<link rel="stylesheet" href="css/bhims-entry.css">
-	<link rel="stylesheet" href="css/query.css">
 	<link rel="stylesheet" href="css/bhims.css">
+	<link rel="stylesheet" href="css/query.css">
 </head>
 
 <body>
@@ -144,21 +144,25 @@
 
 			<!--main dashboard content -->
 			<div class="main-content-wrapper">
-				<div id="result-summary-pane" class="query-result-pane col-4">
-					<div id="query-result-list-container" class="result-summary-container">
-						<ul id="query-result-list">
-							<!-- list built dynamically -->
-						</ul>
+				<div class="main-content-body">
+					<div id="result-summary-pane" class="query-result-pane col-4">
+						<div id="query-result-list-container" class="result-summary-container">
+							<ul id="query-result-list">
+								<!-- list built dynamically -->
+							</ul>
+						</div>
+						<div id="query-result-map-container" class="result-summary-container">
+							<div id="query-result-map" class="map"></div>
+						</div>
 					</div>
-					<div id="query-result-map-container" class="result-summary-container">
-						<div id="query-result-map" class="map"></div>
+
+					<div id="row-details-pane" class="query-result-pane accordion col-8">
+						<!-- fields added dynamically-->
 					</div>
 				</div>
-
-				<div id="row-details-pane" class="query-result-pane accordion col-8">
-					<!-- fields added dynamically-->
+				<div class="data-export-footer hidden" aria-hidden="true">
+					<button class="generic-button data-export-button" title="Export query result">export data</button>
 				</div>
-
 			</div> <!--main-content-wrapper-->
 
 		</div> <!--wrapper-->
@@ -169,51 +173,110 @@
 	
 	<!-- map modal -->
 	<div class="modal fade lightbox-modal bhims-entry-modal" id="map-modal" tabindex="-1" role="dailog" aria-hidden="true">
-	  <div class="modal-dialog" role="document">
-	    <div class="modal-content">
-	      <div class="modal-body modal-img-body">
-	      	<div class="modal-header-container">
-		      	<div class="modal-img-body-header">
-			        <button type="button" class="close icon-button" data-dismiss="modal" aria-label="Minimize map">
-			          <img src="imgs/minimize_window_icon_50px.svg"></img>
-			        </button>
-		      	</div>
-		    </div>
-		    
-		    <div class="map modal-map" id="modal-encounter-location-map">  
-		    </div>
-	      
-	      </div>
-	    </div>
-	  </div>
+		<div class="modal-dialog" role="document">
+		<div class="modal-content">
+			<div class="modal-body modal-img-body">
+			<div class="modal-header-container">
+				<div class="modal-img-body-header">
+					<button type="button" class="close icon-button" data-dismiss="modal" aria-label="Minimize map">
+						<img src="imgs/minimize_window_icon_50px.svg"></img>
+					</button>
+				</div>
+			</div>
+			
+			<div class="map modal-map" id="modal-encounter-location-map">  
+			</div>
+			
+			</div>
+		</div>
+		</div>
 	</div>
 
 	<!--attachment preview modal -->
 	<div class="modal fade lightbox-modal" id="attachment-modal" tabindex="-1" role="dialog" aria-hidden="true">
-	  <div class="modal-dialog" role="document" data-dismiss="modal">
-	    <div class="modal-content" data-dismiss="modal">
-	      <div class="modal-body modal-img-body" >
-	      	<div class="modal-header-container" data-dismiss="modal">
-		      	<div class="modal-img-body-header">
-			        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-			          <span aria-hidden="true">&times;</span>
-			        </button>
-		      	</div>
-		    </div>
-	      	<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
-	      	<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
-	      		<source src="#">
-	      		Sorry, your browser does not support HTML video content
-	      	</video>
-	      	<audio class="modal-img hidden" id="modal-audio-preview" controls alt="preview of uploaded audio">
-	      		<source src="#">
-	      		Sorry, your browser does not support HTML audio content
-	      	</audio>
-	      </div>
-	    </div>
-	  </div>
+		<div class="modal-dialog" role="document" data-dismiss="modal">
+			<div class="modal-content" data-dismiss="modal">
+				<div class="modal-body modal-img-body" >
+					<div class="modal-header-container" data-dismiss="modal">
+						<div class="modal-img-body-header">
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
+					</div>
+					<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
+					<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
+						<source src="#">
+						Sorry, your browser does not support HTML video content
+					</video>
+					<audio class="modal-img hidden" id="modal-audio-preview" controls alt="preview of uploaded audio">
+						<source src="#">
+						Sorry, your browser does not support HTML audio content
+					</audio>
+				</div>
+			</div>
+		</div>
 	</div>
 	
+	<!-- export dialog -->
+	<div id="data-export-modal" class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-modal="true">
+		<div class="modal-dialog modal-img-body data-export-modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Data export options</h5>
+					<button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">×</span>
+					</button>
+				</div>
+				<div class="modal-body">
+					<div class="field-container-row">
+						<!-- <div class="field-container export-option-container">
+							<label class="export-option-label" for="input-export_file_type">file type</label>
+							<select id="input-export_file_type" class="input-field" value="csv" title="">
+								<option value="csv">CSV</option>
+								<option value="shp">shapefile</option>
+							</select>
+						</div> -->
+						<div class="field-container export-option-container col">
+							<label class="export-option-label" for="input-select_fields">Export fields</label>
+							<select id="input-select_fields" class="input-field no-option-fill" name="select_fields" value="all" title="">
+								<option value="all">export all tables and fields</option>
+								<option value="subset">choose a subset</option>
+							</select>
+						</div>
+						<div class="field-container export-option-container col">
+							<label class="export-option-label" for="input-export_codes">Include human-readable values</label>
+							<select id="input-export_codes" class="input-field no-option-fill" name="export_codes" value="no" title="">
+								<option value="no">No, only export numeric database code values</option>
+								<option value="yes">Yes, export both numeric codes and human-readable values</option>
+							</select>
+						</div>
+					</div>
+					<div class="export-field-options-container collapse" data-dependent-target="#input-select_fields" data-dependent-value="subset">
+						<div id="export-field-options-body">
+							<ul class="tabs" role="tablist">
+								<!-- filled dynamically -->
+							</ul>
+							<div class="export-field-collapse-container">
+								<!-- filled dynamically -->
+							</div>
+						</div>
+						<div class="export-field-options-footer tab-field-list-container">
+							<h5 class="w-100">Removed tables</h5>
+							<!-- shows tables that the user has removed so they can be added back in -->
+						</div> 
+						
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button id="prepare-export-button" class="generic-button modal-button">Create export</button>
+					<button class="generic-button modal-button close-modal" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
 	<script src="js/bhims.js"></script>
 	<script src="js/bhims-entry.js"></script>
 	<script src="js/query.js"></script>

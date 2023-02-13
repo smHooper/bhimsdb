@@ -17,6 +17,8 @@ function isInViewport(el) {
 	);
 }
 
+const FEET_PER_METER = 3.2808399;
+
 var BHIMSEntryForm = (function() {
 	
 	/*
@@ -45,6 +47,8 @@ var BHIMSEntryForm = (function() {
 		this.placeNameCoordinates = {};
 		this.acceptedAttachmentExtensions = {};
 		this.confirmLocationSelectChange = false; //set to true after fillFieldValues runs
+		this.serverEnvironment = '';
+		this.initialNarrativeText = '';
 		_this = this;
 	}
 
@@ -60,6 +64,12 @@ var BHIMSEntryForm = (function() {
 			accordions = {},
 			fieldContainers = {},
 			fields = {};
+
+		getEnvironment()
+			.done(resultString => {
+				this.serverEnvironment = resultString.trim();
+			})
+
 
 		const processQueryResult = (obj, result) => {
 			const queryResult = $.parseJSON(result);
@@ -285,7 +295,7 @@ var BHIMSEntryForm = (function() {
 						for (const displayOrder in childFields) {
 							const fieldInfo = childFields[displayOrder];
 
-							var inputFieldAttributes = `id="${fieldInfo.html_id}" class="${fieldInfo.css_class}" name="${fieldInfo.field_name || ''}" data-table-name="${fieldInfo.table_name || ''}" placeholder="${fieldInfo.placeholder}"`;
+							var inputFieldAttributes = `id="${fieldInfo.html_id}" class="${fieldInfo.css_class}" name="${fieldInfo.field_name || ''}" data-table-name="${fieldInfo.table_name || ''}" placeholder="${fieldInfo.placeholder}" title="${fieldInfo.description}"`;
 							
 							var fieldLabelHTML = `<label class="field-label" for="${fieldInfo.html_id}">${fieldInfo.label_text || ''}</label>`
 							var inputTag = fieldInfo.html_input_type;
@@ -314,10 +324,11 @@ var BHIMSEntryForm = (function() {
 							if (fieldInfo.html_input_type == 'datetime-local') 
 								inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
 							const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
+							const required = fieldInfo.required === 't';
 							$(`
 								<div class="${fieldInfo.parent_css_class}">
-									<${inputTag} ${inputFieldAttributes} ${fieldInfo.required ? 'required' : ''}>${inputTagClosure}
-									${fieldInfo.required ? '<span class="required-indicator">*</span>' : ''}
+									<${inputTag} ${inputFieldAttributes} ${required ? 'required' : ''}>${inputTagClosure}
+									${required ? '<span class="required-indicator">*</span>' : ''}
 									${fieldLabelHTML}
 								</div>
 							`).appendTo($parent);
@@ -555,7 +566,7 @@ var BHIMSEntryForm = (function() {
 				//	In addition to going to next section, show required indicator explanation
 				$('#title-page-continue-button').click((e) => {
 					_this.onPreviousNextButtonClick(e, 1);
-					$('.required-indicator-explanation').removeClass('hidden');
+					$('.form-header').removeClass('hidden');
 				})
 
 				$('#previous-button').click(e => {
@@ -566,9 +577,20 @@ var BHIMSEntryForm = (function() {
 				});
 				$('#submit-button').click(_this.onSubmitButtonClick);
 				$('.indicator-dot').click(_this.onIndicatorDotClick);
+				$('#reset-form-button').click(_this.onResetFormClick);
+				$('#new-submission-button').click(e => {
+					e.preventDefault();
+					_this.resetForm();
+				});
+				$('#disable-required-slider-container input[type=checkbox]').change(e => {
+					const $checkbox = $(e.target);
+					$('.field-container .required-indicator').toggleClass('hidden', $checkbox.is(':checked'));
+					$('.input-field.error').removeClass('error');
+				});
 
 				// query.js will hide the loading indicator on its own
 				hideLoadingIndicator();
+
 			}
 			
 			$('#expand-map-button').click(_this.onExpandMapButtonClick);
@@ -602,6 +624,7 @@ var BHIMSEntryForm = (function() {
 				...deferreds
 			).then(function() {
 				if (isNewEntry) {
+					_this.setDefaultInputValues();
 					_this.fillFieldValues(_this.fieldValues);
 					_this.confirmLocationSelectChange = true;
 					// If the user does not have previous data saved, add the first card here in 
@@ -611,7 +634,20 @@ var BHIMSEntryForm = (function() {
 						const tableName = $(el).data('table-name');
 						if (!(tableName in _this.fieldValues)) _this.addNewCard($(el));
 					});
+
+					// go to the last form paage the user was on
+					// *** currently conflicts with addSidebarMenu() and page doesn't scroll
+					// const pageName = window.location.pathname.split('/').pop();
+					// const currentStorage =  window.localStorage[pageName] ? JSON.parse(window.localStorage[pageName]) : {};
+					// const lastPageIndex = currentStorage.selectedPage;
+					// if ((lastPageIndex !== undefined) && (lastPageIndex !== -1)) {
+					// 	$('.form-footer .form-navigation').removeClass('hidden');
+					// 	$('#title-page-continue-button').addClass('hidden');
+					// 	$('.form-header').removeClass('hidden');
+					// 	_this.goToPage(lastPageIndex + 1, true);
+					// } 
 				}
+
 				// Indicate that configuring form finished
 				deferred.resolve();
 			});
@@ -625,15 +661,15 @@ var BHIMSEntryForm = (function() {
 					<option value="ft">feet</option>
 					<option value="m">meters</option>
 				`).val('ft');
+				//.change(this.onShortDistanceUnitsFieldChange); //When a field with units changes, re-calculate
+
 
 			// Set additional change event for initial action selects
-			$('#input-initial_human_action, #input-initial_bear_action').change(this.onInitialActionChange);
+			//$('#input-initial_human_action, #input-initial_bear_action').change(this.onInitialActionChange);
 
 			// When an input changes, save the result to the this.fieldValues global object so data are persistent
 			$('.input-field').change(this.onInputFieldChange);
 
-			//When a field with units changes, re-calculate
-			$('.units-field').change(onUnitsFieldChange);
 
 			// When a card is clicked, close any open cards in the same accordion
 			$('.collapsed').click(function() {
@@ -648,14 +684,15 @@ var BHIMSEntryForm = (function() {
 			// Make sure the hidden class is added/removed when bootstrap collapse events fire
 			$('.collapse.field-container, .collapse.accordion')
 				.on('hidden.bs.collapse', function () {
-					$(this).addClass('hidden');
+					const $collapse = $(this);
+					if (!$collapse.is('.show')) $collapse.addClass('hidden');
 				})
 				.on('show.bs.collapse', function () {
 					$(this).removeClass('hidden');
 				});
 
 			// When any card-label-fields change, try to set the parent card label
-			$('.input-field.card-label-field').change(e => {this.onCardLabelFieldChange($(e.target))});
+			$(document).on('change.onCardLabelFieldChange', '.input-field.card-label-field', e => {this.onCardLabelFieldChange($(e.target))});
 
 			// When the user types anything in a field, remove the .error class (if it was assigned)
 			$('.input-field').on('keyup change', this.onInputFieldKeyUp);
@@ -741,11 +778,15 @@ var BHIMSEntryForm = (function() {
 
 
 			// Save user input when the user leaves the page
-			$(window).on('beforeunload', (e) => {
+			$(window).on('beforeunload', e => {
 				if (isNewEntry) {
 					if (Object.keys(_this.fieldValues).length) {//this.fieldValues is cleared on submit
 						const pageName = window.location.pathname.split('/').pop();
 						var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}');
+
+						// Get the page the user is currently on
+						const formPageIndex = parseInt($('.form-page.selected').data('page-index'));
+						if (formPageIndex >= 0) currentStorage.selectedPage = formPageIndex;
 
 						// Record map extent
 						currentStorage.encounterMapInfo = {
@@ -776,20 +817,29 @@ var BHIMSEntryForm = (function() {
 						// Remove locks on admin sections
 						$('.unlock-button, .locked-section-screen').remove();
 						$('.form-section.admin-section, .form-section.requires-assessment-role').removeClass('locked');
-						$('#input-assessed_by').val(this.username);
+						//$('#input-assessed_by').val(this.username);
+						
+						if (isNewEntry) {
+							addSidebarMenu();
+							$('#disable-required-slider-container').removeClass('hidden');
+							$('.main-content-wrapper').appendTo('.main-container-with-sidebar');
+							$('#username').text(this.username);
+							
+						}
 					}
 				});
 
 			// Fill datetime_entered field
-			const datetimeEnteredField = $('#input-datetime_entered');
-			if (datetimeEnteredField.length) { // could be disabled
+			const $datetimeEnteredField = $('#input-datetime_entered');
+			if ($datetimeEnteredField.length) { // could be disabled
 				const now = new Date();
-				//	calculate as a numberic timestamp with the appropiate timezone offset
+				//	calculate as a numeric timestamp with the appropiate timezone offset
 				//		* 60000 because .getTimezoneOffset() returns offset in minutes
 				//		but the numeric timestamp needs to be in miliseconds 
 				// Also round to the nearest minute
 				const nowLocalTimestamp = Math.round((now.getTime() - (now.getTimezoneOffset() * 60000)) / 60000) * 60000;
-				datetimeEnteredField[0].valueAsNumber = nowLocalTimestamp;
+				$datetimeEnteredField[0].valueAsNumber = nowLocalTimestamp;
+				$datetimeEnteredField.change()
 			}
 
 			// Get coordinates for BC units and place names
@@ -826,11 +876,24 @@ var BHIMSEntryForm = (function() {
 					}
 				);
 
-			customizeConfiguration();
+			window.addEventListener('fields-full', e => {
+				customizeEntryForm();//setTimeout(() => {customizeEntryForm()}, 5000);
+			});
 
 		})
 		
 		return deferred;
+	}
+
+
+	/*
+	Helper function to set default values on inputs from the config table in the database
+	*/
+	Constructor.prototype.setDefaultInputValues = function() {
+		for (const info of Object.values(entryForm.fieldInfo).filter(i => i.default_value != null) ) {
+			// Use the name attribute so that inputs in accordions get their values set
+			$(`.input-field[name='${info.field_name}']`).val(info.default_value).change();
+		}
 	}
 
 
@@ -976,7 +1039,7 @@ var BHIMSEntryForm = (function() {
 		).fail(
 			(xhr, status, error) => {
 			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		});
+		})//.always(() => {hideLoadingIndicator()});
 		/*// Check if the user has a field values from a saved session
 
 
@@ -1018,7 +1081,7 @@ var BHIMSEntryForm = (function() {
 	Skip to the section of the form.
 	@param movement: number of sections to jump to (positive=right or negative=left)
 	*/
-	Constructor.prototype.goToPage = function(movement=1) {
+	Constructor.prototype.goToPage = function(movement=1, preventScroll=false) {
 	
 		const $currentPage = $('.form-page.selected');
 		const currentIndex = parseInt($currentPage.data('page-index'));
@@ -1032,24 +1095,23 @@ var BHIMSEntryForm = (function() {
 
 		$(`.indicator-dot:isSection(${currentIndex})`).removeClass('selected');
 		$(`.indicator-dot:isSection(${nextIndex})`).addClass('selected');
+		_this.setPreviousNextButtonState(nextIndex);
 
 		// If there's an accordion in the new section, find any shown cards and
 		//	collapse them, then show them again after a delay
 		const $shown = $nextPage.find('.card:not(.cloneable) .card-collapse.show')
-			.filter('.show')
 			.removeClass('show');
 		if ($shown.length) {
 			setTimeout(function() {
-				$shown.siblings('.card-header')
-					.find('.card-link')
-					.click()
+				$shown.collapse('show');//siblings('.card-header')
+				// 	.find('.card-link')
+				// 	.click()
 			}, 800);
 		}
 
-		
 		// if user settings prefer no motion, go directly to the section. 
 		//	Otherwise, scroll to it
-		const preventMotion = window.matchMedia('(prefers-reduced-motion)').matches
+		const preventMotion = preventScroll || window.matchMedia('(prefers-reduced-motion)').matches;
 		if (preventMotion) {
 			window.location.hash = nextElementID;
 			// Prevent jump link from appearing in URL (so user can't reload or 
@@ -1060,11 +1122,7 @@ var BHIMSEntryForm = (function() {
 			//window.location.hash = nextElementID;
 		}
 		
-		if ($nextPage.is('.submit-page')) {
-			$('.required-indicator-explanation').addClass('hidden');
-		} else {
-			$('.required-indicator-explanation').removeClass('hidden');
-		}
+		$('.form-header').toggleClass('hidden', $nextPage.is('.submit-page'));
 
 		return nextIndex;
 
@@ -1084,6 +1142,19 @@ var BHIMSEntryForm = (function() {
 
 
 	/*
+	Helper function to warn the user that there's at least one empty/invalid field
+	*/
+	Constructor.prototype.showInvalidFieldsMessage = function() {
+		showModal(
+			'There is at least one field on this page that is not valid or is not filled in.' + 
+				' You must fill all required fields (has <span style="color:#b70606;">* </span>' + 
+				' to the left of the field) before continuing to the next page. You can hover' +
+				' over each field for more information.', 
+			'Invalid/incomplete fields'
+		)
+	}
+
+	/*
 	Event handler for the previous and next buttons
 	*/
 	Constructor.prototype.onPreviousNextButtonClick = function(e, movement) {
@@ -1092,26 +1163,36 @@ var BHIMSEntryForm = (function() {
 		const $button = $(e.target);
 		if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
 
-		if ($button.attr('id') !== 'title-page-continue-button') {
-			const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
-				.filter((_, el) => {
-					let $closestCollapse = $(el).closest('.collapse');
-					while ($closestCollapse.length) {
-						if (!$closestCollapse.is('.show')) return false;
-						$closestCollapse = $closestCollapse.parent().closest('.collapse');
-					}
-					
-					return true;
-				});
-			const allFieldsValid = $parents
-				.map(
-					(_, el) => this.validateFields($(el))
-				).get()
-				.every((isValid) => isValid);
-			if (!allFieldsValid) {
-				showModal('There is at least one field on this page that is not valid or is not filled in. You must fill all required fields (has <span style="color:#b70606;">* </span> to the left of the field) before continuing to the next page. You can hover over each field for more information.', 'Invalid/incomplete fields')
-				return;
+		if (movement > 0) {
+			if ($button.attr('id') !== 'title-page-continue-button') {
+				const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
+					.filter((_, el) => {
+						let $closestCollapse = $(el).closest('.collapse');
+						while ($closestCollapse.length) {
+							if (!$closestCollapse.is('.show')) return false;
+							$closestCollapse = $closestCollapse.parent().closest('.collapse');
+						}
+						
+						return true;
+					});
+				const allFieldsValid = $parents
+					.map(
+						(_, el) => this.validateFields($(el))
+					).get()
+					.every((isValid) => isValid);
+				if (!allFieldsValid) {
+					this.showInvalidFieldsMessage();
+					return;
+				}
 			}
+			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+						.map( (_, el) => _this.validateFields($(el)) )
+							.get()
+							.every((isValid) => isValid);
+					if (!allFieldsValid) {
+						_this.showInvalidFieldsMessage();
+						return;
+					}
 		}
 
 		const nextIndex = this.goToPage(movement);
@@ -1138,21 +1219,58 @@ var BHIMSEntryForm = (function() {
 		$dot = $(e.target);
 		if ($dot.hasClass('selected')) return;
 
-		// validate fields for the currently selected section
-		/*const allFieldsValid = $('.form-page.selected .validate-field-parent')
-			.map(function() {
-				return this.validateFields($(this))
-			}).get()
-			.every((isValid) => isValid);
-		if (!allFieldsValid) return;*/
+		// validate fields for the currently selected section only if this is the production site
+		if (_this.serverEnvironment !== 'dev') {
+			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+			.map( (_, el) => _this.validateFields($(el)) )
+				.get()
+				.every((isValid) => isValid);
+			if (!allFieldsValid) {
+				_this.showInvalidFieldsMessage();
+				return;
+			}
+		}
 
 		const currentIndex = parseInt($('.indicator-dot.selected').data('page-index'));
 		const nextIndex = parseInt($dot.data('page-index'));
 
 		_this.goToPage(nextIndex - currentIndex);
 
-		_this.setPreviousNextButtonState(nextIndex);
+		//_this.setPreviousNextButtonState(nextIndex);
 
+	}
+
+
+	/*
+	Helper method to set the in-memory value from an input. Other than in 
+	onInputFieldChange(), the only other place this is useful is when saving data, 
+	the in-memory values from.short-distance-fields need to be converted to meters.
+	*/
+	Constructor.prototype.setInMemorydValue = function($input, value) {
+
+		const fieldName = ($input.attr('name') || '')
+			.replace(/\-\d+$/g, '');
+
+		// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
+		//	there could, therefore, be multiple objects with this column. In that case,
+		//	append it to the appropriate object (as IDed by the index of the card)
+		const $accordion = $input.closest('.accordion:not(.query-result-pane)');
+		if ($accordion.length) {
+
+			const tableName = $accordion.data('table-name');//fieldInfo.tableName;
+
+			// If this is the first time a field has been changed in this 
+			//	accordion, this.fieldValues[tableName] will be undefined
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			const tableRows = _this.fieldValues[tableName];
+			
+			// Get the index of this card within the accordion
+			const index = $input.attr('id').match(/\d+$/)[0];
+			if (!tableRows[index]) tableRows[index] = {};
+			tableRows[index][fieldName] = value;
+		} else {
+			_this.fieldValues[fieldName] = value;
+		}
 	}
 
 
@@ -1180,18 +1298,17 @@ var BHIMSEntryForm = (function() {
 			return;
 		}
 		
-		const val = $input.is('.input-checkbox') ? $input.prop('checked') : $input.val();
+		const value = $input.is('.input-checkbox') ? $input.prop('checked') : $input.val();
 
 		const fieldInfo = _this.fieldInfo[fieldName];
 		if (!fieldInfo) {
 			console.log(`${fieldName} not in this.fieldInfo. ID: ${$input.attr('id')}`);
-			_this.fieldValues[fieldName] = val;
+			_this.fieldValues[fieldName] = value;
 			//return;
 		} 
 		
-		// If the field is inside an accordion, it belongs to a 1-to-many relationship and 
-		//	there could, therefore, be multiple objects with this column. In that case,
-		//	append it to the appropriate object (as IDed by the index of the card)
+		//_this.setInMemorydValue($input, value);
+		
 		if ($accordion.length) {
 
 			const tableName = $accordion.data('table-name');//fieldInfo.tableName;
@@ -1204,9 +1321,9 @@ var BHIMSEntryForm = (function() {
 			// Get the index of this card within the accordion
 			const index = $input.attr('id').match(/\d+$/)[0];
 			if (!tableRows[index]) tableRows[index] = {};
-			tableRows[index][fieldName] = val;
+			tableRows[index][fieldName] = value;
 		} else {
-			_this.fieldValues[fieldName] = val;
+			_this.fieldValues[fieldName] = value;
 		}
 	}
 
@@ -1215,6 +1332,10 @@ var BHIMSEntryForm = (function() {
 	Validate all fields currently in view
 	*/
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
+		
+		// If the user has disabled validation, just return true to indicate that they're all valid
+		if ($('#disable-required-slider-container input[type=checkbox]').is(':checked')) return true;
+
 		const $fields = $parent
 			.find('.field-container:not(.disabled)')
 			.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
@@ -1259,7 +1380,8 @@ var BHIMSEntryForm = (function() {
 		const dependentElements = $(`
 			.collapse.field-container .input-field, 
 			.collapse.accordion, 
-			.collapse.add-item-container .add-item-button
+			.collapse.add-item-container .add-item-button,
+			.collapse.export-field-options-container
 			`).filter((_, el) => {return $(el).data('dependent-target') === selectID});
 		//const dependentIDs = $select.data('dependent-target');
 		//var dependentValues = $select.data('dependent-value');
@@ -1270,7 +1392,7 @@ var BHIMSEntryForm = (function() {
 			}
 			var dependentValues = $thisField.data('dependent-value').toString();
 			if (dependentValues) {
-				var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container');
+				var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container, .collapse.export-field-options-container');
 				
 				// If there's a ! at the beginning, 
 				const notEqualTo = dependentValues.startsWith('!');
@@ -1315,12 +1437,13 @@ var BHIMSEntryForm = (function() {
 		} else {
 			$select.removeClass('default error');
 			// the user selected an actual option so remove the empty default option
-			for (const el of $select.find('option')) {//.each(function(){
-				const $option = $(el);
-				if ($option.val() == '') {
-					$option.remove();
-				}
-			}
+			// **** DENA staff didn't want option removed ****
+			// for (const el of $select.find('option')) {//.each(function(){
+			// 	const $option = $(el);
+			// 	if ($option.val() == '') {
+			// 		$option.remove();
+			// 	}
+			// }
 		}
 
 		// If there are any dependent fields that should be shown/hidden, 
@@ -1705,11 +1828,23 @@ var BHIMSEntryForm = (function() {
 			zoom: mapZoom || 7
 		});
 
-		var tilelayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
-			attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
-		}).addTo(map);
+		const baseMaps = {
+			'USGS Topos': L.tileLayer(
+				'https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', 
+				{
+					attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+				}
+			).addTo(map),
+			'Satellite':  L.tileLayer(
+				'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+				{
+					attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+				}
+			)
+		};
+		const layerControl = L.control.layers(baseMaps).addTo(map);
 
-		const deferred = $.ajax({url: 'resources/dena_bc_units.json'})
+		const deferred = $.ajax({url: 'resources/management_units.json'})
 			.done(geojson => {
 				const defaultGeojsonStyle = {
 					color: '#000',
@@ -1761,6 +1896,7 @@ var BHIMSEntryForm = (function() {
 						sticky: true
 					}
 				).addTo(map);
+				layerControl.addOverlay(bcUnitsLayer, 'Units');
 
 			}).fail((xhr, error, status) => {
 				console.log('BC unit geojson read failed: ' + error);
@@ -2039,7 +2175,7 @@ var BHIMSEntryForm = (function() {
 		if (code in coordinates) {
 			const latlon = coordinates[code];
 			if (latDDD && lonDDD && _this.confirmLocationSelectChange) {
-				const onConfirm = '_this.confirmSetMarkerFromLocationSelect();';
+				const onConfirm = 'entryForm.confirmSetMarkerFromLocationSelect();';
 				_this.confirmMoveEncounterMarker(latlon.lat, latlon.lon, onConfirm);
 			} else {
 				_this.placeEncounterMarker({lat: latlon.lat, lng: latlon.lon});
@@ -2074,11 +2210,15 @@ var BHIMSEntryForm = (function() {
 			.on('shown.bs.modal', e => {
 				// When the modal is shown, the map's size is not yet determined so 
 				//	Leaflet thinks it's much smaller than it is. As a result, 
-				//	only a single tile is shown. Reset the size after a delay to prevent this
-				_this.modalEncounterMap.invalidateSize()
+				//	only a single tile is shown. Reset the size after the modal is 
+				//	loaded to prevent this
+				_this.modalEncounterMap.invalidateSize();
 				
 				// Center the map on the marker
-				_this.modalEncounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
+				_this.modalEncounterMap.setView(
+					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.encounterMap.getCenter(), 
+					_this.encounterMap.getZoom()
+				);
 			})
 			.on('hidden.bs.modal', e => {
 				// Remove the marker when the modal is hidden
@@ -2086,9 +2226,12 @@ var BHIMSEntryForm = (function() {
 
 				//center form map on the marker. Do this here because it's less jarring 
 				//	for the user to see the map move to center when the modal is closed
-				_this.encounterMap.setView(_this.encounterMarker.getLatLng(), _this.encounterMap.getZoom())
+				_this.encounterMap.setView(
+					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.modalEncounterMap.getCenter(),
+					_this.encounterMap.getZoom()
+				);
 			})
-			.modal() // Show the modal
+			.modal(); // Show the modal
 	}
 
 
@@ -2105,24 +2248,30 @@ var BHIMSEntryForm = (function() {
 
 
 		const $label = $reactionSelect.siblings('.field-label');
-		var labelText = '';
+		var labelText = '',
+			title = '';
 		switch (parseInt(actionBy)) {
 			case 1://human
 				labelText = 'What did you/another person do?';
+				title = `Select your/the person's reaction`;
 				break;
 			case 2://bear
 				labelText = 'What did the bear do?';
+				title = `Select the bear's reaction`;
 				break;
 			case 3://dog
 				labelText = 'What did the dog do?';
+				title = `Select the dog's reaction`;
 				break;
 			case 4: //stock animal
 				labelText = 'What did the stock animal do?';
+				title = `Select the stock animal's reaction`;
 				break;
 		}
 		$label.text(labelText);
 		$reactionSelect.attr('placeholder', labelText)
 			.addClass('default')
+			.attr('title', title)
 			.append(`<option class="" value="">${labelText}</option>`);
 		
 		// Return the deferred object so other functions can be triggered 
@@ -2354,6 +2503,103 @@ var BHIMSEntryForm = (function() {
 
 
 	/*
+	When the units fields for a field measured in feet/meters changes, change the value of UI 
+	*/
+	Constructor.prototype.onShortDistanceUnitsFieldChange = function(e) {
+
+		const $select = $(e.target);
+		const $target = $($select.data('calculation-target'));
+		const multiplyBy = $select.val() === 'ft' ? FEET_PER_METER : 1 / FEET_PER_METER;
+		$target.val( trueRound($target.val() * multiplyBy) ); 
+	}
+
+
+	/*
+	When a feet/meters data field changes, check the units and save the in-memory value in meters
+	*/
+	Constructor.prototype.onShortDistanceFieldChange = function(e) {
+
+		const $input = $(e.target);
+		const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${$input.attr('id')}"]`);
+		// If the 
+		if ($select.val() === 'ft') {
+			const dbValue = $input.val() * FEET_PER_METER;
+			_this.setInMemorydValue($input, dbValue);
+		}
+	}
+
+
+	/*
+	Reset form back to blank state
+	*/
+	Constructor.prototype.resetForm = function() {
+
+		// Remove all but one (not .cloneable) card from each accordion
+		$('.accordion .card:not(.cloneable)').remove();
+		for (const el of $('.accordion')) {
+			_this.addNewCard($(el))
+		}
+		
+		// Reset all input values except the ones filled with the username
+		$('.input-field:not(#input-entered_by):not(select)')
+			.val(null);
+		
+		// Remove text from the .recorded-text-container. The narrative field 
+		//	is actually a textarea, which records the value of the text entered 
+		//	(or dictated) and a regular div, which is what the user sees.
+		$('.recorded-text-container > *').text('')
+
+		// Set all selects to their first option, which should be the default
+		for (const el of $('select')) {
+			const $select = $(el);
+			$select.val(
+				$select.find('option')[0].value
+			).change();
+		}
+
+		// reset default values
+		_this.setDefaultInputValues();
+
+		if (_this.markerIsOnMap()) {
+			_this.encounterMarker.remove();
+			$('#encounter-marker-container').slideDown(0);
+		}
+
+		// Clear localStorage
+		_this.fieldValues = {};
+		window.localStorage.clear();
+
+		const pageIndex = parseInt($('.form-page.selected').data('page-index'));
+		if (pageIndex !== 0) _this.goToPage(-pageIndex);
+		
+		// Reset submission page
+		const $confirmationContainer = $('.submition-confirmation-container')
+			.addClass('hidden');
+		$confirmationContainer.find('.success-query-link');
+		$confirmationContainer.siblings()
+			.removeClass('hidden');
+
+		$('.form-footer').removeClass('transparent');
+
+		customizeEntryForm();
+	}
+
+
+	/*
+	Confirm that users wants to reset form
+	*/
+	Constructor.prototype.onResetFormClick = function(e) {
+		e.preventDefault();
+		e.stopPropagation();
+		const message = 'Are you sure you want to reset the form? Any data you have entered will be deleted.'
+		const footerButtons = `
+			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
+			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="entryForm.resetForm()">Yes</button>
+		`;
+		showModal(message, 'Reset Form?', 'confirm', footerButtons);
+	}
+
+	/*
 	AJAX call to the PHP script to retrieve user's AD username
 	*/
 	Constructor.prototype.getUsername = function() {
@@ -2369,7 +2615,7 @@ var BHIMSEntryForm = (function() {
 				const result = $.parseJSON(resultString);
 				_this.username = result[0].username;
 				_this.userRole = result[0].role;
-				$('#input-entered_by').val(_this.username);	
+				$('#input-entered_by').val(_this.username).change();	
 			}
 		});
 	}
@@ -2394,8 +2640,8 @@ var BHIMSEntryForm = (function() {
 			// Need to add RETURNING clause to get the encounter_id
 			returningClause = ' RETURNING id';
 			
-			sortedFields = sortedFields.concat(['entered_by', 'datetime_entered', 'last_edited_by', 'datetime_last_edited']);
-			parameters = parameters.concat([this.username, timestamp, this.username, timestamp]);
+			sortedFields = sortedFields.concat(['last_edited_by', 'datetime_last_edited']);
+			parameters = parameters.concat([this.username, timestamp]);
 			parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $'); //$1, $2, ...
 		} else {
 			// Need to add a parameter placeholder for the encounter_id for 
@@ -2422,7 +2668,7 @@ var BHIMSEntryForm = (function() {
 
 	}
 
-//** make method of form obj
+
 	Constructor.prototype.onSubmitButtonClick = function(e) {
 
 		e.preventDefault();
@@ -2441,7 +2687,7 @@ var BHIMSEntryForm = (function() {
 			if (!allFieldsValid) {
 				hideLoadingIndicator();
 				const onClick = `			
-					const pageIndex = _this.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
+					const pageIndex = entryForm.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
 					entryForm.setPreviousNextButtonState(pageIndex);
 				`;
 				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
@@ -2468,9 +2714,16 @@ var BHIMSEntryForm = (function() {
 						.done(resultString => {
 								if (resultString.trim().startsWith('ERROR')) {
 									failedFiles.push(fileName);
+									console.log(fileName + ' failed with result: ' + resultString);
 									return false;
 								} else {
-									const result = $.parseJSON(resultString);
+									try {
+										const result = $.parseJSON(resultString);
+									} catch {
+										failedFiles.push(fileName);
+										console.log(fileName + ' failed with result: ' + resultString);
+										return false;
+									}
 									const filePath = result.filePath.replace(/\//g, '\\');//replace forward slashes with backslash
 									const filename = filePath.split('/').pop();
 									const fileExtension = filename.split('.').pop();
@@ -2527,6 +2780,17 @@ var BHIMSEntryForm = (function() {
 				return;
 			} else {
 				
+				
+				// for (const el of $('.short-distance-field')) {
+				// 	const $input = $(el);
+				// 	const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${el.id}"]`);
+					
+				// 	if ($unitsSelect.val() === 'ft') {
+				// 		const dbValue = $input.val() / FEET_PER_METER;
+				// 		_this.setInMemorydValue($input, dbValue);
+				// 	}
+				// }
+
 				// Insert data
 				var sqlStatements = [];
 				var sqlParameters = [];
@@ -2554,7 +2818,16 @@ var BHIMSEntryForm = (function() {
 						unorderedParameters[tableName] = {}
 					}
 					
-					unorderedParameters[tableName][fieldName] = _this.fieldValues[fieldName];
+					var value = _this.fieldValues[fieldName];
+
+					// Convert short distance fields from feet to meters if necessary
+					const $input = $(input);
+					if ($input.is('.short-distance-field')) {
+						const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
+						if ($unitsSelect.val() === 'ft') value = Math.round(value / FEET_PER_METER);
+					}
+
+					unorderedParameters[tableName][fieldName] = value;
 				}
 
 
@@ -2639,18 +2912,21 @@ var BHIMSEntryForm = (function() {
 					method: 'POST',
 					data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
 					cache: false
-				}).done((queryResultString) => {
-
-					hideLoadingIndicator();
+				}).done(queryResultString => {
 					if (queryReturnedError(queryResultString)) {
 						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 						return;
 					}
 
-					$('.submition-confirmation-container')
+					hideLoadingIndicator();
+
+					// Show success message and nav buttons
+					const $submissionContainer = $('.submition-confirmation-container');
+					$submissionContainer
 						.removeClass('hidden')
 						.siblings()
 							.addClass('hidden');
+					$('.form-footer').addClass('transparent');
 
 					// Clear localStorage
 					_this.fieldValues = {};
@@ -2658,8 +2934,19 @@ var BHIMSEntryForm = (function() {
 
 					// Send email notification
 					
+					// If this is an admin user, show them a link to the data via the query page
+					if (_this.userRole == 3) {
+						const result = $.parseJSON(queryResultString)[0];
+						const url = window.encodeURI(`query.html?{"encounters": {"id": {"value": ${result.id}, "operator": "="}}}`);
+						$submissionContainer.append(`
+							<a class="success-query-link mt-3" href="${url}" target="blank_">View your entry</a>
+						`);
+					}
+
 				}).fail((xhr, status, error) => {
 					showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+				}).always(() => {
+					hideLoadingIndicator();
 				})
 			}
 		});
@@ -2672,12 +2959,7 @@ var BHIMSEntryForm = (function() {
 
 
 //** make method of form obj
-function onUnitsFieldChange(e) {
 
-	const $select = $(e.target);
-	const $target = $($select.data('calculation-target'));
-
-}
 
 
 function onBearGroupTypeChange() {
@@ -2689,18 +2971,7 @@ function onBearGroupTypeChange() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-function customizeConfiguration(){
+function customizeEntryForm(){
 	/*Dummy function that can be overloaded in bhims-custom.js*/
 }
 
@@ -2860,20 +3131,22 @@ function initSpeechRecognition() {
 			return;
 		}
 
-		var interimTranscript = '';
-		var finalTranscript = $('#recorded-text-final').text() || '';
+		var interimTranscript = entryForm.interimTranscript;
+		var finalTranscript = entryForm.initialNarrativeText ;//$('#recorded-text-final').text() || '';
+		var lastInterimResult = '';
 		for (let result of e.results) {
 			if (result.isFinal) {
 				let transcript = result[0].transcript
 				finalTranscript += transcript.charAt(0).toUpperCase() + transcript.slice(1);
 			} else {
-				interimTranscript += result[0].transcript;
+				lastInterimResult = result[0].transcript;
+				interimTranscript += lastInterimResult;
 				$('#recorded-text-interim').text(interimTranscript);
 			}
 		}
 		$('#input-narrative').val(finalTranscript).change();
 		$('#recorded-text-final').text(finalTranscript);
-		$('#recorded-text-interim').text('');
+		$('#recorded-text-interim').text(lastInterimResult);
 		
 	}
 
@@ -2884,6 +3157,11 @@ function initSpeechRecognition() {
 		$micIcon.addClass('blink');
 		$recordingIndicator.addClass('recording');
 		console.log('audio started');
+
+		entryForm.initialNarrativeText = $('#input-narrative').val();
+		entryForm.interimTranscript = '';
+		// Hide the placeholder if the textarea is empty
+		$('#input-narrative').addClass('is-recording');
 	}
 
 	recognition.onerror = function(e) {
@@ -2894,7 +3172,7 @@ function initSpeechRecognition() {
 		} else {
 			const $statusMessage = $('#recording-status-message');
 			$statusMessage.text(`...${e.error.message}...`);
-			setTimeout(5000, () => {$statusMessage.fadeOut(500, (_, el) => {$(el).text('').fadeIn(500)})});
+			setTimeout(() => {$statusMessage.fadeOut(500, (_, el) => {$(el).text('').fadeIn(500)})}, 5000);
 		}
 	}
 
@@ -2902,6 +3180,9 @@ function initSpeechRecognition() {
 		$micIcon.removeClass('blink');
 		$recordingIndicator.removeClass('recording');
 		console.log('audio ended');
+
+		$('#input-narrative').removeClass('is-recording');
+		entryForm.interimTranscript = '';
 	}
 
 	recognition.soundstart = function(e) {
@@ -2921,7 +3202,7 @@ function onMicIconClick(e){
 		return;
 	}
 	try {
-		recognition.start()
+		recognition.start();
 	} catch (error) {
 		recognition.stop() //already started - toggle
 	}

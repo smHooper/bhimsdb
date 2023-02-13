@@ -229,7 +229,8 @@ var BHIMSQuery = (function(){
 					$('.data-export-footer').removeClass('hidden').attr('aria-hidden', false);
 				}
 			}
-		).then(() => {
+		).fail(() => {hideLoadingIndicator()})
+		.then(() => {
 
 			// If the encounters query was empty, warn the user and exit
 			if (!Object.keys(encounterResult).length) {
@@ -288,7 +289,7 @@ var BHIMSQuery = (function(){
 			$.when(...deferreds).then(() =>  {
 				this.loadSelectedEncounter();
 				this.addMapData();
-			}).always(hideLoadingIndicator());
+			}).always(() => {hideLoadingIndicator()});
 		});
 
 		return deferreds;
@@ -467,6 +468,8 @@ var BHIMSQuery = (function(){
 			}
 		}
 
+		this.queryResultMapData.remove();
+
 		this.queryResultMapData = L.geoJSON(
 				features, 
 				{
@@ -474,7 +477,7 @@ var BHIMSQuery = (function(){
 					style: styleFunc,
 					pointToLayer: featureToMarker
 				}
-		).on('click', (e) => {
+		).on('click', e => {
 			/*
 			When a point is clicked on the map, select the corresponding encounter
 			*/
@@ -2380,8 +2383,8 @@ var BHIMSQuery = (function(){
 			data: {action: 'exportData', exportParams: exportParams},
 			cache: false
 		}).done(resultString => {
-			if (resultString.trim().startsWith('Traceback')) {
-				showMOdal('An unexpected error with the export occurred', 'Export error')
+			if (resultString.trim().startsWith('Traceback') || queryReturnedError(resultString)) {
+				showModal('An unexpected error with the export occurred: ' + resultString, 'Export error')
 				console.log(resultString)
 			} else {
 				window.location.href = resultString.trim();

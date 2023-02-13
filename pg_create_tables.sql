@@ -20,6 +20,7 @@ CREATE TABLE food_present_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, nam
 CREATE TABLE general_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE habitat_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE human_group_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE improper_reaction_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE initial_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE human_injury_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE initial_bear_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
@@ -80,7 +81,7 @@ CREATE TABLE encounters (
     bear_spray_was_present INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     bear_spray_used INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     bear_spray_was_effective INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
-    bear_spray_distance INTEGER,
+    bear_spray_distance_m INTEGER,
     reported_probable_cause_code INTEGER,
     food_present_code INTEGER,
     bear_obtained_food INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
@@ -133,6 +134,7 @@ CREATE TABLE assessment (
     management_classification_code INTEGER,
     responsibility_classification_code INTEGER,
     preparedness_classification_code INTEGER,
+    reacted_improperly INTEGER REFERENCES boolean_response_codes (code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     data_quality_code INTEGER, 
     entry_status_code INTEGER, 
     assessed_by VARCHAR(50), 
@@ -157,6 +159,8 @@ CREATE TABLE reactions (
     encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE, 
     reaction_order INTEGER, reaction_by_code INTEGER, 
     reaction_code INTEGER, 
+    reaction_details VARCHAR(255),
+    other_reaction VARCHAR(255),
     PRIMARY KEY (encounter_id, reaction_order)
 );
 CREATE TABLE encounter_locations (

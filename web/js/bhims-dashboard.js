@@ -7,6 +7,8 @@ var MAP_DATA,
 	FIELD_INFO = {},
 	LOOKUP_TABLES = {};
 
+//add bhims-dashboard to main-content
+
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
 	

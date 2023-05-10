@@ -2721,8 +2721,9 @@ var BHIMSEntryForm = (function() {
 									console.log(fileName + ' failed with result: ' + resultString);
 									return false;
 								} else {
+									var result = {};
 									try {
-										const result = $.parseJSON(resultString);
+										result = $.parseJSON(resultString);
 									} catch {
 										failedFiles.push(fileName);
 										console.log(fileName + ' failed with result: ' + resultString);

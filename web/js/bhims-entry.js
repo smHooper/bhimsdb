@@ -49,6 +49,7 @@ var BHIMSEntryForm = (function() {
 		this.confirmLocationSelectChange = false; //set to true after fillFieldValues runs
 		this.serverEnvironment = '';
 		this.initialNarrativeText = '';
+		this.presentMode = false;
 		_this = this;
 	}
 
@@ -69,6 +70,9 @@ var BHIMSEntryForm = (function() {
 			.done(resultString => {
 				this.serverEnvironment = resultString.trim();
 			})
+
+		const queryParams = parseURLQueryString();
+		this.presentMode = queryParams.present === 'true'
 
 
 		const processQueryResult = (obj, result) => {
@@ -354,7 +358,7 @@ var BHIMSEntryForm = (function() {
 			const lockedSectionTitles = $('.form-section.admin-section.locked').find('.section-title');
 			lockedSectionTitles.append(`
 				<button class="unlock-button icon-button" type="button" onclick="onlockSectionButtonClick(event)" aria-label="Unlock">
-					<i class="fas fa-lock fa-lg"></i>
+					<i class="fas fa-lock"></i>
 				</button>
 			`);
 			lockedSectionTitles.after(`
@@ -1220,7 +1224,7 @@ var BHIMSEntryForm = (function() {
 		if ($dot.hasClass('selected')) return;
 
 		// validate fields for the currently selected section only if this is the production site
-		if (_this.serverEnvironment !== 'dev') {
+		if (!(_this.presentMode || _this.serverEnvironment === 'dev')) {
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
 			.map( (_, el) => _this.validateFields($(el)) )
 				.get()
@@ -1896,7 +1900,7 @@ var BHIMSEntryForm = (function() {
 						sticky: true
 					}
 				).addTo(map);
-				layerControl.addOverlay(bcUnitsLayer, 'Units');
+				layerControl.addOverlay(bcUnitsLayer, 'Backcountry Units');
 
 			}).fail((xhr, error, status) => {
 				console.log('BC unit geojson read failed: ' + error);

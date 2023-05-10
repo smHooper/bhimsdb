@@ -371,3 +371,34 @@ function getEnvironment() {
 	});
 
 }
+
+
+function parseURLQueryString(queryString=window.location.search) {
+	if (queryString.length) {
+		const parsed = decodeURIComponent(queryString.slice(1))
+				.split('&')
+				.map(s => {
+					const match = s.match(/=/)
+					if (!match) {
+						return s
+					} else {
+						// Need to return [key, value]
+						return [
+							s.slice(0, match.index), 
+							s.slice(match.index + 1, s.length) //+1 to skip the = separator
+						]
+					}
+				}
+			);
+		params = {};
+		try {
+			params = Object.fromEntries(parsed)
+		} catch {
+		}
+		return params;
+
+	} else {
+		// no search string so return an empty object
+		return {};
+	}
+}

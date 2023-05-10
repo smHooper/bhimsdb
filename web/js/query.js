@@ -1452,9 +1452,9 @@ var BHIMSQuery = (function(){
 					for (const i in reactionRows) {
 						// Get reaction code
 						const reaction = reactionRows[i];
-
+						const reactionLookup = reactionCodesTable[reaction.reaction_code];
 						// Determine reaction_by and fill value
-						reactionRows[i].reaction_by = reactionCodesTable[reaction.reaction_code].action_by;
+						reactionRows[i].reaction_by = reactionLookup ? reactionLookup.action_by : null;
 					}
 					deferred.resolve();
 				} else {	

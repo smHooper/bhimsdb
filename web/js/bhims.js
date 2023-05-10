@@ -26,8 +26,10 @@ function fillSelectOptions(selectElementID, queryString, optionClassName='') {
 				//console.log(`error filling in ${selectElementID}: ${queryResultString}`);
 			}
 			if (queryResult) {
+				const $select = $('#' + selectElementID)
+				$select.find('option:not([value=""])').remove();
 				queryResult.forEach(function(object) {
-					$('#' + selectElementID).append(
+					$select.append(
 						`<option class="${optionClassName}" value="${object.value}">${object.name}</option>`
 					);
 				})
@@ -36,7 +38,7 @@ function fillSelectOptions(selectElementID, queryString, optionClassName='') {
 			}
 		},
 		failFilter=function(xhr, status, error) {
-			console.log(`fill select failed with status ${status} because ${error} from query:\n${sql}`)
+			console.log(`fill select failed with status ${status} because ${error} on #${selectElementID}`)
 		}
 	);
 
@@ -147,22 +149,49 @@ function queryReturnedError(queryResultString) {
 
 
 /*
+Copy text from a selection. 
+*/
+function copyFromSelection(elementID, deselect=true) {
+	
+	var range = document.createRange();
+	range.selectNode(document.getElementById(elementID));
+	
+	// clear current selection
+	window.getSelection().removeAllRanges(); 
+	
+	window.getSelection().addRange(range); // to select text
+	
+	document.execCommand("copy");
+	
+	// Deselect
+	if (deselect) window.getSelection().removeAllRanges();
+}
+
+
+/*
 Copy specified text to the clipboard
 */
 function copyToClipboard(text, modalMessage='') {
 	const clipboard = navigator.clipboard;
 	if (!clipboard) {
 		showModal(`Your browser refused access to the clipboard. This feature only works with a HTTPS connection. Right-click and copy from <a href="${text}">this link</a> instead.`, 'Clipboard access denied');
-		return;
+		// If the browser refuses access to the clipboard (because this is an insecure connection), 
+		//	copy the text the janky way by adding a textarea element to the dom and copying it's text
+		// const temporaryID = `temporary-text-${new Date().valueOf()}`;
+		// $(`<textarea id="${temporaryID}" style="display:none">${text}</textarea>`).appendTo('body');
+		// copyFromSelection(temporaryID);
+		// $('#' + temporaryID).remove();
+		// showModal(modalMessage || `Successfully copied ${text} to clipboard`, 'Copy successful');
+	} else {
+		clipboard
+			.writeText(text)
+			.then(() => {
+				showModal(modalMessage || `Successfully copied ${text} to clipboard`, 'Copy successful');
+			})
+			.catch((err) => {
+				console.error(`Error copying text to clipboard: ${err}`);
+			});
 	}
-	clipboard
-		.writeText(text)
-		.then(() => {
-			showModal(modalMessage || `Successfully copied ${text} to clipboard`, 'Copy successful');
-		})
-		.catch((err) => {
-			console.error(`Error copying text to clipboard: ${err}`);
-		});
 }
 
 
@@ -234,5 +263,142 @@ function runCountUpAnimations(animationDuration=500, framesPerSecond=60, easeFun
 	const nFrames = Math.round(animationDuration / frameDuration);
 	for (const el of $('.count-up')) {
 		animateCountUp(el, nFrames, frameDuration);
+	}
+}
+
+/*
+Round a number, x, to a specifed precision (because Math.round() always returns an integer)
+*/
+function trueRound(x, precision=0) { 
+	const exponent = Math.pow(10, precision);
+	return Math.round( x * exponent) / exponent;
+}
+
+
+/*
+
+*/
+function addSidebarMenu() {
+	$(`
+		<!-- nav sidebar -->
+		<div class="main-container-with-sidebar">
+			<nav class="sidebar" role="navigation">
+				<div class="sidebar-sticky">
+					<div class="sidebar-background"></div>
+					<ul class="sidebar-nav-group">
+
+						<li class="nav-item selected">
+							<a href="bhims-dashboard.html">
+								<img class="sidebar-nav-item-icon" src="imgs/dashboard_icon_50px.svg">
+								<span class="sidebar-nav-item-label">dashboard</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="query.html">
+								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
+								<span class="sidebar-nav-item-label">query data</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="manage-users.html">
+								<img class="sidebar-nav-item-icon" src="imgs/user_icon_50px.svg">
+								<span class="sidebar-nav-item-label">manage users</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="config.html">
+								<img class="sidebar-nav-item-icon" src="imgs/settings_icon_50px.svg">
+								<span class="sidebar-nav-item-label">configure app</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="bhims-entry.html">
+								<img class="sidebar-nav-item-icon" src="imgs/entry_form_icon_50px.svg">
+								<span class="sidebar-nav-item-label">new encounter</span>
+							</a>
+						</li>
+
+					</ul>
+
+				</div>
+			</nav>
+	`).prependTo('main');
+
+	$(`
+		<nav class="bhims-header-menu">
+			<div class="header-menu-item-group">
+				<button class="icon-button sidebar-collapse-button" title="Toggle sidebar menu">
+					<div class="sidebar-collapse-button-line"></div>
+					<div class="sidebar-collapse-button-line"></div>
+					<div class="sidebar-collapse-button-line"></div>
+				</button>
+				<a class="home-button" role="button" href="bhims-index.html">
+					<img src="imgs/bhims_icon_50px.svg" alt="home icon">
+				</a>
+				<h4 class="page-title">BHIMS dashboard</h4>
+			</div>
+			<div class="header-menu-item-group" id="username-container">
+				<img id="username-icon" src="imgs/user_icon_50px.svg" alt="username icon">
+				<label id="username"></label>
+			</div>
+		</nav>
+	`).insertBefore('main');
+
+	$('.sidebar-collapse-button').click((e) => {
+		$('.sidebar-collapse-button, nav.sidebar').toggleClass('collapsed');
+	});
+	
+	$('.sidebar-nav-group > .nav-item.selected').removeClass('selected');
+	$('.sidebar-nav-group .nav-item > a')
+		.filter((_, el) => el.href.endsWith(window.location.pathname.split('/').pop()))
+		.parent()
+			.addClass('selected');
+}
+
+
+/*
+Helper function to ask server if the app is running in the production or development environment 
+*/
+function getEnvironment() {
+
+	return $.post({
+		url: 'bhims.php',
+		data: {action: 'getEnvironment'}
+	});
+
+}
+
+
+function parseURLQueryString(queryString=window.location.search) {
+	if (queryString.length) {
+		const parsed = decodeURIComponent(queryString.slice(1))
+				.split('&')
+				.map(s => {
+					const match = s.match(/=/)
+					if (!match) {
+						return s
+					} else {
+						// Need to return [key, value]
+						return [
+							s.slice(0, match.index), 
+							s.slice(match.index + 1, s.length) //+1 to skip the = separator
+						]
+					}
+				}
+			);
+		params = {};
+		try {
+			params = Object.fromEntries(parsed)
+		} catch {
+		}
+		return params;
+
+	} else {
+		// no search string so return an empty object
+		return {};
 	}
 }

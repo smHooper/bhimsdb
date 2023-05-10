@@ -3,8 +3,9 @@
 <?php
 
 include '../../config/bhims-config.php';
-error_reporting(-1);
-ini_set('display_errors', 'On');
+// error_reporting(-1);
+//ini_set('display_errors', 'On');
+// ini_set('html_errors', false);
 
 function runQuery($ipAddress, $port, $dbName, $username, $password, $queryStr, $parameters=array()) {
 	/*return result of a postgres query as an array*/
@@ -30,12 +31,13 @@ function runQueryWithinTransaction($conn, $queryStr, $parameters=array()) {
 
 
 	$result = pg_query_params($conn, $queryStr, $parameters);
+
 	if (!$result) {
 		$err = array(pg_last_error($conn));
 	  	return $err;
 	}
 	$pgFetch = pg_fetch_all($result);
-	return $pgFetch ? $pgFetch : null;
+	return $pgFetch ? $pgFetch : [null];
 }
 
 
@@ -116,9 +118,14 @@ function uuid() {
 }
 
 
-function getAttachmentDir() {
+function getEnvironment() {
+	return strpos(getcwd(), 'git') ? 'dev' : 'prod';
+}
+
+
+function getAttachmentDir($configAttachmentPath) {
 	$rootDir = strpos(getcwd(), 'git') ? 'git' : 'prod';
-	return preg_replace("/prod/", $rootDir, $attachmentDir);
+	return preg_replace("/prod/", $rootDir, $configAttachmentPath);
 }
 
 // File upload with submit
@@ -128,7 +135,7 @@ if (isset($_FILES['uploadedFile'])) {
 	$fileNameParts = explode('.', $fileName);
 	$fileExt = end($fileNameParts);
 	$uuid = uuid();
-	$attachmentDirPath = getAttachmentDir();
+	$attachmentDirPath = getAttachmentDir($attachmentDir);
 	$uploadFilePath = "$attachmentDirPath/$uuid.$fileExt";
 
 	if (move_uploaded_file($_FILES['uploadedFile']['tmp_name'], $uploadFilePath)) {
@@ -208,6 +215,11 @@ if (isset($_POST['action'])) {
 	}
 
 
+	if ($_POST['action'] == 'getEnvironment') {
+		echo getEnvironment();
+	}
+
+
 	if ($_POST['action'] == 'query') {
 
 		if (isset($_POST['queryString'])) {
@@ -243,6 +255,7 @@ if (isset($_POST['action'])) {
 							$params[$j] = null;
 						}
 					}
+
 					$result = runQueryWithinTransaction($conn, $_POST['queryString'][$i], $params);
 					if (strpos(json_encode($result), 'ERROR') !== false) {
 						// roll back the previous queries
@@ -251,7 +264,7 @@ if (isset($_POST['action'])) {
 						exit();
 					}
 
-					$resultArray[$i] = $result;
+					$resultArray[$i] = $result[0];
 				}
 
 				// COMMIT the transaction
@@ -299,15 +312,28 @@ if (isset($_POST['action'])) {
 			// Call the export script and redirectoy stderr to a text file. After the script finishes, 
 			//	read that text file to check if the script ran successfully or not. If the stderrr 
 			//	text file is blnak, then the run was sucessful. 
-			$params = json_encode($_POST['exportParams']);
+			
+			// Format parameter JSON string for Windows command line because escapeshellcmd doesn't work. Need to:
+			//	- get rid of backslashes, wchich the json_encode function will adds and Windows interprets as a filepath
+			//	- replace each set of double quotes with 2 double-quotes to
+			//	- remove the first and last double double-quotes that the replace function added
+			$params = substr(str_replace('\\', '', str_replace('"', '""', json_encode($_POST['exportParams']) ) ), 1, -1);
+
 			$cacheDir = "export_cache";
 			$runID = uniqid();
+			$environment = getEnvironment();
+			
 			// set stderr text file path with the unique ID for this run so that in case an old stderr.txt file was never properly cleaned up, there's no confusion 
 			$stderrPath = $cacheDir . "/stderr" . $runID . ".txt";
-			$cmd = "conda activate bhims && python ../py/scripts/export_data.py -e dev -r $runID -i $params 2> $stderrPath";
+			$cmd = "conda activate bhims && python ../py/scripts/export_data.py -e $environment -r $runID -i $params 2> $stderrPath";
 
 			// run the command
 			$result = shell_exec($cmd);//
+
+			if (!file_exists($stderrPath)) {
+				echo "ERROR: malformed command could not be executed: $cmd";
+				exit();
+			}
 
 			// read stderr text file
 			$stderr = file_get_contents($stderrPath);

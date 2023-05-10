@@ -17,7 +17,16 @@ var BHIMSQuery = (function(){
 		this.tableSortColumns = {};
 		this.encounterIDs = [];
 		this.fieldsFull = false;
+		this.anonymizedDefaults = {
+			first_name: 'Anonymoys',
+			last_name: 'Person',
+			phone_number: '555-5555',
+			email_address: 'someone@abc.com' 
+		};
+		this.ignorePIIFields = false;
 		_this = this; // scope hack for event handlers that take over "this"
+
+
 	}
 
 
@@ -177,7 +186,9 @@ var BHIMSQuery = (function(){
 					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
 					for (const encounter of encounterResult) {
 						
+						
 						this.queryResult[encounter.id] = {...encounter};
+
 						//this.queryResult.encounters[encounter.id] = {...encounter};
 
 						// Configure the list item element for this encounter
@@ -229,7 +240,8 @@ var BHIMSQuery = (function(){
 					$('.data-export-footer').removeClass('hidden').attr('aria-hidden', false);
 				}
 			}
-		).then(() => {
+		).fail(() => {hideLoadingIndicator()})
+		.then(() => {
 
 			// If the encounters query was empty, warn the user and exit
 			if (!Object.keys(encounterResult).length) {
@@ -263,6 +275,12 @@ var BHIMSQuery = (function(){
 						const result = $.parseJSON(queryResultString);
 						//this.queryResult[tableName] = {};
 						for (const row of result) {
+							for (const columnName in row) {
+								if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
+									row[columnName] = this.anonymizedDefaults[columnName];
+									this.ignorePIIFields = true;
+								}
+							}
 							const encounterID = row.encounter_id;
 							if (!this.queryResult[encounterID]) {
 								a = 1;
@@ -288,7 +306,7 @@ var BHIMSQuery = (function(){
 			$.when(...deferreds).then(() =>  {
 				this.loadSelectedEncounter();
 				this.addMapData();
-			}).always(hideLoadingIndicator());
+			}).always(() => {hideLoadingIndicator()});
 		});
 
 		return deferreds;
@@ -467,6 +485,8 @@ var BHIMSQuery = (function(){
 			}
 		}
 
+		this.queryResultMapData.remove();
+
 		this.queryResultMapData = L.geoJSON(
 				features, 
 				{
@@ -474,7 +494,7 @@ var BHIMSQuery = (function(){
 					style: styleFunc,
 					pointToLayer: featureToMarker
 				}
-		).on('click', (e) => {
+		).on('click', e => {
 			/*
 			When a point is clicked on the map, select the corresponding encounter
 			*/
@@ -992,6 +1012,14 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.saveEdits = function() {
 		
+		// If the values of any PII fields were automatically set, ignore any changes to them
+		if (this.ignorePIIFields) {
+			const selector = Object.keys(this.anonymizedDefaults)
+				.map(fieldName => `.input-field[name="${fieldName}"]`)
+				.join(', ');
+			$(selector).removeClass('dirty');
+		}
+
 		const $dirtyInputs = $('.input-field.dirty:not(.ignore-on-insert)');
 		if ($dirtyInputs.length === 0) {
 			hideLoadingIndicator();
@@ -2380,8 +2408,8 @@ var BHIMSQuery = (function(){
 			data: {action: 'exportData', exportParams: exportParams},
 			cache: false
 		}).done(resultString => {
-			if (resultString.trim().startsWith('Traceback')) {
-				showMOdal('An unexpected error with the export occurred', 'Export error')
+			if (resultString.trim().startsWith('Traceback') || queryReturnedError(resultString)) {
+				showModal('An unexpected error with the export occurred: ' + resultString, 'Export error')
 				console.log(resultString)
 			} else {
 				window.location.href = resultString.trim();
@@ -2429,6 +2457,8 @@ var BHIMSQuery = (function(){
 				$('#username').text(result[0].username);
 			}
 		});
+
+
 
 		// Data export modal: when the field selection tabs are shown, expand the modal
 		$('#input-select_fields').change(e => {

@@ -4,6 +4,8 @@
 	<meta charset='utf-8'>
 	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
 	<title>DENA BHIMS - new encounter</title>
+	<link rel="icon" type="image/x-icon" href="/imgs/favicon.ico">
+	
 	<!--jquery -->
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
@@ -29,9 +31,10 @@
 		crossorigin=""></script>
 
 	<!-- custom css -->
+	<link rel="stylesheet" href="css/bhims.css">
 	<link rel="stylesheet" href="css/bhims-entry.css">
 	<link rel="stylesheet" href="css/bhims-entry-dena.css">
-	<link rel="stylesheet" href="css/bhims.css">
+	
 </head>
 
 <body>
@@ -39,63 +42,84 @@
 	<div class="modal-background modal-background-light hidden" id="loading-indicator-background"></div>
 	<div class="hidden" id="loading-indicator"></div>
 	<!--<div class="bg-blur-100 full-screen"></div>-->
-	<div id="main-container">
-		<div class="background-blur vertical-scroll" id="main-form-container">
-			<form class="mx-0 px-0 form-container" id="input-form">
-				<div class="required-indicator-explanation hidden">
-					<span class="required-indicator">*
-					<label class=""></span>= required</label>
-				</div>
-				<div class="form-body">
+
+	<main id="main-container">
+		<div class="main-content-wrapper">
+			<div class="background-blur vertical-scroll" id="main-form-container">
+				<form class="mx-0 px-0 form-container" id="input-form">
 					
-					<div class="form-page title-page selected" data-page-index="-1">
-						<div class="form-title">
-							<h1 id='title-page-title'></h1>
-							<h4 id='title-page-subtitle'></h4>
+					<div class="form-header hidden"><!-- Initially hidden so it's not visible on the title page -->
+						<div class="w-100"></div><!-- filler to put button in the middle and required indicator on right-->
+						<button id="reset-form-button" class="generic-button" type="button">reset form</button>
+						<div id="required-indicator-container">
+							<div class="required-indicator-explanation">
+								<span class="required-indicator">*</span>
+								<label class="">= required</label>
+								<br>
+							</div>
+							<div id="disable-required-slider-container" class="slider-container hidden">
+								<label class="slider-label">Disable required</label>
+								<label class="switch mx-10">
+									<input type="checkbox">
+									<span class="slider round"></span>
+								</label>
+							</div>
 						</div>
-						<section class="form-section">
-							<div class="form-section-content">
-								<p class="form-description">
-								</p>
-							</div>
-						</section>
 					</div>
 
-					<div class="form-page submit-page" id="page-4" data-page-index="4" data-page-name="submit">
-						<section class="form-section">
-							<h4 class="section-title"></h4>
-							<div class="form-section-content">
-								<p class="form-description" id="pre-submit-message"></p>
-								<div class="submit-button-container">
-									<button class="generic-button form-navigation" type="button" id="submit-button">Submit encounter</button>
-								</div>
-								<div class="submition-confirmation-container hidden">
-									<h4>Submission successful</h4>
-									<p class="form-description" id="post-submit-message"></p>
-									<a href="bhims-index.html">Return to the home page</a>
-								</div>
+					<div class="form-body">
+						
+						<div class="form-page title-page selected" data-page-index="-1">
+							<div class="form-title">
+								<h1 id='title-page-title'></h1>
+								<h4 id='title-page-subtitle'></h4>
 							</div>
-						</section>	
+							<section class="form-section">
+								<div class="form-section-content">
+									<p class="form-description">
+									</p>
+								</div>
+							</section>
+						</div>
+
+						<div class="form-page submit-page" id="page-4" data-page-index="4" data-page-name="submit">
+							<section class="form-section">
+								<h4 class="section-title"></h4>
+								<div class="form-section-content">
+									<p class="form-description" id="pre-submit-message"></p>
+									<div class="submit-button-container">
+										<button class="generic-button form-navigation" type="button" id="submit-button">Submit encounter</button>
+									</div>
+									<div class="submition-confirmation-container hidden">
+										<h4>Submission successful</h4>
+										<p class="form-description" id="post-submit-message"></p>
+										<div class="submit-success-button-container">
+											<a class="generic-button submit-success-button" href="bhims-index.html">return to the home</a>
+											<button id="new-submission-button" class="generic-button submit-success-button">new submission</button>
+										</div>
+									</div>
+								</div>
+							</section>	
+						</div>
+						
 					</div>
-					
-				</div>
-				<!--########### end of form body ##########################-->
+					<!--########### end of form body ##########################-->
 
-				<div class="form-footer">
-					<button class="generic-button form-navigation hidden" type="button" id="previous-button" disabled>previous</button>
-					<ol class="section-indicator form-navigation hidden">
-					</ol>
-					<button class="generic-button form-navigation hidden" type="button" id="next-button">next</button>
-					<button class="generic-button" type="button" id="title-page-continue-button">continue</button>
-					<input class="generic-button hidden" id="submit-button" type="submit" value="submit">
+					<div class="form-footer">
+						<button class="generic-button form-navigation hidden" type="button" id="previous-button" disabled>previous</button>
+						<ol class="section-indicator form-navigation hidden">
+						</ol>
+						<button class="generic-button form-navigation hidden" type="button" id="next-button">next</button>
+						<button class="generic-button" type="button" id="title-page-continue-button">continue</button>
+						<input class="generic-button hidden" id="submit-button" type="submit" value="submit">
 
-				</div>
-			</form>
+					</div>
+				</form>
+
+			</div>
 
 		</div>
-
-	</div>
-
+	</main>
 
 	<!-- map modal -->
 	<div class="modal fade lightbox-modal bhims-entry-modal" id="map-modal" tabindex="-1" role="dailog" aria-hidden="true">

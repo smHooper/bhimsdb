@@ -157,7 +157,8 @@ def generate_query_parameters(query_json: Dict) -> Dict:
         }
     """
     query_components = {}
-
+    print(query_json)
+    
     include_codes = query_json['include_codes']
     fields_dict = query_json['fields']
     criteria_dict = query_json['criteria']

@@ -23,16 +23,23 @@ body {
   right: 0;
 	animation: 1s ease-in 0.2s fadeIn;
 }
-
-#main-container {
+#.main-content-wrapper.has-sidebar {
+	height: calc(100% - 60px);
+}
+.main-content-wrapper {
 	display: flex; 
 	justify-content: center; 
 	align-items: center;
 	width: 100%; 
 	height: 100%;
 	animation: .5s ease-in 0s fadeIn;
+	padding: 0;
 }
-
+.sidebar-background	{
+	background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+}
 #main-form-container {
 	display: flex; 
 	justify-content: center;
@@ -47,7 +54,9 @@ body {
 	border-radius: 20px;
 	background-image: radial-gradient(circle at bottom 30% right 30%, rgba(255,255,255,0.7), rgba(255,255,255,0.35));
 }
-
+.sidebar-nav-group .nav-item.selected > a::after {
+	display: none;
+}
 
 
 #input-form {
@@ -62,6 +71,39 @@ body {
 	padding-bottom: 20px;
 }
 
+/*wrapper for content so that the reset button can be in the middle and 
+the required-indicatior-explanation can still be on the right*/
+.form-header {
+	width: 100%;
+	display: flex;
+	justify-content: space-between;
+}
+.form-header-content {
+	width: 50%;
+	display: flex;
+	justify-content: space-between;
+}
+#required-indicator-container {
+	width: 100%;
+	height: 2rem;
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+}
+.required-indicator-explanation {
+	width: 100%;
+	height: 2rem;
+	display: flex;
+	justify-content: flex-end;
+}
+#disable-required-slider-container .slider-label {
+	height: 34px;
+	line-height: 34px;
+	vertical-align: middle;
+	margin-bottom: 0;
+	margin-right: 10px;
+}
+
 .form-body {
 	display: flex;
 	overflow: hidden;
@@ -69,7 +111,7 @@ body {
 	scroll-behavior: smooth;
 	-webkit-overflow-scrolling: touch;
 	width: 100%;
-	height: calc(100% - 85px);
+	height: calc(100% - 170px);
 	/*flex: 1 0 auto;*/
 }
 
@@ -93,12 +135,7 @@ body {
 	background: transparent;
 }*/
 
-.required-indicator-explanation {
-	width: 100%;
-	height: 2rem;
-	display: flex;
-	justify-content: flex-end;
-}
+
 
 .required-indicator-explanation > .required-indicator {
 	position: initial;
@@ -409,6 +446,10 @@ select.input-field.default,
 .input-field::placeholder,
 textarea.narrative-field::placeholder {
 	color: hsl(1, 0%, 40%);
+}
+/*hide placeholder while recording*/
+#input-narrative.is-recording::placeholder {
+	color: transparent;
 }
 
 .required-indicator {
@@ -803,4 +844,11 @@ textarea.narrative-field {
 	margin-bottom: 1rem;
 	width: 100%;
 	text-align: center;
+}
+.submit-success-button-container {
+	display: flex;
+	justify-content: center;
+}
+.submit-success-button {
+	margin-right: 40px;
 }

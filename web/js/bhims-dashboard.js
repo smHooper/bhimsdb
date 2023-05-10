@@ -5,7 +5,11 @@ var MAP_DATA,
 	MODAL_MAP_DATA = L.geoJSON(),
 	MODAL_MAP,
 	FIELD_INFO = {},
-	LOOKUP_TABLES = {};
+	LOOKUP_TABLES = {},
+	PRESENT_MODE = false,
+	PRESENT_MODE_YEAR = 2022;
+
+//add bhims-dashboard to main-content
 
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
@@ -266,7 +270,7 @@ function configureMap(divID, modalDivID=null) {
 
 	const sql = `
 		SELECT 
-			round(CURRENT_DATE - encounters.start_date)::integer AS "Age of report",
+			round(${PRESENT_MODE ? `'${PRESENT_MODE_YEAR}-9-24'` : 'now()'}::date - encounters.start_date)::integer AS "Age of report",
 			encounter_locations.latitude,
 			encounter_locations.longitude,
 			encounters.*
@@ -276,7 +280,7 @@ function configureMap(divID, modalDivID=null) {
 			encounter_locations 
 		ON encounters.id=encounter_locations.encounter_id
 		WHERE 
-			extract(year FROM encounters.start_date)=(extract(year FROM CURRENT_DATE)) AND
+			extract(year FROM encounters.start_date)=(${PRESENT_MODE ? PRESENT_MODE_YEAR : 'extract(year FROM CURRENT_DATE)'}) AND
 			latitude IS NOT NULL AND longitude IS NOT NULL
 	`;
 	fieldInfoDeferred.done(() => {
@@ -440,7 +444,7 @@ function configureDailyEncounterChart() {
 				SELECT 
 					generate_series(min(start_date), max(start_date), '1d')::date AS encounter_date 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now())
+				WHERE extract(year FROM start_date) = extract(year FROM now()) - 1
 			) series 
 		LEFT JOIN 
 			(
@@ -448,7 +452,7 @@ function configureDailyEncounterChart() {
 					start_date::date AS encounter_date, 
 					count(*) AS n_encounters 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now())
+				WHERE extract(year FROM start_date) = extract(year FROM now()) - 1 
 				GROUP BY encounter_date
 			) n 
 		USING (encounter_date) 

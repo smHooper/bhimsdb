@@ -1,6 +1,8 @@
 # compiled python3 scripts
 py/__pycache__/*
 py/resource/__pycache__/*
+py/scripts/__pycache__/*
+web/flask/__pycache__/*
 
 # illustrator and PS files
 *.psd

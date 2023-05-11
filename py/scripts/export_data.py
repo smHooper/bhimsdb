@@ -26,17 +26,23 @@ Example Input:
 """
 
 import json
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from urllib.parse import quote
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union, Any
 
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import Session
 
-import py.resource.config as config
-from py.resource.tables import model_dict
-
+try:
+    import py.resource.config as config
+    from py.resource.tables import model_dict
+except:
+    import sys, os
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../resource'))
+    import config
+    from tables import model_dict
 
 BHIMS_CODE_NAMES = {
     'assessment.management_action_code': 'management_action_codes.name as management_action',
@@ -75,6 +81,16 @@ BHIMS_CODE_NAMES = {
 }
 
 
+class DotDict(dict):
+    """
+    dot.notation access to dictionary attributes
+    from https://stackoverflow.com/a/23689767
+    """
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
 def build_query_string(table: str, selects: List, joins: Optional[List] = None, wheres: Optional[List] = None) -> str:
     """Given all sql query components, build a raw sql query string.
     NOTE: All joins are left joins and all where clauses will be ANDed together.
@@ -97,7 +113,7 @@ def build_query_string(table: str, selects: List, joins: Optional[List] = None, 
     return query_string
 
 
-def select_encounters(criteria_dict: Dict) -> Tuple:
+def select_encounters(criteria_dict: Dict, engine: Engine) -> Tuple:
     """Determine which encounter ids to filter all tables on.
 
     Example: If the user asked for encounters with female bears, we need to get the ids of all encounters had a female
@@ -139,7 +155,7 @@ def select_encounters(criteria_dict: Dict) -> Tuple:
     return encounter_ids
 
 
-def generate_query_parameters(query_json: Dict) -> Dict:
+def generate_query_parameters(query_json: Dict, engine: Engine, session: Session) -> Dict:
     """From the php query parameters json, build the proper sql query parameters.
 
     Args:
@@ -165,7 +181,7 @@ def generate_query_parameters(query_json: Dict) -> Dict:
     db_models = model_dict()
 
     # Determine encounter_ids to filter by if there are filtering criteria.
-    encounter_ids = select_encounters(criteria_dict) if criteria_dict else None
+    encounter_ids = select_encounters(criteria_dict, engine) if criteria_dict else None
 
     # Parse out and generate the selection fields and where clauses required for every table query from the query json.
     #
@@ -204,6 +220,37 @@ def generate_query_parameters(query_json: Dict) -> Dict:
     return query_components
 
 
+def export_data(args: Namespace) -> None:
+
+    # Read config file and initialize database connection.
+    config.initialize(args.environment)
+    db_vars = config.read('database:bhims')
+    db_vars.update(password=quote(db_vars['password']))  # Required step should password contain an @ symbol.
+    db_uri = "postgresql://{username}:{password}@{host}:{port}/{name}".format(**db_vars)
+
+    engine = create_engine(db_uri, echo=args.verbose)
+    session = Session(bind=engine)
+
+    query_params = generate_query_parameters(args.input, engine, session)
+
+    # Remove any tables requested for a specific environment.
+    table_exclusions = config.read('script', 'table_exclusions').split(',')
+    for exclusion in table_exclusions:
+        query_params.pop(exclusion, None)
+
+    output_path = f"{config.read('script', 'export_cache')}/bhims_export_{args.request_id}.xlsx"
+    with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        for table, params in query_params.items():
+            query = build_query_string(table=table,
+                                       selects=params['selects'],
+                                       joins=params['joins'],
+                                       wheres=params['wheres'])
+            df = pd.read_sql(query, engine)
+            df.to_excel(writer, sheet_name=table, index=False)
+
+    return output_path
+
+
 if __name__ == "__main__":
 
     parser = ArgumentParser()
@@ -217,27 +264,4 @@ if __name__ == "__main__":
                         help='Output query details.')
     args = parser.parse_args()
 
-    # Read config file and initialize database connection.
-    config.initialize(args.environment)
-    db_vars = config.read('database:bhims')
-    db_vars.update(password=quote(db_vars['password']))  # Required step should password contain an @ symbol.
-    db_uri = "postgresql://{username}:{password}@{host}:{port}/{name}".format(**db_vars)
-
-    engine = create_engine(db_uri, echo=args.verbose)
-    session = Session(bind=engine)
-
-    query_params = generate_query_parameters(args.input)
-
-    # Remove any tables requested for a specific environment.
-    table_exclusions = config.read('script', 'table_exclusions').split(',')
-    for exclusion in table_exclusions:
-        query_params.pop(exclusion, None)
-
-    with pd.ExcelWriter(f"{config.read('script', 'export_cache')}/bhims_export_{args.request_id}.xlsx", engine='xlsxwriter') as writer:
-        for table, params in query_params.items():
-            query = build_query_string(table=table,
-                                       selects=params['selects'],
-                                       joins=params['joins'],
-                                       wheres=params['wheres'])
-            df = pd.read_sql(query, engine)
-            df.to_excel(writer, sheet_name=table, index=False)
+    export_data(args)

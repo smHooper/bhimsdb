@@ -2403,7 +2403,7 @@ var BHIMSQuery = (function(){
 		});
 
 		return $.ajax({
-			url: 'bhims.php',
+			url: 'flask/export_data',
 			method: 'POST',
 			data: {action: 'exportData', exportParams: exportParams},
 			cache: false

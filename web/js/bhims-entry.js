@@ -1159,9 +1159,9 @@ var BHIMSEntryForm = (function() {
 	}
 
 
-	Constructor.prototype.userCanIgnoreAdminSection = function() {
+	Constructor.prototype.isAdminSectionUserCanIgnore = function(el) {
 		const rolesThatCanIgnore = ["1"]
-		return rolesThatCanIgnore.includes(_this.userRole)
+		return $(el)[0].classList.contains("admin-section") && rolesThatCanIgnore.includes(_this.userRole)
 	}
 
 	
@@ -1178,7 +1178,7 @@ var BHIMSEntryForm = (function() {
 				const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
 					.filter((_, el) => {
 						let $closestCollapse = $(el).closest('.collapse');
-						if ($(el)[0].classList.contains("admin-section") && this.userCanIgnoreAdminSection()) return false;
+						if (this.isAdminSectionUserCanIgnore(el)) return false;
 						while ($closestCollapse.length) {
 							if (!$closestCollapse.is('.show')) return false;
 							$closestCollapse = $closestCollapse.parent().closest('.collapse');
@@ -1198,7 +1198,7 @@ var BHIMSEntryForm = (function() {
 			}
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
 						.filter((_, el) => {
-							if ($(el)[0].classList.contains("admin-section") && this.userCanIgnoreAdminSection()) return false; 
+							if (this.isAdminSectionUserCanIgnore(el)) return false; 
 							else return true;
 						})
 						.map( (_, el) => _this.validateFields($(el)) )
@@ -1238,7 +1238,7 @@ var BHIMSEntryForm = (function() {
 		if (!(_this.presentMode || _this.serverEnvironment === 'dev')) {
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
 				.filter((_, el) => {
-					if ($(el)[0].classList.contains("admin-section")  && _this.userCanIgnoreAdminSection()) return false; 
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
 					else return true;
 				})
 			.map( (_, el) => _this.validateFields($(el)) )
@@ -2700,7 +2700,7 @@ var BHIMSEntryForm = (function() {
 			const $page = $(page);
 			const allFieldsValid = $page.find('.validate-field-parent')
 				.filter((_, el) => {
-					if ($(el)[0].classList.contains("admin-section") && _this.userCanIgnoreAdminSection()) return false; 
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
 					else return true;
 				})
 				.map((_, parent) => {

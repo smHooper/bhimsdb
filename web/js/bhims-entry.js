@@ -980,28 +980,39 @@ var BHIMSEntryForm = (function() {
 		if ('reactions' in fieldValues) {
 			const $reactionsAccordion = $('#reactions-accordion');
 			const reactions = fieldValues.reactions;
+			const reactionDeferreds = []; // collect deferreds to dispatch fields-full event
 			for (index in reactions) {
 				const $card = this.addNewCard($reactionsAccordion, index);
 				const $reaction = $('#input-reaction-' + index);
+				const reactionByValue = reactions[index].reaction_by;
 				const $reactionBy = $('#input-reaction_by-' + index)
-					.val(reactions[index].reaction_by)
-					.change();
-				this.updateReactionsSelect($reactionBy)
-					.then(() => {
-						// For some reason the index var doesn't correspond to the appropriate 
-						//	iteration of the for loop (even though $reaction does). Get the 
-						//index from the id to set the select with the right val
-						const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
-						$reaction
-							.val(reactions[thisIndex].reaction_code)
-							.change();
-					});
+					.val(reactionByValue)
+					// Don't trigger change because it will call .updateReactionsSelect(). We need the 
+					//	deferred returned from it and we don't want to call it twice. Other .change
+					// 	event handlers aren't necessary
 
+				reactionDeferreds.push(
+					this.updateReactionsSelect($reactionBy)
+						.then(() => {
+							// For some reason the index var doesn't correspond to the appropriate 
+							//	iteration of the for loop (even though $reaction does). Get the 
+							//index from the id to set the select with the right val
+							const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
+							$reaction
+								.val(reactions[thisIndex].reaction_code)
+								.change();
+						})
+				);
 			}
+			// Once reaction_code fields have been set, dispatch the fields-full event
+			$.when(...reactionDeferreds).then(
+				() => {window.dispatchEvent(fieldsFullEvent)}
+			)
 			
-		} 
-
-		window.dispatchEvent(fieldsFullEvent);
+		} else { 
+			// If there are no reactions to worry about, signal that fields have been filled
+			window.dispatchEvent(fieldsFullEvent);
+		}
 	}
 
 

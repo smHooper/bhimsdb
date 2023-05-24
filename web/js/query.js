@@ -282,9 +282,6 @@ var BHIMSQuery = (function(){
 								}
 							}
 							const encounterID = row.encounter_id;
-							if (!this.queryResult[encounterID]) {
-								a = 1;
-							}
 							if (oneToManyTables.includes(tableName)) {
 								if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
 								this.queryResult[encounterID][tableName].push({...row});
@@ -1011,7 +1008,7 @@ var BHIMSQuery = (function(){
 	Save user edits 
 	*/
 	Constructor.prototype.saveEdits = function() {
-		
+
 		// If the values of any PII fields were automatically set, ignore any changes to them
 		if (this.ignorePIIFields) {
 			const selector = Object.keys(this.anonymizedDefaults)
@@ -1074,7 +1071,8 @@ var BHIMSQuery = (function(){
 				//	remain undefined. Otherwise, set the ID so the item can be updated
 				if (entryForm.fieldValues[tableName] != undefined) {
 					if (index in entryForm.fieldValues[tableName]) {
-						tableUpdates[index].id = entryForm.fieldValues[tableName][index].id; // will be undefined if this is a new card
+						// Get DB row ID from queryResult because entryForm.fieldValues doesn't have it
+						tableUpdates[index].id = _this.queryResult[_this.selectedID][tableName][index].id; // will be undefined if this is a new card
 					}
 				} 
 				tableUpdates[index].values[fieldName] = inputValue;
@@ -1089,8 +1087,8 @@ var BHIMSQuery = (function(){
 		oneToOneUpdates.encounters.last_edited_by = entryForm.username;
 		oneToOneUpdates.encounters.datetime_last_edited = getFormattedTimestamp();
 		
-		const sqlStatements = [];
-		const sqlParameters = [];
+		var sqlStatements = [];
+		var sqlParameters = [];
 		for (const tableName in oneToOneUpdates) {
 			const updates = oneToOneUpdates[tableName];
 			// If this is just a normal table update (not part of a 1-to-many relationship), 
@@ -1181,6 +1179,7 @@ var BHIMSQuery = (function(){
 
 			// Create SQL statements for all other updates
 			for (const tableName in oneToManyUpdates) {
+
 				// Either UPDATE the proper row or INSERT if this is a new row
 				const updates = oneToManyUpdates[tableName];
 				for (const cardID in updates) {
@@ -1206,6 +1205,10 @@ var BHIMSQuery = (function(){
 				}
 			}
 
+			// In case this dummy function isn't implemented, only do reassign the sql vars if 
+			//	beforeSaveCustomAction returns something
+			const beforeSaveResult = _this.beforeSaveCustomAction(sqlStatements, sqlParameters);
+			if (beforeSaveResult && beforeSaveResult.length === 2) [sqlStatements, sqlParameters] = beforeSaveResult;
 
 			// Send queries to server
 			$.ajax({
@@ -1244,7 +1247,7 @@ var BHIMSQuery = (function(){
 						for (const index in updates) {
 							const rowValues = updates[index].values;
 							// Only INSERTs will return an ID. Otherwise, the return result will be null
-							if (result[updateIndex]) rowValues.id = result[updateIndex][0].id;
+							if (result[updateIndex]) rowValues.id = result[updateIndex].id;
 							
 							// If this was an insert, no record exists in the queried data yet
 							if (!selectedEncounterData[tableName]) {
@@ -1264,6 +1267,9 @@ var BHIMSQuery = (function(){
 						}
 						entryForm.fieldValues[tableName] = [...selectedEncounterData[tableName]]
 					}
+
+					// Call in case it's implemented in bhims-custom.js
+					_this.afterSaveCustomAction()
 				}
 			}).fail((xhr, status, error) => {
 				showModal(`An unexpected error occurred while saving data to the database: ${error}.`, 'Unexpected error');
@@ -2552,6 +2558,10 @@ var BHIMSQuery = (function(){
 		customizeQuery();
 		//getFieldInfo();
 	}
+
+	// Intended to be overridden in bhims-custom.js
+	Constructor.prototype.beforeSaveCustomAction = function() {};
+	Constructor.prototype.afterSaveCustomAction = function() {};
 
 	/***end of BHIMSQuery module***/
 	return Constructor;

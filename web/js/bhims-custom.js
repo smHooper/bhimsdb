@@ -68,6 +68,27 @@ function customizeQuery() {
 		$('#bears-accordion').siblings('.add-item-container').addClass('hidden');
 	}
 
+	BHIMSQuery.prototype.beforeSaveCustomAction = function(sqlStatements, sqlParameters) {
+		const tablesToBeUpdated = $('.input-field.dirty').map((_, el) => $(el).data('table-name')).get();
+		
+
+		const encounterID = this.selectedID;
+		// Add DELETE SQL statement to clear the table before insert. We want to add
+		//	the SQL to the sqlStatements so the DELETE and INSERTs all happen in the
+		//	same transaction in case one produces an error
+		if (tablesToBeUpdated.includes('bears')) {
+			return [ 
+				[`DELETE FROM bears WHERE encounter_id=$1`].concat(sqlStatements),
+				[[encounterID]].concat(sqlParameters)
+			]
+		} else {
+			return [sqlStatements, sqlParameters]
+		}
+
+	}
+
+
 	bhimsQuery.dataLoadedFunctions.push(bhimsQuery.setDENABearFields)
 }
+
 

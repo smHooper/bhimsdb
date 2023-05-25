@@ -391,7 +391,7 @@ var BHIMSEntryForm = (function() {
 				<!-- lat/lon fields -->
 				<div class="field-container col">
 					<div class="field-container col-6">
-						<select class="input-field no-option-fill coordinates-select" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
+						<select class="input-field no-option-fill coordinates-select ignore-on-insert" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
 							<option value="ddd">Decimal degrees (dd.ddd&#176)</option>
 							<option value="ddm">Degrees decimal minutes (dd&#176 mm.mmm)</option>
 							<option value="dms">Degrees minutes seconds (dd&#176 mm' ss")</option>
@@ -403,13 +403,13 @@ var BHIMSEntryForm = (function() {
 				<!-- dd.ddd -->
 				<div class="collapse show field-container col-6 inline">
 					<div class="field-container col-6">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude_dec_deg" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
 						<span class="required-indicator">*</span>
 						<span class="unit-symbol">&#176</span>
 						<label class="field-label" for="input-lat_dec_deg">Latitude</label>
 					</div>
 					<div class="field-container col-6">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude_dec_deg" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
 						<span class="required-indicator">*</span>
 						<span class="unit-symbol">&#176</span>
 						<label class="field-label" for="input-lon_dec_deg">Longitude</label>
@@ -1987,7 +1987,7 @@ var BHIMSEntryForm = (function() {
 
 		// Remove error class from coordinate fields
 		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').removeClass('error');
-
+		$('.coordinates-ddd').addClass('dirty');
 	}
 
 	/* 

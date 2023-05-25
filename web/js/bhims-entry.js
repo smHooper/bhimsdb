@@ -1169,11 +1169,17 @@ var BHIMSEntryForm = (function() {
 		)
 	}
 
+
+	Constructor.prototype.isAdminSectionUserCanIgnore = function(el) {
+		const rolesThatCanIgnore = ["1"]
+		return $(el)[0].classList.contains("admin-section") && rolesThatCanIgnore.includes(_this.userRole)
+	}
+
+	
 	/*
 	Event handler for the previous and next buttons
 	*/
 	Constructor.prototype.onPreviousNextButtonClick = function(e, movement) {
-
 		e.preventDefault();//prevent form from reloading
 		const $button = $(e.target);
 		if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
@@ -1183,6 +1189,7 @@ var BHIMSEntryForm = (function() {
 				const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
 					.filter((_, el) => {
 						let $closestCollapse = $(el).closest('.collapse');
+						if (this.isAdminSectionUserCanIgnore(el)) return false;
 						while ($closestCollapse.length) {
 							if (!$closestCollapse.is('.show')) return false;
 							$closestCollapse = $closestCollapse.parent().closest('.collapse');
@@ -1201,6 +1208,10 @@ var BHIMSEntryForm = (function() {
 				}
 			}
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+						.filter((_, el) => {
+							if (this.isAdminSectionUserCanIgnore(el)) return false; 
+							else return true;
+						})
 						.map( (_, el) => _this.validateFields($(el)) )
 							.get()
 							.every((isValid) => isValid);
@@ -1237,6 +1248,10 @@ var BHIMSEntryForm = (function() {
 		// validate fields for the currently selected section only if this is the production site
 		if (!(_this.presentMode || _this.serverEnvironment === 'dev')) {
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+				.filter((_, el) => {
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
+					else return true;
+				})
 			.map( (_, el) => _this.validateFields($(el)) )
 				.get()
 				.every((isValid) => isValid);
@@ -1347,7 +1362,7 @@ var BHIMSEntryForm = (function() {
 	Validate all fields currently in view
 	*/
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
-		
+
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		if ($('#disable-required-slider-container input[type=checkbox]').is(':checked')) return true;
 
@@ -2695,6 +2710,10 @@ var BHIMSEntryForm = (function() {
 		for (const page of $('.form-page:not(.title-page)')) {
 			const $page = $(page);
 			const allFieldsValid = $page.find('.validate-field-parent')
+				.filter((_, el) => {
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
+					else return true;
+				})
 				.map((_, parent) => {
 					return _this.validateFields($(parent), focusOnField=false);
 				}).get()

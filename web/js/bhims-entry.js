@@ -27,8 +27,16 @@ var BHIMSEntryForm = (function() {
 	var _this;
 	var Constructor = function() {
 		// Map stuff
-		this.encounterMap = null;
-		this.modalEncounterMap = null;
+		this.maps = {
+			main: {
+				map: null,
+				mileposts: null
+			}, 
+			modal: {
+				map: null,
+				mileposts: null
+			}	
+		};
 		this.encounterMarker = new  L.marker(
 			[0, 0], 
 			{
@@ -708,13 +716,12 @@ var BHIMSEntryForm = (function() {
 			$('#input-coordinate_format').change(this.onCoordinateFormatChange);
 
 			// Set up the map
-			this.encounterMap = this.configureMap('encounter-location-map');
-			this.modalEncounterMap = this.configureMap('modal-encounter-location-map')
-				.on('moveend', e => { // on pan, get center and re-center this.encounterMap
+			this.configureMap('encounter-location-map', this.maps.main);
+			this.configureMap('modal-encounter-location-map', this.maps.modal)
+			this.maps.modal.map.on('moveend', e => { // on pan, get center and re-center this.maps.main.map
 					const modalMap = e.target;
-					this.encounterMap.setView(modalMap.getCenter(), modalMap.getZoom());
-				}) 
-			this.modalEncounterMap.scrollWheelZoom.enable();
+					this.maps.main.map.setView(modalMap.getCenter(), modalMap.getZoom());
+				}).scrollWheelZoom.enable();
 
 			// Prevent form submission when the user hits the 'Enter' key
 			$('.input-field').keydown((e) => { 
@@ -794,8 +801,8 @@ var BHIMSEntryForm = (function() {
 
 						// Record map extent
 						currentStorage.encounterMapInfo = {
-							center: _this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.encounterMap.getCenter(),
-							zoom: _this.encounterMap.getZoom()
+							center: _this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.maps.main.map.getCenter(),
+							zoom: _this.maps.main.map.getZoom()
 						}
 
 						// Record field values
@@ -1812,10 +1819,28 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.setMapMileposts = function(mapObject) {
+		const map = mapObject.map;
+		const mapZoom = map.getZoom();
+		const milepostGroups = mapObject.mileposts;
+		for (const layerZoom in milepostGroups) {
+			const thisLayer = milepostGroups[layerZoom];
+			// If the zoom level is high enough, add the layer
+			if (layerZoom <= mapZoom && !map.hasLayer(thisLayer)) {
+				map.addLayer(thisLayer);
+			}
+			// If the zoom level is too low, remove the layer
+			else if (layerZoom > mapZoom && map.hasLayer(thisLayer)) {
+				map.removeLayer(thisLayer);
+			}
+		}
+	}
+
+
 	/*
 	Configure a Leaflet map given a div HTML ID
 	*/
-	Constructor.prototype.configureMap = function(divID) {
+	Constructor.prototype.configureMap = function(divID, mapObject) {
 		
 		var mapCenter, mapZoom;
 		const pageName = window.location.pathname.split('/').pop();
@@ -1848,69 +1873,147 @@ var BHIMSEntryForm = (function() {
 		};
 		const layerControl = L.control.layers(baseMaps).addTo(map);
 
-		const deferred = $.ajax({url: 'resources/management_units.json'})
+		// Add pane to get mileposts on top of roads
+		map.createPane('mileposts');
+		map.getPane('mileposts').style.zIndex = 1000;
+
+		// Helper function to load geojson data to avoid repeating
+		const onGeoJSONLoad = function(geojson, defaultStyle, layerName, {tooltipHandler={}, hoverStyle={}}={}) {
+				const onMouseover = (e) => {
+				let layer = e.target;
+
+				layer.setStyle(hoverStyle)
+
+				if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+					layer.bringToFront();
+				}
+			}
+			const onMouseout = (e) => {
+				layer.resetStyle(e.target);
+			}
+			onEachFeature = (feature, layer) => {
+				layer.on({
+					mouseover: onMouseover,
+					mouseout: onMouseout
+				})
+			}
+
+			let geojsonOptions = {
+				style: defaultStyle,
+				onEachFeature: onEachFeature //add mouseover and mouseout listeners
+			}
+
+			var layer; // define before calling L.geoJSON() so onMouseout event can reference
+			layer = L.geoJSON(geojson, geojsonOptions)
+				.bindTooltip(
+					tooltipHandler,
+					{
+						sticky: true
+					}
+				).addTo(map);
+			layerControl.addOverlay(layer, layerName);
+
+			return layer;
+		}
+
+		$.get({url: 'resources/management_units.json'})
 			.done(geojson => {
-				const defaultGeojsonStyle = {
+				const defaultStyle = {
 					color: '#000',
 					opacity: 0.2,
 					fillColor: '#000',
 					fillOpacity: 0.15 
 				}
-				const hoverGeojsonStyle = {
+				const hoverStyle = {
 					color: '#000',
 					opacity: 0.4,
 					fillColor: '#000',
 					fillOpacity: 0.15 
 				}
-
-				const onMouseover = (e) => {
-					let layer = e.target;
-
-					layer.setStyle(hoverGeojsonStyle)
-
-					if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-						layer.bringToFront();
-					}
-				}
-				const onMouseout = (e) => {
-					bcUnitsLayer.resetStyle(e.target);
-				}
-				const onEachFeature = (feature, layer) => {
-					layer.on({
-						mouseover: onMouseover,
-						mouseout: onMouseout
-					})
-				}
-
-				var bcUnitsLayer; // define before calling L.geoJSON() so onMouseout event can reference
-				bcUnitsLayer = L.geoJSON(
-					geojson, 
-					{
-						style: {
-							color: '#000',
-							opacity: 0.2,
-							fillColor: '#000',
-							fillOpacity: 0.15 
-						},
-						onEachFeature: onEachFeature //add mouseover and mouseout listeners
-					}
-				).bindTooltip(
-					layer => layer.feature.properties.Unit + ': ' + layer.feature.properties.Name,
-					{
-						sticky: true
-					}
-				).addTo(map);
-				layerControl.addOverlay(bcUnitsLayer, 'Backcountry Units');
-
+				const tooltipHandler = layer => layer.feature.properties.Unit + ': ' + layer.feature.properties.Name;
+				onGeoJSONLoad(geojson, defaultStyle, 'Backcountry Units', {tooltipHandler: tooltipHandler, hoverStyle: hoverStyle})
 			}).fail((xhr, error, status) => {
 				console.log('BC unit geojson read failed: ' + error);
 			})
+		$.get({url: 'resources/roads.json'})
+			.done(geojson => {
+				const defaultStyle = {
+					color: '#a72d0c',
+					opacity: 0.7
+				}
+				const hoverStyle = {
+					color: '#a72d0c',
+					opacity: 0.9
+				}
+				const tooltipHandler =  layer => layer.feature.properties.road_name;
+				onGeoJSONLoad(geojson, defaultStyle, 'Roads', {tooltipHandler: tooltipHandler, hoverStyle: hoverStyle})
+			}).fail((xhr, error, status) => {
+				console.log('Road geojson read failed: ' + error);
+			});
+		$.get({url: 'resources/mileposts.json'})
+			.done(geojson => {
+				const markerOptions = {
+					radius: 5,
+					weight: 1,
+					opacity: 0.9,
+					fillOpacity: 0.8,
+					fillColor: '#7bdf6a',
+					color: '#7bdf6a',
+					pane: 'mileposts'
+				}
+
+				var allMilePosts = L.layerGroup().addTo(map);
+				var milepostGroups = {
+					3:  L.layerGroup().addTo(allMilePosts),
+					5:  L.layerGroup().addTo(allMilePosts),
+					7:  L.layerGroup().addTo(allMilePosts),
+					9:  L.layerGroup().addTo(allMilePosts),
+					10: L.layerGroup().addTo(allMilePosts),
+					11: L.layerGroup().addTo(allMilePosts)
+				}
+
+
+				const pointToLayer = (feature, latlon) => 
+					L.circleMarker(latlon, markerOptions)
+						.bindTooltip(layer => layer.feature.properties.mile.toString(), {permanent: true, className: 'leaflet-tooltip-point-label'});
+				const splitIntoLayerGroups = (feature, layer) => {
+					const mile = feature.properties.mile;
+					if (mile == 0) return; // skip milepost 0
+					const layerGroup = 
+						mile % 100 === 0 ? milepostGroups[3] :
+						mile % 50 === 0 ? milepostGroups[5] :
+						mile % 20 === 0 ? milepostGroups[7] :
+						mile % 10 === 0 ? milepostGroups[9] :
+						mile % 5 === 0 ? milepostGroups[10] :
+						milepostGroups[11]; // everything else
+					layer.addTo(layerGroup)
+				}
+				var layer = L.geoJSON(
+					geojson, 
+					{
+						pointToLayer: pointToLayer,
+						onEachFeature: splitIntoLayerGroups
+					}
+				);
+				layerControl.addOverlay(allMilePosts, 'Mileposts');
+
+				mapObject.mileposts = milepostGroups;
+				this.setMapMileposts(mapObject);
+
+			}).fail((xhr, error, status) => {
+				console.log('Milepost geojson read failed: ' + error);
+			});
+
+		// Show/hide mileposts based on zoom level
+		map.on('zoom', (e) => {
+			if (mapObject.mileposts) this.setMapMileposts(mapObject);
+		})
 
 		// Make the encounter marker drag/droppable onto the map
 		$('#encounter-marker-img').draggable({opacity: 0.7, revert: true});//helper: 'clone'});
 		$('#encounter-location-map').droppable({drop: this.markerDroppedOnMap});
 
-		return map;
+		mapObject.map = map;
 	}
 
 
@@ -1971,7 +2074,7 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.markerIsOnMap = function() {
 
 		var isOnMap = false;
-		this.encounterMap.eachLayer((layer) => {
+		this.maps.main.map.eachLayer((layer) => {
 			if (layer === this.encounterMarker) isOnMap = true;
 		});
 
@@ -1993,13 +2096,13 @@ var BHIMSEntryForm = (function() {
 		this.encounterMarker.setLatLng({lat: lat, lng: lng});//, options={draggable: true});
 		
 		if (!this.markerIsOnMap()) {
-			this.encounterMarker.addTo(this.encounterMap);
+			this.encounterMarker.addTo(this.maps.main.map);
 			this.removeDraggableMarker();
 		}
 
 		// If the marker is outside the map bounds, zoom to it
-		if (!this.encounterMap.getBounds().contains(this.encounterMarker.getLatLng())) {
-			this.encounterMap.setView(this.encounterMarker.getLatLng(), this.encounterMap.getZoom());
+		if (!this.maps.main.map.getBounds().contains(this.encounterMarker.getLatLng())) {
+			this.maps.main.map.setView(this.encounterMarker.getLatLng(), this.maps.main.map.getZoom());
 		}
 		
 		// Make sure the coords for fields are appropriately rounded
@@ -2038,7 +2141,7 @@ var BHIMSEntryForm = (function() {
 		originalEvent.pageY -= originalEvent.offsetY - $target.height();
 		originalEvent.clientX -= originalEvent.offsetX - ($target.width() / 2); 
 		originalEvent.clientY -= originalEvent.offsetY - $target.height();
-		const latlng = _this.encounterMap.mouseEventToLatLng(originalEvent);
+		const latlng = _this.maps.main.map.mouseEventToLatLng(originalEvent);
 		
 		_this.placeEncounterMarker(latlng);
 
@@ -2208,7 +2311,7 @@ var BHIMSEntryForm = (function() {
 				//set coordinate fields
 				_this.setCoordinatesFromMarker();
 			})
-			.addTo(_this.modalEncounterMap);
+			.addTo(_this.maps.modal.map);
 
 		$('#map-modal')
 			.on('shown.bs.modal', e => {
@@ -2216,23 +2319,23 @@ var BHIMSEntryForm = (function() {
 				//	Leaflet thinks it's much smaller than it is. As a result, 
 				//	only a single tile is shown. Reset the size after the modal is 
 				//	loaded to prevent this
-				_this.modalEncounterMap.invalidateSize();
+				_this.maps.modal.map.invalidateSize();
 				
 				// Center the map on the marker
-				_this.modalEncounterMap.setView(
-					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.encounterMap.getCenter(), 
-					_this.encounterMap.getZoom()
+				_this.maps.modal.map.setView(
+					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.maps.main.map.getCenter(), 
+					_this.maps.main.map.getZoom()
 				);
 			})
 			.on('hidden.bs.modal', e => {
 				// Remove the marker when the modal is hidden
-				_this.modalEncounterMap.removeLayer(modalMarker);
+				_this.maps.modal.map.removeLayer(modalMarker);
 
 				//center form map on the marker. Do this here because it's less jarring 
 				//	for the user to see the map move to center when the modal is closed
-				_this.encounterMap.setView(
-					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.modalEncounterMap.getCenter(),
-					_this.encounterMap.getZoom()
+				_this.maps.main.map.setView(
+					_this.markerIsOnMap() ? _this.encounterMarker.getLatLng() : _this.maps.modal.map.getCenter(),
+					_this.maps.main.map.getZoom()
 				);
 			})
 			.modal(); // Show the modal

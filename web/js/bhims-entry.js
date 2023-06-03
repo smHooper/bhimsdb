@@ -60,6 +60,7 @@ var BHIMSEntryForm = (function() {
 		this.serverEnvironment = '';
 		this.initialNarrativeText = '';
 		this.presentMode = false;
+		this.maxFileUploadSize = 2147483648;
 		_this = this;
 	}
 
@@ -534,8 +535,8 @@ var BHIMSEntryForm = (function() {
 						</div>
 						<div class="attachment-file-input-container col-6">
 							<label class="filename-label"></label>
-							<label class="generic-button text-center file-input-label" for="attachment-upload">select file</label>
-							<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="entryForm.onAttachmentInputChange(event)" required>
+							<label class="generic-button text-center file-input-label" for="attachment-upload" disabled>select file</label>
+							<input class="input-field hidden attachment-input" id="attachment-upload" type="file" accept="" name="uploadedFile" data-dependent-target="#input-file_type" data-dependent-value="!<blank>" onchange="entryForm.onAttachmentInputChange(event)" required disabled>
 						</div>
 					</div>
 				`);
@@ -2562,7 +2563,17 @@ var BHIMSEntryForm = (function() {
 		const fileTypeSelectID = $fileTypeSelect.attr('id');
 		const previousFileType = $fileTypeSelect.data('previous-value');//should be undefined if this is the first time this function has been called
 		const $fileInput = $fileTypeSelect.closest('.card-body').find('.file-input-label ~ input[type=file]');
+		const $fileInputLabel = $fileTypeSelect.closest('.card-body').find('.file-input-label');
 		const fileInputID = $fileInput.attr('id');
+
+		if ($fileTypeSelect.val()) {
+			$fileInput.removeAttr('disabled')
+			$fileInputLabel.removeAttr('disabled')
+		}
+		else {
+			$fileInput.attr('disabled', true)
+			$fileInputLabel.attr('disabled', true)
+		}
 
 		// If the data-previous-value attribute has been set and there's already a file uploaded, that means the user has already selected a file
 		if (previousFileType && $fileInput.get(0).files[0]) {
@@ -2616,6 +2627,13 @@ var BHIMSEntryForm = (function() {
 				const fileType = $barContainer.closest('.card').find('select').val();
 				var blob;
 				if (fileType == 2) var blob = new Blob([reader.result], {type: file.type});
+				if (fileType == 2 && blob.size > _this.maxFileUploadSize) {
+					$barContainer.addClass('hidden');
+					const card = $barContainer.closest(".card")
+					$(card).find(".filename-label").html('')
+					showModal(`File too big to upload. Please replace with a file less than ${_this.maxFileUploadSize/1073741824}gb`, "File too large");
+					return;
+				} 
 				setAttachmentThumbnail(fileType, $destinationImg, blob);
 				$barContainer.addClass('hidden');
 				$destinationImg.closest('.card')
@@ -2646,7 +2664,7 @@ var BHIMSEntryForm = (function() {
 	Event handler for attachment input
 	*/
 	Constructor.prototype.onAttachmentInputChange = function(e) {
-		
+
 		const el = e.target; 
 		const $parent = $(el).closest('.field-container');
 

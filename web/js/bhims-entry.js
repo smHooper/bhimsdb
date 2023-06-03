@@ -401,7 +401,7 @@ var BHIMSEntryForm = (function() {
 				<!-- lat/lon fields -->
 				<div class="field-container col">
 					<div class="field-container col-6">
-						<select class="input-field no-option-fill coordinates-select" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
+						<select class="input-field no-option-fill coordinates-select ignore-on-insert" name="coordinate_format" id="input-coordinate_format" value="ddd" required>
 							<option value="ddd">Decimal degrees (dd.ddd&#176)</option>
 							<option value="ddm">Degrees decimal minutes (dd&#176 mm.mmm)</option>
 							<option value="dms">Degrees minutes seconds (dd&#176 mm' ss")</option>
@@ -413,13 +413,13 @@ var BHIMSEntryForm = (function() {
 				<!-- dd.ddd -->
 				<div class="collapse show field-container col-6 inline">
 					<div class="field-container col-6">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude_dec_deg" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-90" max="90" name="latitude" placeholder="Lat: dd.ddd" id="input-lat_dec_deg" required>
 						<span class="required-indicator">*</span>
 						<span class="unit-symbol">&#176</span>
 						<label class="field-label" for="input-lat_dec_deg">Latitude</label>
 					</div>
 					<div class="field-container col-6">
-						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude_dec_deg" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
+						<input class="input-field input-with-unit-symbol text-right coordinates-ddd" type="number" step="0.00001" min="-180" max="180" name="longitude" placeholder="Lon: ddd.ddd" id="input-lon_dec_deg" required>
 						<span class="required-indicator">*</span>
 						<span class="unit-symbol">&#176</span>
 						<label class="field-label" for="input-lon_dec_deg">Longitude</label>
@@ -990,28 +990,39 @@ var BHIMSEntryForm = (function() {
 		if ('reactions' in fieldValues) {
 			const $reactionsAccordion = $('#reactions-accordion');
 			const reactions = fieldValues.reactions;
+			const reactionDeferreds = []; // collect deferreds to dispatch fields-full event
 			for (index in reactions) {
 				const $card = this.addNewCard($reactionsAccordion, index);
 				const $reaction = $('#input-reaction-' + index);
+				const reactionByValue = reactions[index].reaction_by;
 				const $reactionBy = $('#input-reaction_by-' + index)
-					.val(reactions[index].reaction_by)
-					.change();
-				this.updateReactionsSelect($reactionBy)
-					.then(() => {
-						// For some reason the index var doesn't correspond to the appropriate 
-						//	iteration of the for loop (even though $reaction does). Get the 
-						//index from the id to set the select with the right val
-						const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
-						$reaction
-							.val(reactions[thisIndex].reaction_code)
-							.change();
-					});
+					.val(reactionByValue)
+					// Don't trigger change because it will call .updateReactionsSelect(). We need the 
+					//	deferred returned from it and we don't want to call it twice. Other .change
+					// 	event handlers aren't necessary
 
+				reactionDeferreds.push(
+					this.updateReactionsSelect($reactionBy)
+						.then(() => {
+							// For some reason the index var doesn't correspond to the appropriate 
+							//	iteration of the for loop (even though $reaction does). Get the 
+							//index from the id to set the select with the right val
+							const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
+							$reaction
+								.val(reactions[thisIndex].reaction_code)
+								.change();
+						})
+				);
 			}
+			// Once reaction_code fields have been set, dispatch the fields-full event
+			$.when(...reactionDeferreds).then(
+				() => {window.dispatchEvent(fieldsFullEvent)}
+			)
 			
-		} 
-
-		window.dispatchEvent(fieldsFullEvent);
+		} else { 
+			// If there are no reactions to worry about, signal that fields have been filled
+			window.dispatchEvent(fieldsFullEvent);
+		}
 	}
 
 
@@ -1168,11 +1179,17 @@ var BHIMSEntryForm = (function() {
 		)
 	}
 
+
+	Constructor.prototype.isAdminSectionUserCanIgnore = function(el) {
+		const rolesThatCanIgnore = ["1"]
+		return $(el)[0].classList.contains("admin-section") && rolesThatCanIgnore.includes(_this.userRole)
+	}
+
+	
 	/*
 	Event handler for the previous and next buttons
 	*/
 	Constructor.prototype.onPreviousNextButtonClick = function(e, movement) {
-
 		e.preventDefault();//prevent form from reloading
 		const $button = $(e.target);
 		if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
@@ -1182,6 +1199,7 @@ var BHIMSEntryForm = (function() {
 				const $parents = $('.form-page.selected .validate-field-parent:not(.cloneable)')
 					.filter((_, el) => {
 						let $closestCollapse = $(el).closest('.collapse');
+						if (this.isAdminSectionUserCanIgnore(el)) return false;
 						while ($closestCollapse.length) {
 							if (!$closestCollapse.is('.show')) return false;
 							$closestCollapse = $closestCollapse.parent().closest('.collapse');
@@ -1200,6 +1218,10 @@ var BHIMSEntryForm = (function() {
 				}
 			}
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+						.filter((_, el) => {
+							if (this.isAdminSectionUserCanIgnore(el)) return false; 
+							else return true;
+						})
 						.map( (_, el) => _this.validateFields($(el)) )
 							.get()
 							.every((isValid) => isValid);
@@ -1236,6 +1258,10 @@ var BHIMSEntryForm = (function() {
 		// validate fields for the currently selected section only if this is the production site
 		if (!(_this.presentMode || _this.serverEnvironment === 'dev')) {
 			const allFieldsValid = $('.form-page.selected .validate-field-parent')
+				.filter((_, el) => {
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
+					else return true;
+				})
 			.map( (_, el) => _this.validateFields($(el)) )
 				.get()
 				.every((isValid) => isValid);
@@ -1346,7 +1372,7 @@ var BHIMSEntryForm = (function() {
 	Validate all fields currently in view
 	*/
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
-		
+
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		if ($('#disable-required-slider-container input[type=checkbox]').is(':checked')) return true;
 
@@ -2069,7 +2095,7 @@ var BHIMSEntryForm = (function() {
 
 		// Remove error class from coordinate fields
 		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').removeClass('error');
-
+		$('.coordinates-ddd').addClass('dirty');
 	}
 
 	/* 
@@ -2900,6 +2926,10 @@ var BHIMSEntryForm = (function() {
 		for (const page of $('.form-page:not(.title-page)')) {
 			const $page = $(page);
 			const allFieldsValid = $page.find('.validate-field-parent')
+				.filter((_, el) => {
+					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
+					else return true;
+				})
 				.map((_, parent) => {
 					return _this.validateFields($(parent), focusOnField=false);
 				}).get()

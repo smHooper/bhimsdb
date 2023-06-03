@@ -257,10 +257,11 @@ if (isset($_POST['action'])) {
 					}
 
 					$result = runQueryWithinTransaction($conn, $_POST['queryString'][$i], $params);
-					if (strpos(json_encode($result), 'ERROR') !== false) {
+					$stringifiedResult = json_encode($result);
+					if (strpos($stringifiedResult, 'ERROR') !== false) {
 						// roll back the previous queries
 						pg_query($conn, 'ROLLBACK');
-						echo $result, " from the query $i ", $_POST['queryString'][$i], ' with params ', json_encode($params);
+						echo $stringifiedResult, " from the query $i ", $_POST['queryString'][$i], ' with params ', json_encode($params);
 						exit();
 					}
 

@@ -707,6 +707,7 @@ textarea.narrative-field {
 	height: 200px;
 	padding: 5px 25px 40px 10px;
 	font-size: 14px;
+	overflow-y: auto;
 }
 #recorded-text-final {
 	color: black;

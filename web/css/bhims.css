@@ -921,5 +921,9 @@ input[type=number] {
   font-weight: bold;
   border: none;
   /* add text halo*/
-  text-shadow: -1px -1px 0 #ffffff66, 1px -1px 0 #ffffff66, -1px 1px 0 #ffffff66, 1px 1px 0 #ffffff66;
+  text-shadow: -1px -1px 0 #ffffff88, 1px -1px 0 #ffffff88, -1px 1px 0 #ffffff88, 1px 1px 0 #ffffff88;
+  box-shadow: none;
+}
+.leaflet-tooltip-point-label:before {
+  display: none !important;
 }

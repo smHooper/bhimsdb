@@ -912,6 +912,18 @@ input[type=number] {
 
 /**** leaflet stuff *****/
 
-.leaflet-popup .leaflet-popup-content-wrapper {
+.leaflet-popup .leaflet-popup-content-wrapper,
+.leaflet-tooltip-point-label {
   font-family: 'Barlow', sans-serif;
+}
+.leaflet-tooltip-point-label {
+  background-color: #00000000; /*make bg transparent*/
+  font-weight: bold;
+  border: none;
+  /* add text halo*/
+  text-shadow: -1px -1px 0 #ffffff88, 1px -1px 0 #ffffff88, -1px 1px 0 #ffffff88, 1px 1px 0 #ffffff88;
+  box-shadow: none;
+}
+.leaflet-tooltip-point-label:before {
+  display: none !important;
 }

@@ -7,13 +7,14 @@ var MAP_DATA,
 	FIELD_INFO = {},
 	LOOKUP_TABLES = {},
 	PRESENT_MODE = false,
-	PRESENT_MODE_YEAR = 2022;
+	PRESENT_MODE_YEAR = 2022,
+	DATA_ACCESS_USER_ROLES = [2, 3];
 
 //add bhims-dashboard to main-content
 
 function configureReviewCard() {
 	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
-	
+
 	const sql = `
 		SELECT 
 			status, 
@@ -444,7 +445,7 @@ function configureDailyEncounterChart() {
 				SELECT 
 					generate_series(min(start_date), max(start_date), '1d')::date AS encounter_date 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now()) - 1
+				WHERE extract(year FROM start_date) = extract(year FROM now())
 			) series 
 		LEFT JOIN 
 			(
@@ -452,7 +453,7 @@ function configureDailyEncounterChart() {
 					start_date::date AS encounter_date, 
 					count(*) AS n_encounters 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now()) - 1 
+				WHERE extract(year FROM start_date) = extract(year FROM now())
 				GROUP BY encounter_date
 			) n 
 		USING (encounter_date) 

@@ -93,7 +93,7 @@ function hideLoadingIndicator(caller) {
 }
 
 
-function showModal(message, title, modalType='alert', footerButtons='') {
+function showModal(message, title, modalType='alert', footerButtons='', {dismissable=true}={}) {
 
 	var modalID = title
 		.replace(/[^\w]/g, '-') // replace non-alphanumeric chars with '-'
@@ -131,13 +131,37 @@ function showModal(message, title, modalType='alert', footerButtons='') {
 	    </div>
 	  </div>
 	`;
+	const options = dismissable ? {} : {backdrop: 'static', keyboard: false};
 	const $modal = $('#alert-modal').empty()
 		.append($(innerHTML))
-		.modal();
+		.modal(options);
 	
 	$modal.find('.close-modal').click(function() {
 		$modal.modal('hide');
 	})
+}
+
+
+function getUserInfo() {
+	return $.post({
+		url: 'bhims.php',
+		data: {action: 'getUser'},
+		cache: false
+	}).done(function(resultString) {
+		if (queryReturnedError(resultString)) {
+			throw 'User role query failed: ' + resultString;
+		} else {
+
+		}
+	});
+}
+
+
+function showPermissionDeniedAlert() {
+	$('.main-content-wrapper').remove();
+	const message = 'You do not have sufficient permissions to view data. Contact the BHIIMS program administrator if you need access.';
+	const footerButton = '<a class="generic-button" href="bhims-index.html">OK</a>'
+	showModal(message, 'Permission Denied', 'alert', footerButton, {dismissable: false});
 }
 
 /*

@@ -1,0 +1,11 @@
+{% extends "email_notification.html" %}
+
+{% block message %}
+	A new BHIMS form was submitted on {{formatted_date}} at {{formatted_time}}. Click the button below to view this submission. 
+	<strong>Note: the link to the query page will only work if you are connected to the 
+	NPS network.</strong> You can connect to the network directly 
+	or use a VPN.
+{% endblock %}
+{% block link_block %}
+	{{ super() }}
+{% endblock %}

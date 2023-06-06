@@ -249,11 +249,21 @@
 	  </div>
 	</div>
 
+	<!--alert/message modal -->
+	<div class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-hidden="true"></div>
+
 	<script src="js/bhims.js"></script>
 	<script src="js/bhims-dashboard.js"></script>
 	
 	<script>
 		$(document).ready(function(){
+
+			getUserInfo().then(resultString => {
+				const userInfo = $.parseJSON(resultString)[0];
+				if (!DATA_ACCESS_USER_ROLES.includes(parseInt(userInfo.role))) {
+					showPermissionDeniedAlert();
+				}
+			})
 
 			const queryParams = parseURLQueryString();
 			PRESENT_MODE = queryParams.present === 'true';

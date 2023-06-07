@@ -1033,9 +1033,15 @@ var BHIMSQuery = (function(){
 		//var fileUploads = {};
 		for (const input of $dirtyInputs) {
 			const $input = $(input);
-			const inputValue = $input.val();
+			let inputValue = $input.val();
 			const fieldName = $input.attr('name');
 			const $accordion = $input.closest('.accordion.form-item-list');
+
+			if ($input.is('.short-distance-field')) {
+				const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
+				inputValue = Math.round(inputValue / UNIT_PER_METER_MAP.get($unitsSelect.val()));
+				console.log("2 heresies 2")
+			}
 
 			var tableName = '';
 			if ($accordion.length) { 
@@ -1516,16 +1522,17 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.onShortDistanceUnitsFieldChange = function(e) {
 		const $target = $(e.target);
 		const units = $target.val();
-		const conversionFactor = 3.2808399;
+		conversionFactor = UNIT_PER_METER_MAP.get(units)
 		const $valueField = $target.closest('.field-container')
 			.find('.flex-field-container')
 				.find('.input-field');
 		const distanceInMeters = entryForm.fieldValues[$valueField.attr('name')];
-		$valueField.val(
-			units === 'm' ? 
-			distanceInMeters : 
-			Math.round(distanceInMeters * conversionFactor)
-		);
+		if (!$valueField.hasClass('dirty')) {
+			console.log('yaa')
+			$valueField.val(
+				Math.round(distanceInMeters * conversionFactor)
+			);
+		}
 	}
 
 

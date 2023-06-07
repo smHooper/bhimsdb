@@ -17,7 +17,11 @@ function isInViewport(el) {
 	);
 }
 
-const FEET_PER_METER = 3.2808399;
+let UNIT_PER_METER_MAP = new Map([
+	["ft", 3.2808399],
+	["yd", 1.0936132],
+	["m", 1],
+])
 
 var BHIMSEntryForm = (function() {
 	
@@ -58,7 +62,7 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
-
+		console.log("yooo")
 		var config = {},
 			pages = {},
 			sections = {},
@@ -662,8 +666,9 @@ var BHIMSEntryForm = (function() {
 			$('.short-distance-select')
 				.empty()
 				.append(`
-					<option value="ft">feet</option>
 					<option value="m">meters</option>
+					<option value="ft">feet</option>
+					<option value="yd">yards</option>
 				`).val('ft');
 				//.change(this.onShortDistanceUnitsFieldChange); //When a field with units changes, re-calculate
 
@@ -2531,34 +2536,6 @@ var BHIMSEntryForm = (function() {
 
 	}
 
-
-	/*
-	When the units fields for a field measured in feet/meters changes, change the value of UI 
-	*/
-	Constructor.prototype.onShortDistanceUnitsFieldChange = function(e) {
-
-		const $select = $(e.target);
-		const $target = $($select.data('calculation-target'));
-		const multiplyBy = $select.val() === 'ft' ? FEET_PER_METER : 1 / FEET_PER_METER;
-		$target.val( trueRound($target.val() * multiplyBy) ); 
-	}
-
-
-	/*
-	When a feet/meters data field changes, check the units and save the in-memory value in meters
-	*/
-	Constructor.prototype.onShortDistanceFieldChange = function(e) {
-
-		const $input = $(e.target);
-		const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${$input.attr('id')}"]`);
-		// If the 
-		if ($select.val() === 'ft') {
-			const dbValue = $input.val() * FEET_PER_METER;
-			_this.setInMemorydValue($input, dbValue);
-		}
-	}
-
-
 	/*
 	Reset form back to blank state
 	*/
@@ -2855,11 +2832,11 @@ var BHIMSEntryForm = (function() {
 					
 					var value = _this.fieldValues[fieldName];
 
-					// Convert short distance fields from feet to meters if necessary
+					// Convert short distance fields units if necessary
 					const $input = $(input);
 					if ($input.is('.short-distance-field')) {
 						const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
-						if ($unitsSelect.val() === 'ft') value = Math.round(value / FEET_PER_METER);
+						value = Math.round(value / UNIT_PER_METER_MAP.get($unitsSelect.val()));
 					}
 
 					unorderedParameters[tableName][fieldName] = value;

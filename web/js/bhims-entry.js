@@ -62,7 +62,6 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
-		console.log("yooo")
 		var config = {},
 			pages = {},
 			sections = {},

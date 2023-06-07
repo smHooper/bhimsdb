@@ -1040,7 +1040,6 @@ var BHIMSQuery = (function(){
 			if ($input.is('.short-distance-field')) {
 				const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
 				inputValue = Math.round(inputValue / UNIT_PER_METER_MAP.get($unitsSelect.val()));
-				console.log("2 heresies 2")
 			}
 
 			var tableName = '';
@@ -1528,7 +1527,6 @@ var BHIMSQuery = (function(){
 				.find('.input-field');
 		const distanceInMeters = entryForm.fieldValues[$valueField.attr('name')];
 		if (!$valueField.hasClass('dirty')) {
-			console.log('yaa')
 			$valueField.val(
 				Math.round(distanceInMeters * conversionFactor)
 			);

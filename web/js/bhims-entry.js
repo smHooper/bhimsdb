@@ -2423,13 +2423,12 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.onRoadMileChange = function(e) {
 
 		const mile = e.target.value;
-		const roadID = $('#input-road_name').val();
+		const roadID = $('#input-road_name').val() || _this.fieldValues.road_name_code;
 		const roadsGeoJSON = _this.roadsGeoJSON;
 		let milepostFeatures = _this.maps.main.mileposts;
 
 		// If the layers haven't been added to the map, do nothing
-		if (!milepostFeatures) return;
-		if (!roadsGeoJSON) return;
+		if (!(roadID && milepostFeatures && roadsGeoJSON)) return;
 
 		let roadFeature = _this.roadsGeoJSON.features.filter(f => f.properties.road_id == roadID);
 		const roadName = $(`#input-road_name option[value=${roadID}]`).text();

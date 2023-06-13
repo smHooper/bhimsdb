@@ -30,7 +30,6 @@ var BHIMSEntryForm = (function() {
 	*/
 	var _this;
 	var Constructor = function() {
-		// Map stuff
 		this.maps = {
 			main: {
 				map: null,
@@ -43,6 +42,7 @@ var BHIMSEntryForm = (function() {
 				roads: {}
 			}	
 		};
+		
 		this.encounterMarker = new  L.marker(
 			[0, 0], 
 			{
@@ -67,6 +67,7 @@ var BHIMSEntryForm = (function() {
 		this.maxFileUploadSize = 2147483648;
 		this.userRolesForNotification = [1]; // if user has one of these roles, an email notification should be sent on submission
 		this.dataAccessUserRoles = [2, 3]; // to determine if user should be able to open query page
+		this.roadsGeoJSON;
 		_this = this;
 	}
 
@@ -109,9 +110,7 @@ var BHIMSEntryForm = (function() {
 				_this.username = userInfo.username;
 				_this.userRole = userInfo.role;
 				
-				if (isNewEntry) {
-					$('#input-entered_by').val(_this.username).change();	
-				} else {
+				if (!isNewEntry) {
 					// If this is the query page, check if the user has permission to access it
 					const canAccessData = _this.dataAccessUserRoles.includes(parseInt(userInfo.role))
 					if (!canAccessData) {
@@ -743,13 +742,14 @@ var BHIMSEntryForm = (function() {
 			$('#input-coordinate_format').change(this.onCoordinateFormatChange);
 			$('#input-road_mile').change(this.onRoadMileChange);
 
-			// Set up the map
-			this.configureMap('encounter-location-map', this.maps.main);
-			this.configureMap('modal-encounter-location-map', this.maps.modal)
-			this.maps.modal.map.on('moveend', e => { // on pan, get center and re-center this.maps.main.map
-					const modalMap = e.target;
-					this.maps.main.map.setView(modalMap.getCenter(), modalMap.getZoom());
-				}).scrollWheelZoom.enable();
+			if (!this.maps.main.mileposts) {
+				this.configureMap('encounter-location-map', this.maps.main);
+				this.configureMap('modal-encounter-location-map', this.maps.modal)
+				this.maps.modal.map.on('moveend', e => { // on pan, get center and re-center this.maps.main.map
+						const modalMap = e.target;
+						this.maps.main.map.setView(modalMap.getCenter(), modalMap.getZoom());
+					}).scrollWheelZoom.enable();
+			}
 
 			// Prevent form submission when the user hits the 'Enter' key
 			$('.input-field').keydown((e) => { 
@@ -846,6 +846,9 @@ var BHIMSEntryForm = (function() {
 
 			// Get username and store for INSERTing data in addition to filling the entered_by field
 			userInfoDeferred.then(() => {
+
+				if (isNewEntry) $('#input-entered_by').val(_this.username).change();	
+
 				// Set the view of the form according to user role
 				if (this.userRole < 2) { // >2 === assessment or admin
 					// Remove the asseessment section bcecause this user doesn't have 
@@ -993,13 +996,14 @@ var BHIMSEntryForm = (function() {
 					.filter((_, el) => {
 						return ($(el).attr('name') || '').startsWith(key)})
 					.removeClass('default');
-				if ($input.is('.input-checkbox')) {
-					$input.prop('checked', value);
-				} else {
-					$input.val(value);
+				if (value !== null) {
+					if ($input.is('.input-checkbox')) {
+						$input.prop('checked', value);
+					} else {
+						$input.val(value);
+					}
+					$input.change();//call change event callbacks
 				}
-
-				$input.change();//call change event callbacks
 			}
 		}
 
@@ -1872,6 +1876,9 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	/*
+	Helper function to toggle mileposts for different zoom levels
+	*/
 	Constructor.prototype.setMapMileposts = function(mapObject) {
 		const map = mapObject.map;
 		const mapZoom = map.getZoom();
@@ -2000,7 +2007,7 @@ var BHIMSEntryForm = (function() {
 				}
 				const tooltipHandler =  layer => layer.feature.properties.road_name;
 				const layer = onGeoJSONLoad(geojson, defaultStyle, 'Roads', {tooltipHandler: tooltipHandler, hoverStyle: hoverStyle})
-				mapObject.roads = {layer: layer, geojson: geojson};
+				if (!_this.roadsGeoJSON) _this.roadsGeoJSON = {...geojson};
 
 			}).fail((xhr, error, status) => {
 				console.log('Road geojson read failed: ' + error);
@@ -2070,7 +2077,6 @@ var BHIMSEntryForm = (function() {
 
 		mapObject.map = map;
 	}
-
 
 	/*
 	Convert coordinates from decimal degrees to degrees decimal 
@@ -2421,15 +2427,14 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.onRoadMileChange = function(e) {
 
 		const mile = e.target.value;
-		const roadID = $('#input-road_name').val();
-		const roadGeoJSON = _this.maps.main.roads.geojson;
+		const roadID = $('#input-road_name').val() || _this.fieldValues.road_name_code;
+		const roadsGeoJSON = _this.roadsGeoJSON;
 		let milepostFeatures = _this.maps.main.mileposts;
 
 		// If the layers haven't been added to the map, do nothing
-		if (!milepostFeatures) return;
-		if (!roadGeoJSON) return;
+		if (!(roadID && milepostFeatures && roadsGeoJSON)) return;
 
-		let roadFeature = roadGeoJSON.features.filter(f => f.properties.road_id == roadID);
+		let roadFeature = _this.roadsGeoJSON.features.filter(f => f.properties.road_id == roadID);
 		const roadName = $(`#input-road_name option[value=${roadID}]`).text();
 
 		// Check that there is a road feature laoded onto the map

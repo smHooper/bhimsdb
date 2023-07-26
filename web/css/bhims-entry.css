@@ -690,6 +690,18 @@ button.indicator-dot:focus {
 	font-size: 13px;
 }
 
+textarea.mobile-data {
+	width: 100%;
+	min-height: 200px;
+	background-color: hsla(1, 0%, 100%, 0.3);
+	border: none;
+	padding: 5px 10px;
+	margin-bottom: 20px;
+	/* border-bottom: 40px solid transparent; make room for mic button */
+	text-indent: 0;
+	/* color: rgba(0,0,0,0);text area holds text but recorded-text-container displays it */
+}
+
 textarea.narrative-field {
 	width: 100%;
 	min-height: 200px;

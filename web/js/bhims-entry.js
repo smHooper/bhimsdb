@@ -615,6 +615,7 @@ var BHIMSEntryForm = (function() {
 				$('#submit-button').click(_this.onSubmitButtonClick);
 				$('.indicator-dot').click(_this.onIndicatorDotClick);
 				$('#reset-form-button').click(_this.onResetFormClick);
+				$('#import-mobile-button').click(_this.onImportMobileClick);
 				$('#new-submission-button').click(e => {
 					e.preventDefault();
 					_this.resetForm();
@@ -1218,6 +1219,9 @@ var BHIMSEntryForm = (function() {
 	Event handler for the previous and next buttons
 	*/
 	Constructor.prototype.onPreviousNextButtonClick = function(e, movement) {
+		console.log(_this.fieldValues)
+		// console.log(_this.fieldInfo)
+		
 		e.preventDefault();//prevent form from reloading
 		const $button = $(e.target);
 		if ($button.prop('disabled')) return;//shouldn't be necessary if browser respects 'disabled' attribute
@@ -2911,6 +2915,54 @@ var BHIMSEntryForm = (function() {
 
 	}
 
+	// bugs with this:
+	// latitude/ longitude only filled sometimes when using place name
+	// Need to refresh to get rid of extra accordions at top. 
+	// Need to refresh to get 'entered by' and 'date/time' enterted
+	// Detailed reaction ofs interaction details not showing up
+	// property damage and structure interactions still displaying as "No"
+	// Should adminsitrative information be filled from mobile or web?
+	Constructor.prototype.importMobileData = function(e) {
+		// {"people":{"0":{"first_name":"Formie","last_name":"Onesies","country_code":"1","zip_code":"12433"},"1":{"first_name":"Aaron","last_name":"Gould","country_code":"1","zip_code":"1"}},"human_group_type_code":"2","general_human_activity_code":"5","group_size_total":"2","start_date":"2023-07-12","start_time":"03:57","location_type":"Place name","place_name_code":"4","location_description":"Form 1!!","bear_species_code":"2","bear_color_code":"1","bear_cohort_code":"3","bears":{"0":{"bear_sex_code":"-1","bear_injury_code":"-1","bear_park_id":"1","previously_encountered":"-1","bear_number":""}},"habitat_type_code":"2","visibility_code":"1","initial_distance_m":"20","closest_distance_m":"22","was_making_noise":"1","initial_human_action_code":"-2","other_initial_human_action":"Cooling","initial_bear_action_code":"5","reactions":{"0":{"reaction_by":"1","reaction_code":"6","other_reaction":"","reaction_details":""},"1":{"reaction_by":"2","reaction_code":"100","other_reaction":"","reaction_details":"He dumb"}},"reported_probable_cause_code":"2","bear_charged":"1","greatest_charge_distance_m":"0.01","charge_count":"1","food_present_code":"3","bear_spray_used":"0","was_property_damaged":"1","property_damage":{"0":{"quantity":"1","property_description":"1","property_value":"14"}},"structures_were_involved":"1","structure_interactions":{"0":{"structure_type_code":"2","other_structure_type":"","structure_interaction_code":"3","structure_description":"desc"}},"narrative":"Testing","received_by":"Aaron Gould","received_date":"2020-12-14","park_form_id":"1","incident_id":"1","entered_by":"1","probable_cause_code":"3","management_classification_code":"3","assessed_by":"1","management_action_code":"3","reacted_improperly":"-1"}
+		
+		_this.resetForm()
+
+		const data = JSON.parse($("#mobile-text").val())
+		_this.fieldValues = data
+
+
+		window.localStorage.clear();
+		_this.fillFieldValues(_this.fieldValues)
+
+		// set units to meters
+		$(".short-distance-select").each(function() {
+			$(this).val("m")
+		})
+
+		// set location accuracy
+		$("#input-location_accuracy").each(function() {
+			$(this).val('')
+		})
+
+		// location.reload()
+
+		_this.confirmLocationSelectChange = false
+
+
+	}
+
+	Constructor.prototype.onImportMobileClick = function(e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		const message = '<textarea class="mobile-data" id="mobile-text"></textarea>'
+		const footerButtons = `
+			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">Cancel</button>
+			<button class="generic-button modal-button primary-button close-modal" data-dismiss="modal" onclick="entryForm.importMobileData()">Import</button>
+		`;
+		showModal(message, 'Import Mobile Data', 'confirm', footerButtons);
+
+	}
 
 	Constructor.prototype.onSubmitButtonClick = function(e) {
 

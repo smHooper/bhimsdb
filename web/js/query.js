@@ -35,7 +35,15 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.fillFieldsFromQuery = function() {
 
-		entryForm.fillFieldValues(this.queryResult[this.selectedID]);//entryForm.fieldValues);
+		// Reset fields so that when the newly selected encounter has a null value,
+		//	 it doesn't retain the previously selected encounter's value 
+		$('.input-field:not(select)').val('');
+		for (const el of $('select.input-field')) {
+			const $select = $(el);
+			$select.val($select.find('option').first().attr('value'));
+		}
+
+		entryForm.fillFieldValues(deepCopy(this.queryResult[this.selectedID]));//entryForm.fieldValues);
 
 		// All distance values in the DB should be in meters so make sure the units match that
 		$('.short-distance-select').val('m')
@@ -818,7 +826,7 @@ var BHIMSQuery = (function(){
 
 	/*
 	Load a new encounter after an encounter has already been selected. This needs 
-	to be separated from the onResultItemClick ecent handler to enable control flow 
+	to be separated from the onResultItemClick event handler to enable control flow 
 	from modal asking user to confirm edit saves
 	*/
 	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
@@ -1270,7 +1278,9 @@ var BHIMSQuery = (function(){
 							}
 							updateIndex ++; //increment to match the returned result from the queries
 						}
-						entryForm.fieldValues[tableName] = [...selectedEncounterData[tableName]]
+
+						// Use deep copy to avoid tying fieldValues to queryResult
+						entryForm.fieldValues[tableName] = deepCopy(selectedEncounterData[tableName])
 					}
 
 					// Call in case it's implemented in bhims-custom.js
@@ -2493,12 +2503,12 @@ var BHIMSQuery = (function(){
 		$('.input-field').data('manual-change-triggered', false);
 		
 		$.when(
+			this.getTableSortColumns(),
 			...this.getLookupValues(), 
 			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false),
 			this.getJoinedDataTables(),
-			this.getTableSortColumns(),
 			this.queryEncounterIDs()
-		).then(() => {
+		).always(() => {
 			
 			this.sectionsToAccordion();
 			const configurationComplete = this.configureQueryOptions();

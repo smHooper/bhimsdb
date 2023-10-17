@@ -3201,6 +3201,11 @@ var BHIMSEntryForm = (function() {
 					}
 					// If this is an admin user, show them a link to the data via the query page
 					else if (_this.userRole == 3) {
+						// Show encounter ID
+						const $postSubmitMessage = $('#post-submit-message');
+						$postSubmitMessage.html($postSubmitMessage.html() + ` The encounter ID is <h3>${result.id}</h3>`);
+						
+						// add link
 						$submissionContainer.append(`
 							<a class="success-query-link mt-3" href="${queryURL}" target="blank_">View your entry</a>
 						`);

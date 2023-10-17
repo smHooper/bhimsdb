@@ -13,65 +13,72 @@ var MAP_DATA,
 //add bhims-dashboard to main-content
 
 function configureReviewCard() {
-	const ratingColumns = ['probable_cause_code', 'management_classification_code'];
 
+	const ratingColumns = {
+		probable_cause_code: 'Probable cause',
+		management_classification_code: 'Bear behavior rating'
+	};
+	const ratingFieldNames = Object.keys(ratingColumns).sort();
+
+	// Query all records where at least one of the rating fields is null
 	const sql = `
-		SELECT 
-			status, 
-			string_agg(id::text, ',') AS encounter_ids,
-			count(*) 
-		FROM 
-			(
-				WITH n_null AS (
-					SELECT
-						encounters.id, 
-						num_nulls(${ratingColumns.join(', ')}) 
-					FROM assessment 
-					INNER JOIN encounters ON assessment.encounter_id=encounters.id 
-					WHERE 
-						${ratingColumns.map(c => {return c + ' IS NULL'}).join(' OR ')} 
-					ORDER BY start_date
-				) 
-				SELECT 
-					CASE 
-						WHEN n_null.num_nulls = ${ratingColumns.length} THEN 'full' 
-						ELSE 'partial' 
-					END AS status,
-					id
-				FROM n_null
-			) t 
-		GROUP BY status;
+		SELECT
+			encounter_id, 
+			${ratingFieldNames.join(', ')}
+		FROM assessment 
+		INNER JOIN encounters ON assessment.encounter_id=encounters.id 
+		WHERE 
+			${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')} 
+		ORDER BY start_date
 	`;
 
 	queryDB(sql, 'bhims')
 		.done((queryResultString) => {
         	let resultString = queryResultString.trim();
         	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
-        		alert('Unable to query encounters locations: ' + resultString);
+        		alert('Unable to query review status: ' + resultString);
         		return false; // Save was unsuccessful
         	} else {
-        		let queryResult = $.parseJSON(resultString);
-        		let needsFullReview, needsPartialReview;
-        		for (let row of queryResult) {
-        			row.count = parseInt(row.count);
-        			if (row.status == 'full') {
-        				needsFullReview = {...row};
-        			} else {
-        				needsPartialReview = {...row};
+
+        		// Loop through each result row and for each field, collect running totals and a list of IDs
+        		const queryResult = $.parseJSON(resultString);
+        		let reviewTotals = Object.fromEntries(ratingFieldNames.map(f => [f, 0]));//queryResult.length;
+        		let reviewIDs = Object.fromEntries(ratingFieldNames.map(f => [f, []]))
+        		for (const row of queryResult) {
+        			for (const fieldName of ratingFieldNames) {
+        				if (row[fieldName] === null) { // if it's null, it needs to be reviewed
+        					reviewTotals[fieldName] ++;
+        					reviewIDs[fieldName].push(row.encounter_id);
+        				} 
         			}
         		}
-        		const total = needsFullReview.count + needsPartialReview.count;
-        		const partialReviewURL = `query.html?{"encounters": {"id": {"value": "(${needsPartialReview.encounter_ids})", "operator": "IN"}}}`;
-        		const fullReviewURL = `query.html?{"encounters": {"id": {"value": "(${needsFullReview.encounter_ids})", "operator": "IN"}}}`;
-        		$('#needs-partial-review-bar').css('width', `${(needsPartialReview.count / total) * 100}%`)
-        			.closest('.review-bar-and-text-container')
-        				.attr('href', encodeURI(partialReviewURL));
-				$('#needs-full-review-bar').css('width', `${(needsFullReview.count / total) * 100}%`)
-        			.closest('.review-bar-and-text-container')
-        				.attr('href', encodeURI(fullReviewURL));
-				$('#n-needs-review').text(total);
-				$('#needs-partial-review-text > h3').text(needsPartialReview.count);
-				$('#needs-full-review-text > h3').text(needsFullReview.count);
+
+        		// Make the bar with the most encounters the full width and 
+        		//	all other bar widths proportional to it
+        		const reviewTotalMax = Math.max(...Object.values(reviewTotals));
+        		$('#n-needs-review').text(reviewTotalMax)
+        		
+        		// For each field...
+        		for (const i in ratingFieldNames) {
+        			const fieldName = ratingFieldNames[i];
+        			const reviewURL = `query.html?{"encounters": {"id": {"value": "(${reviewIDs[fieldName].join(',')})", "operator": "IN"}}}`;
+        			const needsReviewCount = reviewTotals[fieldName]
+
+      				// reference the bar by index
+        			const $barContainer = $('.needs-review-bar-container').eq(i);
+        			// set the bar width
+        			$barContainer.find('.needs-review-bar')
+        				.css('width', `${(needsReviewCount / reviewTotalMax) * 100}%`);
+        			// set the URL
+        			$barContainer.find('.review-bar-and-text-container')
+        		 		.attr('href', encodeURI(reviewURL));
+        		 	// Set the label of the bar to include the field name
+        		 	$barContainer.find('.needs-review-bar-label')
+        		 		.text(ratingColumns[fieldName] + ' not entered');
+        		 	// set the needs review count
+        		 	$barContainer.find('.needs-review-text > h3')
+        		 		.text(needsReviewCount);
+        		}
 
 				runCountUpAnimations();
         	}

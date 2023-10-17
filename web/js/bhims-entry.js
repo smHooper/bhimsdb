@@ -873,14 +873,7 @@ var BHIMSEntryForm = (function() {
 			// Fill datetime_entered field
 			const $datetimeEnteredField = $('#input-datetime_entered');
 			if ($datetimeEnteredField.length) { // could be disabled
-				const now = new Date();
-				//	calculate as a numeric timestamp with the appropiate timezone offset
-				//		* 60000 because .getTimezoneOffset() returns offset in minutes
-				//		but the numeric timestamp needs to be in miliseconds 
-				// Also round to the nearest minute
-				const nowLocalTimestamp = Math.round((now.getTime() - (now.getTimezoneOffset() * 60000)) / 60000) * 60000;
-				$datetimeEnteredField[0].valueAsNumber = nowLocalTimestamp;
-				$datetimeEnteredField.change()
+				_this.setDatetimeEntered();
 			}
 
 			// Get coordinates for BC units and place names
@@ -1311,6 +1304,24 @@ var BHIMSEntryForm = (function() {
 
 		//_this.setPreviousNextButtonState(nextIndex);
 
+	}
+
+
+	/*
+	Helper method to set the datetime_entered field
+	*/
+	Constructor.prototype.setDatetimeEntered = function() {
+
+		const $datetimeEnteredField = $('#input-datetime_entered');
+		const now = new Date();
+		
+		//	calculate as a numeric timestamp with the appropiate timezone offset
+		//		* 60000 because .getTimezoneOffset() returns offset in minutes
+		//		but the numeric timestamp needs to be in miliseconds 
+		// Also round to the nearest minute
+		const nowLocalTimestamp = Math.round((now.getTime() - (now.getTimezoneOffset() * 60000)) / 60000) * 60000;
+		$datetimeEnteredField[0].valueAsNumber = nowLocalTimestamp;
+		$datetimeEnteredField.change();
 	}
 
 
@@ -2813,6 +2824,8 @@ var BHIMSEntryForm = (function() {
 		$('.input-field:not(#input-entered_by):not(select)')
 			.val(null);
 		
+		_this.setDatetimeEntered();
+
 		// Remove text from the .recorded-text-container. The narrative field 
 		//	is actually a textarea, which records the value of the text entered 
 		//	(or dictated) and a regular div, which is what the user sees.
@@ -3201,6 +3214,11 @@ var BHIMSEntryForm = (function() {
 					}
 					// If this is an admin user, show them a link to the data via the query page
 					else if (_this.userRole == 3) {
+						// Show encounter ID
+						const $postSubmitMessage = $('#post-submit-message');
+						$postSubmitMessage.html($postSubmitMessage.html() + ` The encounter ID is <h3>${result.id}</h3>`);
+						
+						// add link
 						$submissionContainer.append(`
 							<a class="success-query-link mt-3" href="${queryURL}" target="blank_">View your entry</a>
 						`);

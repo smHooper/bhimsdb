@@ -15,8 +15,8 @@ var MAP_DATA,
 function configureReviewCard() {
 
 	const ratingColumns = {
-		probable_cause_code: 'Probable cause',
-		management_classification_code: 'Bear behavior rating'
+		probable_cause_code: 'Bear behavior rating',
+		management_classification_code: 'Management classification'
 	};
 	const ratingFieldNames = Object.keys(ratingColumns).sort();
 

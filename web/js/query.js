@@ -18,8 +18,8 @@ var BHIMSQuery = (function(){
 		this.encounterIDs = [];
 		this.fieldsFull = false;
 		this.anonymizedDefaults = {
-			first_name: 'Anonymoys',
-			last_name: 'Person',
+			//first_name: 'Anonymous',
+			//last_name: 'Person',
 			phone_number: '555-5555',
 			email_address: 'someone@abc.com' 
 		};
@@ -1083,9 +1083,12 @@ var BHIMSQuery = (function(){
 				//	relationship for this table and this encounter. In that case, the id will 
 				//	remain undefined. Otherwise, set the ID so the item can be updated
 				if (entryForm.fieldValues[tableName] != undefined) {
-					if (index in entryForm.fieldValues[tableName]) {
+					const queryRecord = _this.queryResult[_this.selectedID];
+					if (tableName in queryRecord && index in queryRecord[tableName] && index in entryForm.fieldValues[tableName]) {
 						// Get DB row ID from queryResult because entryForm.fieldValues doesn't have it
-						tableUpdates[index].id = _this.queryResult[_this.selectedID][tableName][index].id; // will be undefined if this is a new card
+						tableUpdates[index].id = (queryRecord[tableName][index] || {}).id; // will be undefined if this is a new card
+					} else {
+						tableUpdates[index].id = undefined;
 					}
 				} 
 				tableUpdates[index].values[fieldName] = inputValue;
@@ -1445,8 +1448,9 @@ var BHIMSQuery = (function(){
 						break;
 					}
 				}	
+				$(targetField).val(collapsed ? 0 : 1).change();
 			}
-			$(targetField).val(collapsed ? 0 : 1).change();
+			
 		}
 	}
 

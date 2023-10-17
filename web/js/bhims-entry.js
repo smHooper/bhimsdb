@@ -958,9 +958,14 @@ var BHIMSEntryForm = (function() {
 			//	several cards
 			if (typeof(value) === 'object' && value !== null) { // corresponds to an accordion
 				// Loop through each object and add a card/fill fields 
-				const $accordion = $('.accordion:not(.hidden)')
-					.filter((_, el) => {return $(el).data('table-name') === key})
-				if (!$accordion.length) continue;//if the accordion is hidden, ignore it
+				const $accordion = $('.accordion').filter((_, el) => $(el).data('table-name') === key);
+
+				//if the accordion is hidden, ignore it
+				if (
+					!$accordion.length || 
+					($accordion.is('.hidden') && !$accordion.is('.collapse'))
+				) continue;
+				
 				for (const index in value) {
 					const $card = this.addNewCard($accordion, index);
 					const inputValues = value[index];

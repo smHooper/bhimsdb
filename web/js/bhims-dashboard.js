@@ -28,7 +28,11 @@ function configureReviewCard() {
 		FROM assessment 
 		INNER JOIN encounters ON assessment.encounter_id=encounters.id 
 		WHERE 
-			${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')} 
+			(probable_cause_code IS NOT NULL AND management_classification_code IS NULL) OR  
+			(
+				management_classification_code <> 1 AND --not an observation  
+				(${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')})
+			)
 		ORDER BY start_date
 	`;
 

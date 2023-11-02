@@ -23,7 +23,7 @@ function deepCopy(inObject) {
 }
 
 
-function queryDB(sql) {
+function queryDB(sql, {schema='public'}={}) {
 
 	return $.ajax({
 		url: 'bhims.php',
@@ -419,6 +419,29 @@ function getEnvironment() {
 
 }
 
+/*
+Load configuration values from the database
+*/
+function loadConfigValues() {
+
+	let config = {};
+	queryDB('SELECT property, data_type, value FROM config')
+		.done(queryResultString => {
+			if (this.queryReturnedError(queryResultString)) {
+				print('Problem querying config values');
+			} else {
+				for (const {property, data_type, value, ...rest} of $.parseJSON(queryResultString)) {
+					config[property] = 
+						data_type === 'integer' ? parseInt(value) : 
+						data_type === 'float' ? parseFloat(value) : 
+						data_type === 'boolean' ? value.toLowerCase().startsWith('t') :
+						value; // it's a string
+				}
+			}
+		})
+	return config;
+}
+
 
 function parseURLQueryString(queryString=window.location.search) {
 	if (queryString.length) {
@@ -448,4 +471,11 @@ function parseURLQueryString(queryString=window.location.search) {
 		// no search string so return an empty object
 		return {};
 	}
+}
+
+function pythonReturnedError(resultString) {
+
+	return resultString.startsWith('ERROR: Internal Server Error') ?
+	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
+	   false;
 }

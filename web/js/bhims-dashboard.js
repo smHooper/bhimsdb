@@ -19,18 +19,19 @@ function configureReviewCard() {
 		management_classification_code: 'Management classification'
 	};
 	const ratingFieldNames = Object.keys(ratingColumns).sort();
-
+	
 	// Query all records where at least one of the rating fields is null
 	const sql = `
 		SELECT
-			encounter_id, 
+			encounters.id AS encounter_id,
 			${ratingFieldNames.join(', ')}
-		FROM assessment 
-		INNER JOIN encounters ON assessment.encounter_id=encounters.id 
+		FROM encounters 
+		LEFT JOIN assessment ON assessment.encounter_id=encounters.id 
 		WHERE 
+			${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')} 
 			(probable_cause_code IS NOT NULL AND management_classification_code IS NULL) OR  
 			(
-				management_classification_code <> 1 AND --not an observation  
+				coalesce(management_classification_code, -1) <> 1 AND --not an observation  
 				(${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')})
 			)
 		ORDER BY start_date

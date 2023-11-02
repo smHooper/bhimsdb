@@ -28,15 +28,12 @@ function configureReviewCard() {
 		FROM encounters 
 		LEFT JOIN assessment ON assessment.encounter_id=encounters.id 
 		WHERE 
-<<<<<<< Updated upstream
 			${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')} 
-=======
 			(probable_cause_code IS NOT NULL AND management_classification_code IS NULL) OR  
 			(
 				coalesce(management_classification_code, -1) <> 1 AND --not an observation  
 				(${ratingFieldNames.map(c => c + ' IS NULL').join(' OR ')})
 			)
->>>>>>> Stashed changes
 		ORDER BY start_date
 	`;
 

@@ -21,7 +21,8 @@ let UNIT_PER_METER_MAP = new Map([
 	["ft", 3.2808399],
 	["yd", 1.0936132],
 	["m", 1],
-])
+]);
+var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
 
 var BHIMSEntryForm = (function() {
 	
@@ -357,7 +358,7 @@ var BHIMSEntryForm = (function() {
 									inputFieldAttributes += ` step="${fieldInfo.html_step}"`;
 								if (fieldInfo.html_input_type == 'datetime-local') 
 									inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
-								if (fieldInfo.css_class.includes('bhims-select2'))
+								if (fieldInfo.css_class.includes(MULTIPLE_SELECT_ENTRY_CLASS))
 									inputFieldAttributes += ' multiple="true"';
 								const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
 								const required = fieldInfo.required === 't';
@@ -683,7 +684,7 @@ var BHIMSEntryForm = (function() {
 						// 	_this.goToPage(lastPageIndex + 1, true);
 						// } 
 					}
-					for (const el of $('.bhims-select2')) {
+					for (const el of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
 						const $select = $(el);
 						$select.select2({
 							width: '100%',
@@ -1421,7 +1422,7 @@ var BHIMSEntryForm = (function() {
 			(_, el) => {
 				const $el = $(el);
 				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
-				if (!($el.hasClass('bhims-select2') ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
+				if (!($el.hasClass(MULTIPLE_SELECT_ENTRY_CLASS) ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
 					$el.addClass('error');
 				} else {
 					$el.removeClass('error');
@@ -3171,7 +3172,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Handle multiple choice selects
-				for (const input of $('.bhims-select2')) {
+				for (const input of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
 					const [statements, params] = _this.getMultipleSelectSQL(input);
 					sqlStatements = [...sqlStatements, ...statements];
 					sqlParameters = [...sqlParameters, ...params];

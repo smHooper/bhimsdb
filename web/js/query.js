@@ -45,7 +45,7 @@ var BHIMSQuery = (function(){
 
 		// Find any multiple selects and flatten the data
 		let queryCopy = deepCopy(this.queryResult[this.selectedID]);
-		for (const input of $('.bhims-select2')) {
+		for (const input of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
 			const $select = $(input);
 			const fieldName = input.name;
 			queryCopy[fieldName] = (queryCopy[fieldName] || []).flat();
@@ -274,7 +274,7 @@ var BHIMSQuery = (function(){
 				Object.entries(entryForm.fieldInfo).flatMap( 
 					// return [table name, field name] if it's a multiple select, otherwise return an empty array
 					// 	so that the whole returned array can be flattened and null results will be dropped
-					([fieldName, info]) => (info.css_class || '').includes('bhims-select2') ? 
+					([fieldName, info]) => (info.css_class || '').includes(MULTIPLE_SELECT_ENTRY_CLASS) ? 
 						[[info.table_name, fieldName]] : // wrap in double brackets for flatMap() to remove the first set
 						[] // and collapse any null results
 				)
@@ -618,7 +618,7 @@ var BHIMSQuery = (function(){
 		}
 
 		// disable multiple selects
-		$('.bhims-select2').prop('disabled', disableEdits);
+		$(`.${MULTIPLE_SELECT_ENTRY_CLASS}`).prop('disabled', disableEdits);
 	}
 
 
@@ -1107,7 +1107,7 @@ var BHIMSQuery = (function(){
 					}
 				} 
 				tableUpdates[index].values[fieldName] = inputValue;
-			} else if ($input.is('.bhims-select2')) { 
+			} else if ($input.is(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) { 
 				// Add a DELETE statement to remove any existing records, 
 				//	then just insert whatever the current values are
 				sqlStatements.push(`DELETE FROM ${tableName} WHERE encounter_id=$1;`)

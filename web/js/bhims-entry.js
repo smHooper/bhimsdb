@@ -126,13 +126,7 @@ var BHIMSEntryForm = (function() {
 			$.when(
 				userInfoDeferred,
 				this.getFieldInfo(),
-				queryDB('SELECT * FROM data_entry_config;')
-					.done(result => {
-						const queryResult = $.parseJSON(result);
-						if (queryResult) {
-							_this.dataEntryConfig = loadConfigValues();
-						}
-					}),
+				loadConfigValues(this.dataEntryConfig),
 				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_pages ORDER BY page_index;`)
 					.done(result => {processQueryResult(pages, result)}),
 				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`)
@@ -363,9 +357,11 @@ var BHIMSEntryForm = (function() {
 									inputFieldAttributes += ` step="${fieldInfo.html_step}"`;
 								if (fieldInfo.html_input_type == 'datetime-local') 
 									inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
+								if (fieldInfo.css_class.includes('bhims-select2'))
+									inputFieldAttributes += ' multiple="true"';
 								const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
 								const required = fieldInfo.required === 't';
-								$(`
+								const $field = $(`
 									<div class="${fieldInfo.parent_css_class}">
 										<${inputTag} ${inputFieldAttributes} ${required ? 'required' : ''}>${inputTagClosure}
 										${required ? '<span class="required-indicator">*</span>' : ''}
@@ -687,6 +683,16 @@ var BHIMSEntryForm = (function() {
 						// 	_this.goToPage(lastPageIndex + 1, true);
 						// } 
 					}
+					for (const el of $('.bhims-select2')) {
+						const $select = $(el);
+						$select.select2({
+							width: '100%',
+							placeholder: $select.attr('placeholder') || $select.find('option[value=""]').text()
+						});
+						
+						// .select2 removes the .default class for some reason
+						$select.addClass('default');
+					}
 
 					// Indicate that configuring form finished
 					deferred.resolve();
@@ -933,10 +939,12 @@ var BHIMSEntryForm = (function() {
 			 // reactions are set manually below whereas attachment data is never saved
 			if (key === 'reactions' || key === 'attachments') continue;
 
-			// Value is either a string/number corresponding to a single field or an object 
-			//	containing a series of values corresponding to an accordion with potentially 
-			//	several cards
-			if (typeof(value) === 'object' && value !== null) { // corresponds to an accordion
+			// Value is either:
+			//		- a string/number corresponding to a single field
+			//		- an array of values for multiple-choice-enabled selects or 
+			//		- an array of objects containing a series of values corresponding 
+			//		  to an accordion with potentially several cards
+			if (Array.isArray(value) && typeof(value[0]) === 'object') { // corresponds to an accordion
 				// Loop through each object and add a card/fill fields 
 				const $accordion = $('.accordion').filter((_, el) => $(el).data('table-name') === key);
 
@@ -1050,7 +1058,7 @@ var BHIMSEntryForm = (function() {
 		const sql = `
 			SELECT 
 				fields.* 
-			FROM data_entry_fields fields 
+			FROM ${_this.dbSchema}.data_entry_fields fields 
 				JOIN data_entry_field_containers containers 
 				ON fields.field_container_id=containers.id 
 			WHERE 
@@ -1413,7 +1421,7 @@ var BHIMSEntryForm = (function() {
 			(_, el) => {
 				const $el = $(el);
 				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
-				if (!$el.val() && $hiddenParent.length === 0) {
+				if (!($el.hasClass('bhims-select2') ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
 					$el.addClass('error');
 				} else {
 					$el.removeClass('error');
@@ -2881,7 +2889,7 @@ var BHIMSEntryForm = (function() {
 	Helper function to convert unordered parameters 
 	into pre-prepared SQL statement and params
 	*/
-	Constructor.prototype.valuesToSQL = function(values, tableName, timestamp) {
+	Constructor.prototype.valuesToSQL = function(values, tableName, {timestamp=getFormattedTimestamp(), encounterID=null}={}) {
 
 		
 		var sortedFields = Object.keys(values).sort();
@@ -2905,7 +2913,12 @@ var BHIMSEntryForm = (function() {
 			//parametized += ', $' + (sortedFields.length + 1);
 			// get parametized string before adding enconter_id since currvalClause will take the place of a param
 			parametized ='$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
-			currvalClause = `, currval(pg_get_serial_sequence('encounters', 'id'))`;
+			if (encounterID == null) {
+				currvalClause = `, currval(pg_get_serial_sequence('encounters', 'id'))`;
+			} else {
+				parametized += ', $' + (sortedFields.length + 1);
+				parameters.push(encounterID);
+			}
 			sortedFields.push('encounter_id');
 		}
 
@@ -2924,6 +2937,32 @@ var BHIMSEntryForm = (function() {
 
 	}
 
+
+	/*
+	Helper method to get INSERT sql for a multiple choice select
+	*/ 
+	Constructor.prototype.getMultipleSelectSQL = function(inputElement, encounterID=null) {
+		const $select = $(inputElement);
+		const values = $select.val();
+
+		const fieldName = inputElement.name;
+		const fieldInfo = _this.fieldInfo[fieldName];
+		const tableName = fieldInfo.table_name;
+		
+		let sqlStatements = [],
+			sqlParameters = [];
+		for (const i in values) {
+			const [statement, params] = _this.valuesToSQL(
+				Object.fromEntries([[fieldName, values[i]], ['display_order', parseInt(i) + 1]]),
+				tableName,
+				{encounterID: encounterID}
+			);
+			sqlStatements.push(statement);
+			sqlParameters.push(params);
+		}
+
+		return [sqlStatements, sqlParameters];
+	}
 
 
 	Constructor.prototype.onSubmitButtonClick = function(e) {
@@ -2965,6 +3004,7 @@ var BHIMSEntryForm = (function() {
 			failedFiles = [],
 			parkFormID = $('#input-park_form_id').val(); // in case user entered something manually
 		const timestamp = getFormattedTimestamp();
+		
 		// Only create a new park_form_id if the user didn't enter one
 		if (!parkFormID) {
 			const encounterDate = $('#input-start_date').val();
@@ -3082,7 +3122,7 @@ var BHIMSEntryForm = (function() {
 
 				// Handle all fields in tables with 1:1 relationship to 
 				var unorderedParameters = {};
-				const inputsWithData = $('.input-field:not(.ignore-on-insert)')
+				const inputsWithData = $('.input-field:not(.ignore-on-insert, .bhims-select2)')
 					.filter((_, el) => {
 						return $(el).data('table-name') != null && $(el).data('table-name') != ''
 					});
@@ -3097,13 +3137,13 @@ var BHIMSEntryForm = (function() {
 					const tableName = fieldInfo.table_name;
 
 					//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
-					if ((!(fieldName in _this.fieldValues) || typeof(_this.fieldValues[tableName]) === 'object')) continue;
+					var value = _this.fieldValues[fieldName] || '';
+					if (!(fieldName in _this.fieldValues) || typeof(_this.fieldValues[tableName]) === 'object') continue;
 
 					if (!(tableName in unorderedParameters)) {
 						unorderedParameters[tableName] = {}
 					}
 					
-					var value = _this.fieldValues[fieldName];
 
 					// Convert short distance fields units if necessary
 					const $input = $(input);
@@ -3117,7 +3157,7 @@ var BHIMSEntryForm = (function() {
 
 
 				// Make sure that encounters is the first insert since everything references it
-				const [encountersSQL, encountersParams] = _this.valuesToSQL(unorderedParameters.encounters, 'encounters', timestamp);
+				const [encountersSQL, encountersParams] = _this.valuesToSQL(unorderedParameters.encounters, 'encounters', {timestamp: timestamp});
 				sqlStatements.push(encountersSQL);
 				sqlParameters.push(encountersParams);
 
@@ -3128,6 +3168,13 @@ var BHIMSEntryForm = (function() {
 						sqlStatements.push(statement);
 						sqlParameters.push(params);
 					} 
+				}
+
+				// Handle multiple choice selects
+				for (const input of $('.bhims-select2')) {
+					const [statements, params] = _this.getMultipleSelectSQL(input);
+					sqlStatements = [...sqlStatements, ...statements];
+					sqlParameters = [...sqlParameters, ...params];
 				}
 
 				// Handle accordions with 1-to-many relationships to encounters

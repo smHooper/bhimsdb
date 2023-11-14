@@ -228,7 +228,7 @@ body {
 .select2-container--open {
 	z-index: 5000;
 }
-.select2-container > .select2-dropdown {
+.select2-container > .select2-dropdown.bhims-query-select2-dropdown-container {
 	background: rgb(0,0,0);
 	color: white;
 }

@@ -43,7 +43,14 @@ var BHIMSQuery = (function(){
 			$select.val($select.find('option').first().attr('value'));
 		}
 
-		entryForm.fillFieldValues(deepCopy(this.queryResult[this.selectedID]));//entryForm.fieldValues);
+		// Find any multiple selects and flatten the data
+		let queryCopy = deepCopy(this.queryResult[this.selectedID]);
+		for (const input of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
+			const $select = $(input);
+			const fieldName = input.name;
+			queryCopy[fieldName] = (queryCopy[fieldName] || []).flat();
+		}
+		entryForm.fillFieldValues(queryCopy);
 
 		// All distance values in the DB should be in meters so make sure the units match that
 		$('.short-distance-select').val('m')
@@ -52,9 +59,9 @@ var BHIMSQuery = (function(){
 
 
 	/*
-	Helper function to uery the database to find the primary key for each 
+	Helper function to query the database to find the primary key for each 
 	table. This is really only necessary for bears and reactions, which
-	both have primary keys from two columns, a order column specific 
+	both have primary keys from two columns, an order column specific 
 	to the encounter and the encounter_id
 	*/
 	Constructor.prototype.getTableSortColumns = function() {
@@ -262,42 +269,54 @@ var BHIMSQuery = (function(){
 			// Get all table names from accordions
 			const oneToManyTables = $('.accordion').map((_, el) => {return $(el).data('table-name')}).get();
 			const encounterIDClause = `encounters.id IN (${Object.keys(this.queryResult).join(',')})`
+			// get a list of all the multiple choice select fields
+			const selectMultipleFields = Object.fromEntries(
+				Object.entries(entryForm.fieldInfo).flatMap( 
+					// return [table name, field name] if it's a multiple select, otherwise return an empty array
+					// 	so that the whole returned array can be flattened and null results will be dropped
+					([fieldName, info]) => (info.css_class || '').includes(MULTIPLE_SELECT_ENTRY_CLASS) ? 
+						[[info.table_name, fieldName]] : // wrap in double brackets for flatMap() to remove the first set
+						[] // and collapse any null results
+				)
+			);
 			for (const tableName of this.joinedDataTables) {
-				/*var tableWhereClauses = [];
-				for (const fieldName in sqlQueryParameters[tableName]) {
-					const value = sqlQueryParameters[tableName][fieldName].value;
-					var operator = sqlQueryParameters[tableName][fieldName].operator;
-					const clause = `${tableName}.${fieldName} ${operator} ${value}`;
-					encountersWhereClauses.push(clause);
-				}*/
 				// construct WHERE statement in the format "WHERE encounters.id IN (...) AND <tableName>.<fieldName>..." 
 				//	unless there are no query params for this table. If that's the case just use "WHERE encounters.id IN (...)"
 				const tableWhereClauseString = whereClauses[tableName] ? 'AND ' + whereClauses[tableName].join(' AND ') : '';
 				const whereString = `WHERE ${encounterIDClause} ${tableWhereClauseString}`;
 				const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id ${whereString} ORDER BY ${tableName}.${this.tableSortColumns[tableName]}`;
 				const deferred = queryDB(sql);
+
 				deferred.done( queryResultString => {
 					if (queryReturnedError(queryResultString)) { 
 							console.log(`error querying ${tableName}: ${queryResultString}`);
 					} else { 
 						const result = $.parseJSON(queryResultString);
 						//this.queryResult[tableName] = {};
-						for (const row of result) {
-							for (const columnName in row) {
-								if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
-									row[columnName] = this.anonymizedDefaults[columnName];
-									this.ignorePIIFields = true;
+						if (tableName in selectMultipleFields) {
+							const fieldName = selectMultipleFields[tableName];
+							const sortedResult = (result[0] || {}).display_order ? 
+								result.sort((row1, row2) => parseInt(row1.display_order) - parseInt(row2.display_order)) :
+								result;
+							const encounterID = result[0].encounter_id;
+							this.queryResult[encounterID][fieldName] = sortedResult.map(row => row[fieldName]);
+						} else {
+							for (const row of result) {
+								for (const columnName in row) {
+									if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
+										row[columnName] = this.anonymizedDefaults[columnName];
+										this.ignorePIIFields = true;
+									}
 								}
+								const encounterID = row.encounter_id;
+								if (oneToManyTables.includes(tableName)) {
+									if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
+									this.queryResult[encounterID][tableName].push({...row});
+								} else {
+									this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
+								}
+								//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};	
 							}
-							const encounterID = row.encounter_id;
-							if (oneToManyTables.includes(tableName)) {
-								if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
-								this.queryResult[encounterID][tableName].push({...row});
-							} else {
-								this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
-							}
-							//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};
-							
 						}
 					}
 					
@@ -347,7 +366,7 @@ var BHIMSQuery = (function(){
 					if ($optionElement.hasClass('string-match-query-option')) {
 						// text, textarea, tel, or email
 						const $operatorElement = $optionElement.siblings('.query-option-operator');
-						const fieldValue = fieldParams.value.replace(/'/g, '');
+						const fieldValue = fieldParams.value.toString().replace(/'/g, '');
 						if (fieldParams.operator === '=') {
 							// e.g., field = 'value'
 							$optionElement.val(fieldValue);
@@ -420,7 +439,7 @@ var BHIMSQuery = (function(){
 							$operatorElement.val(fieldParams.operator);
 						}
 					} else if ($optionElement.hasClass('select2-no-tag')) {
-						$optionElement.val(fieldParams.value.replace(/\(|\)/g, '').split(','))
+						$optionElement.val(fieldParams.value.toString().replace(/\(|\)/g, '').split(','))
 					} else {
 						console.log('could not understand type of option for ' + fieldName)
 					}
@@ -597,6 +616,9 @@ var BHIMSQuery = (function(){
 				.find('.uneditable-units-text')
 					.text(displayValue);
 		}
+
+		// disable multiple selects
+		$(`.${MULTIPLE_SELECT_ENTRY_CLASS}`).prop('disabled', disableEdits);
 	}
 
 
@@ -735,13 +757,6 @@ var BHIMSQuery = (function(){
 	/*
 	*/
 	Constructor.prototype.loadSelectedEncounter = function() {
-		
-		// close any open cards
-		/*$('#row-details-pane').find('.row-details-card-collapse.show')
-			.removeClass('show')
-			.siblings()
-				.find('.card-link')
-				.addClass('collapsed');*/
 
 		showLoadingIndicator('loadSelectedEncounter');
 
@@ -1031,13 +1046,16 @@ var BHIMSQuery = (function(){
 			return;
 		}
 
-		var selectedEncounterData = this.queryResult[this.selectedID];
+		const encounterID = this.selectedID;
+		var selectedEncounterData = this.queryResult[encounterID];
 
 		//TODO: need to handle attachment changes/new attachments
 		//TODO: also need to make sure all required fields are filled in somehow 
 
-		var oneToOneUpdates = {};
-		var oneToManyUpdates = {};
+		var oneToOneUpdates = {},
+			oneToManyUpdates = {},
+			sqlStatements = [],
+			sqlParameters = [];
 		//var fileUploads = {};
 		for (const input of $dirtyInputs) {
 			const $input = $(input);
@@ -1068,9 +1086,6 @@ var BHIMSQuery = (function(){
 			if ($accordion.length) {
 				// If this is the first time a field has been changed in this 
 				//	table, oneToManyUpdates[tableName] will be undefined
-				/*var updateStorageVar = tableName === 'attachments' ? fileUploads : oneToManyUpdates;
-				if (!oneToManyUpdates[tableName]) updateStorageVar[tableName] = {};
-				const tableUpdates = updateStorageVar[tableName];*/
 				if (!oneToManyUpdates[tableName]) oneToManyUpdates[tableName] = {};
 				const tableUpdates = oneToManyUpdates[tableName];
 
@@ -1092,6 +1107,16 @@ var BHIMSQuery = (function(){
 					}
 				} 
 				tableUpdates[index].values[fieldName] = inputValue;
+			} else if ($input.is(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) { 
+				// Add a DELETE statement to remove any existing records, 
+				//	then just insert whatever the current values are
+				sqlStatements.push(`DELETE FROM ${tableName} WHERE encounter_id=$1;`)
+				sqlParameters.push([encounterID]);
+
+				const [statements, params] = entryForm.getMultipleSelectSQL(input, encounterID);
+				sqlStatements = [...sqlStatements, ...statements];
+				sqlParameters = [...sqlParameters, ...params];
+
 			} else {
 				if (!oneToOneUpdates[tableName]) oneToOneUpdates[tableName] = {};
 				oneToOneUpdates[tableName][fieldName] = inputValue;
@@ -1103,8 +1128,6 @@ var BHIMSQuery = (function(){
 		oneToOneUpdates.encounters.last_edited_by = entryForm.username;
 		oneToOneUpdates.encounters.datetime_last_edited = getFormattedTimestamp();
 		
-		var sqlStatements = [];
-		var sqlParameters = [];
 		for (const tableName in oneToOneUpdates) {
 			const updates = oneToOneUpdates[tableName];
 			// If this is just a normal table update (not part of a 1-to-many relationship), 
@@ -1472,7 +1495,7 @@ var BHIMSQuery = (function(){
 				for (const row of $.parseJSON(queryResultString)) {
 					reactionCodesTable[row.code] = {...row};
 				}
-				const reactionRows = this.queryResult[this.selectedID].reactions;
+				const reactionRows = this.queryResult[this.selectedID].reactions || [];
 				if (reactionRows.length) {
 					for (const i in reactionRows) {
 						// Get reaction code

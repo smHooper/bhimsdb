@@ -215,6 +215,14 @@ CREATE TABLE people (
     residency_code INTEGER, 
     sex_codes INTEGER REFERENCES sex_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE
 );
+CREATE TABLE improper_reactions (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    improper_reaction_code INTEGER REFERENCES improper_reaction_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_improper_reaction_description VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
 
 --UI meta tables
 CREATE TABLE data_entry_pages (

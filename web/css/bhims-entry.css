@@ -289,14 +289,19 @@ the required-indicatior-explanation can still be on the right*/
     max-width: 100%;
     flex: 1 1 auto;
     height: 30px;
-    background-color: rgba(0,0,0,0);
     outline: -webkit-focus-ring-color auto 0px;
     -webkit-box-shadow: none;
     border-color: rgba(0,0,0,0);
-    font-size: 14px;
-    transition: all 0.3s ease-out;
-    border-bottom: 2px solid rgba(0,0,0,0.2);
     text-indent: 5px;
+    transition: all 0.3s ease-out;
+}
+.input-field,
+.bhims-select2 ~ .select2.select2-container--default .select2-selection--multiple {
+	border: none; /*set border: none first to undoe select2 default style*/
+	border-bottom: 2px solid rgba(0,0,0,0.2);
+	background-color: transparent;
+	font-size: 14px;
+	border-radius: 0;
 }
 
 .input-field.large-field {
@@ -306,22 +311,16 @@ the required-indicatior-explanation can still be on the right*/
 	max-width: 50%;
 }
 
-.input-field:not(textarea):hover {
-	/*background-color: hsla(1, 0%, 100%, 0.3);*/
+.input-field:not(textarea):hover,
+.bhims-select2 ~ .select2.select2-container--default .select2-selection--multiple:hover {
+	border: none; 
 	border-bottom: 2px solid rgba(0,0,0,0.5);
-	/*color: rgba(0,0,0,0.6);*/
 }
-
-/*.input-field:not(textarea):hover::placeholder {
-  color: rgba(0,0,0,0.5);
-}*/
-
-.input-field:not(textarea):focus {
-	/*background-color: hsla(1, 0%, 100%, 0.7);
-	box-shadow: inset 0px 1px 6px 0px hsla(1, 0%, 100%, 0.3);*/
-	border-bottom: 2px solid rgba(0,0,0,0.7) !important;
+.input-field:not(textarea):focus,
+.bhims-select2 ~ .select2.select2-container--default .select2-selection--multiple:hover {
+	border: none;
+	border-bottom: 2px solid rgba(0,0,0,0.7);
 	color: black;
-	/*font-size: 15px;*/
 }
 /*input.input-field:focus {
 	font-size: 15px;
@@ -330,7 +329,8 @@ select.input-field:focus::placeholder {
 	font-size: 15px;
 }*/
 
-.input-field.error {
+.input-field.error,
+.bhims-select2.error ~ .select2-container--default {
 	border: 2px solid rgba(255, 0, 0, 0.3);
 	box-shadow: 0px 0px 7px 2px hsl(0deg 62% 43% / 50%);
 }
@@ -436,11 +436,61 @@ select.input-field:focus::placeholder {
 
 .input-field:placeholder-shown ~ .field-sub-label, 
 .input-field:placeholder-shown ~ .field-label,
-select.input-field.default ~ .field-label {
+select.input-field.default:not(.bhims-select2) ~ .field-label {
 	visibility: hidden;
 	transform: translateY(-10px);
 	color: hsl(1, 0%, 50%);
 }
+
+/*select2 custom styling*/
+.bhims-select2 ~ .select2-container--default .select2-selection--multiple 
+	.select2-selection__choice {/*the selected item pill*/
+	background: none;
+	border: solid rgb(40, 40, 40) 1.5px;
+	border-radius: 2rem;
+	transition: all .2s;
+}
+.bhims-select2 ~ .select2-container--default .select2-selection--multiple 
+.select2-selection__choice__remove { /* the remove button */
+	border: none;
+	color: black;
+	border-radius: 1.1em;
+	top: 0.2em;
+	width: 1.1rem;
+	height: 1.1rem;
+	transition: background 0.2s;
+	background-color: transparent;
+}
+.bhims-select2 ~ .select2-container--default .select2-selection--multiple 
+.select2-selection__choice__remove:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+.bhims-select2 ~ .select2-container--default .select2-selection--multiple 
+.select2-selection__choice__remove span { /*the x*/
+	font-size: 1.5rem;
+	position: relative;
+	top: -.7rem;
+	left: -.05rem;
+}
+
+/*uneditable styling*/
+/*.bhims-select2 ~ .select2.select2-container--default .select2-selection--multiple*/
+.bhims-select2:disabled ~ .select2.select2-container--default .select2-selection--multiple,
+.bhims-select2:disabled ~ .select2.select2-container--default .select2-selection--multiple:hover {
+	border-bottom: none;
+}
+.bhims-select2:disabled ~ .select2-container--default .select2-selection--multiple .select2-selection__choice {
+	padding: 0;
+	border: none;
+	font-style: italic;
+}
+/*separate each item with a pipe since there's no border to distinguish them*/
+.bhims-select2:disabled ~ .select2-container--default .select2-selection--multiple .select2-selection__choice:not(:last-of-type)::after {
+	content: '|';
+	color: black;
+	font-style: normal;
+}
+/*-----------------------*/
 
 select.input-field.default,
 .input-field::placeholder,
@@ -467,7 +517,7 @@ textarea.narrative-field::placeholder {
 }
 
 input.input-field:valid + .required-indicator,
-select.input-field:not(.default) + .required-indicator,
+select.input-field:not(.default) ~ .required-indicator,
 textarea.input-field:valid + .required-indicator {
 	opacity: 0;
 }

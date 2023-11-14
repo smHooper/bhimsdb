@@ -422,13 +422,12 @@ function getEnvironment() {
 /*
 Load configuration values from the database
 */
-function loadConfigValues() {
+function loadConfigValues(config) {
 
-	let config = {};
-	queryDB('SELECT property, data_type, value FROM config')
+	return queryDB('SELECT property, data_type, value FROM config')
 		.done(queryResultString => {
-			if (this.queryReturnedError(queryResultString)) {
-				print('Problem querying config values');
+			if (queryReturnedError(queryResultString)) {
+				print('Problem querying config values: ' + queryResultString);
 			} else {
 				for (const {property, data_type, value, ...rest} of $.parseJSON(queryResultString)) {
 					config[property] = 
@@ -439,7 +438,6 @@ function loadConfigValues() {
 				}
 			}
 		})
-	return config;
 }
 
 

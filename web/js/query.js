@@ -1686,14 +1686,26 @@ var BHIMSQuery = (function(){
 	}
 
 
-	Constructor.prototype.onQueryOptionChange = function(e) {
-		
+	/*
+	Helper function to show/hide the copy query link button. This is called 
+	when a query option or the case-sensitive switch changes 
+	*/
+	Constructor.prototype.toggleCopyQueryLinkButton = function() {
 		// If this was the last query option, hide the copy-permalink button
 		var queryOptionsSpecified = false;
 		for (const tableName in _this.queryOptions.where) {
-			if (Object.keys(_this.queryOptions.where[tableName]).length) queryOptionsSpecified = true;
+			if (Object.keys(_this.queryOptions.where[tableName]).length) {
+				queryOptionsSpecified = true;
+				break;
+			}
 		}
 		$('#copy-query-link-button').toggleClass('invisible', !queryOptionsSpecified);
+	}
+
+
+	Constructor.prototype.onQueryOptionChange = function(e) {
+		
+		_this.toggleCopyQueryLinkButton();
 		
 		// Make the tab label appear selected
 		const $target = $(e.target);
@@ -2287,7 +2299,10 @@ var BHIMSQuery = (function(){
 					$('.query-option-input-field').blur(_this.onQueryOptionChange);
 
 					// When the user clicks the case-sensitive switch, run the result count query
-					$('#case-sensitive-slider-container input[type=checkbox]').change(() => {this.countQueryEncounters()});
+					$('#case-sensitive-slider-container input[type=checkbox]').change(e => {
+						this.countQueryEncounters();
+						this.toggleCopyQueryLinkButton();
+					});
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();

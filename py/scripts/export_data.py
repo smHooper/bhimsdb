@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 try:
     import py.resource.config as config
@@ -43,42 +43,6 @@ except:
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../resource'))
     import config
     from tables import model_dict
-
-BHIMS_CODE_NAMES = {
-    'assessment.management_action_code': 'management_action_codes.name as management_action',
-    'assessment.management_classification_code': 'management_classification_codes.name as management_classification',
-    'assessment.probable_cause_code': 'probable_cause_codes.name as probable_cause',
-    'attachments.file_type_code': 'file_type_codes.name as file_type',
-    'bears.bear_species_code': 'bear_species_codes.name as bear_species',
-    'bears.bear_sex_code': 'sex_codes.name as bear_sex',
-    'bears.bear_color_code': 'bear_color_codes.name as bear_color',
-    'bears.bear_injury_code': 'bear_injury_codes.name as bear_injury',
-    'bears.previously_encountered': 'boolean_response_codes.name as previously_encountered_boolean',
-    'deterrents_used.deterrent_type_code': 'deterrent_type_codes.name as deterrent_type',
-    'encounter_locations.backcountry_unit_code': 'backcountry_unit_codes.name as backcountry_unit',
-    'encounter_locations.datum_code': 'datum_codes.name as datum',
-    'encounter_locations.habitat_type_code': 'habitat_type_codes.name as habitat_type',
-    'encounter_locations.location_accuracy_code': 'location_accuracy_codes as location_accuracy',
-    'encounter_locations.place_name_code': 'place_name_codes.name as place_name',
-    'encounter_locations.road_name_code': 'road_name_codes.name as road_name',
-    'encounter_locations.visibility_code': 'visibility_codes.name as visibility',
-    'encounters.bear_charged': 'boolean_response_codes.name as bear_charged_boolean',
-    'encounters.bear_cohort_code': 'bear_cohort_codes.name as bear_cohort',
-    'encounters.bear_obtained_food': 'boolean_response_codes.name as bear_obtained_food_boolean',
-    'encounters.bear_spray_was_effective': 'boolean_response_codes.name as bear_spray_was_effective_boolean',
-    'encounters.bear_spray_used': 'boolean_response_codes.name as bear_spray_used_boolean',
-    'encounters.food_present_code': 'food_present_codes.name as food_present',
-    'encounters.general_human_activity_code': 'general_human_activity_codes.name as general_human_activity',
-    'encounters.human_group_type_code': 'human_group_type_codes.name as human_group_type',
-    'encounters.initial_bear_action_code': 'initial_bear_action_codes.name as initial_bear_action',
-    'encounters.initial_human_action_code': 'initial_human_action_codes.name as initial_human_action',
-    'encounters.reported_probable_cause_code': 'reported_probable_cause_codes.name as reported_probable_cause',
-    'encounters.was_making_noise': 'boolean_response_codes.name as was_making_noise_boolean',
-    'people.country_code': 'country_codes.name as country',
-    'reactions.reaction_code': 'reaction_codes.name as reaction',
-    'structure_interactions.structure_interaction_code': 'structure_interaction_codes.name as structure_interaction',
-    'structure_interactions.structure_type_code': 'structure_type_codes.name as structure_type'
-}
 
 
 class DotDict(dict):
@@ -183,6 +147,11 @@ def generate_query_parameters(query_json: Dict, engine: Engine, session: Session
     # Determine encounter_ids to filter by if there are filtering criteria.
     encounter_ids = select_encounters(criteria_dict, engine) if criteria_dict else None
 
+    if include_codes:
+        lookup_table_info = pd.read_sql('TABLE export_code_value_map_view', engine)
+        lookup_table_info['join_alias'] = '_' + lookup_table_info.index.astype(str)
+        code_names = {info.coded_value: f'_{i}.name AS {info.readable_value}' for i, info in lookup_table_info.iterrows()}
+
     # Parse out and generate the selection fields and where clauses required for every table query from the query json.
     #
     # NOTE: Every table that needs to be queried will have a json in the fields attribute. If there are no filters for
@@ -196,7 +165,7 @@ def generate_query_parameters(query_json: Dict, engine: Engine, session: Session
         selects.extend([f"{table}.{field}" for field in fields])
 
         if include_codes:
-            code_name_selects = [f"{BHIMS_CODE_NAMES[select]}" for select in selects if BHIMS_CODE_NAMES.get(select)]
+            code_name_selects = [f"{code_names[select]}" for select in selects if code_names.get(select)]
             selects.extend(code_name_selects)
 
         # ---- WHERES ---- #
@@ -211,9 +180,11 @@ def generate_query_parameters(query_json: Dict, engine: Engine, session: Session
 
         joins = []
         if include_codes:
-            query_stmt = str(session.query(db_models[table]).statement)
-            join_stmts = query_stmt.split('FROM')[-1].split('LEFT OUTER JOIN')[1:]
-            joins.extend([join.strip().replace('_1', '') for join in join_stmts])
+            joined_lookup_tables = lookup_table_info.loc[lookup_table_info.table_name == table]
+            joins.extend([
+                f'public.{info.lookup_table} AS _{i} ON _{i}.code = public.{info.table_name}.{info.field_name}' 
+                for i, info in joined_lookup_tables.iterrows()
+            ])
 
         query_components[table] = {'selects': selects, 'wheres': wheres, 'joins':  joins}
 

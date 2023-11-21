@@ -13,7 +13,7 @@ var BHIMSQuery = (function(){
 		this.dataLoadedFunctions = []; // array of functions to extend 
 		this.queryResultMapData = L.geoJSON();
 		this.queryResultMap = null;
-		this.queryOptions = {};
+		this.queryOptions = {case_sensitive: false, where: {}};
 		this.tableSortColumns = {};
 		this.encounterIDs = [];
 		this.fieldsFull = false;
@@ -141,14 +141,18 @@ var BHIMSQuery = (function(){
 		var encountersWhereClauses = [];
 		var joinClauses = [];
 		var whereClauses = {};
-		for (const tableName in sqlQueryParameters) {
-			for (const fieldName in sqlQueryParameters[tableName]) {
+		const caseSensitive = $('#case-sensitive-slider-container input[type=checkbox]').prop('checked');
+		for (const tableName in sqlQueryParameters.where) {
+			for (const fieldName in sqlQueryParameters.where[tableName]) {
 				// Initiate array for this table only if there's at least one param
 				if (whereClauses[tableName] == undefined) whereClauses[tableName] = [];
 				
-				const value = sqlQueryParameters[tableName][fieldName].value;
-				var operator = sqlQueryParameters[tableName][fieldName].operator;
-				const clause = `${tableName}.${fieldName} ${operator} ${value}`;
+				const value = sqlQueryParameters.where[tableName][fieldName].value;
+				var operator = sqlQueryParameters.where[tableName][fieldName].operator;
+				const type = sqlQueryParameters.where[tableName][fieldName].type;
+				const clause = caseSensitive && type === 'text' ? 
+					`lower(${tableName}.${fieldName}) ${operator} lower(${value})` :
+					`${tableName}.${fieldName} ${operator} ${value}`;
 				whereClauses[tableName].push(clause);
 				encountersWhereClauses.push(clause);
 			}
@@ -345,16 +349,21 @@ var BHIMSQuery = (function(){
 
 		var queryParamString = decodeURIComponent(window.location.search.slice(1));
 
-		// 
+		// turn the case-sensitive switch on if it was set in the parameters
+		const queryParams = $.parseJSON(queryParamString);
+		$('#case-sensitive-slider-container input[type=checkbox]').prop('checked', queryParams.case_sensitive);
+
+		// For backwards compatibility with old-style URLs, create the .where property if it doesn't exist
+		if (!('where' in queryParams)) queryParams.where = {...queryParams};
+
 		$.when(
-			this.runDataQuery(queryParamString),
+			this.runDataQuery(queryParams),
 			optionConfigComplete
 		).then( () => {
-			const queryParams = $.parseJSON(queryParamString);
 			//this.setReactionFieldsFromQuery();
 			// set query options
-			for (const tableName in queryParams) {
-				const tableParams = queryParams[tableName];
+			for (const tableName in queryParams.where) {
+				const tableParams = queryParams.where[tableName];
 				for (const fieldName in tableParams) {
 					const $optionElement = $(`#query-option-${fieldName}`);
 					
@@ -453,7 +462,7 @@ var BHIMSQuery = (function(){
 					$('#copy-query-link-button').removeClass('hidden');
 					$optionElement.change();
 				}
-				this.queryOptions[tableName] = {...queryParams[tableName]};
+				this.queryOptions.where[tableName] = {...queryParams.where[tableName]};
 			}
 
 		});
@@ -1352,8 +1361,8 @@ var BHIMSQuery = (function(){
 
 		// Check that the user has actually specified options
 		var hasQueryOptions = false;
-		for (const tableName in _this.queryOptions) {
-			if (Object.keys(_this.queryOptions[tableName]).length) {
+		for (const tableName in _this.queryOptions.where) {
+			if (Object.keys(_this.queryOptions.where[tableName]).length) {
 				hasQueryOptions = true;
 				break;
 			}
@@ -1681,8 +1690,8 @@ var BHIMSQuery = (function(){
 		
 		// If this was the last query option, hide the copy-permalink button
 		var queryOptionsSpecified = false;
-		for (const tableName in _this.queryOptions) {
-			if (Object.keys(_this.queryOptions[tableName]).length) queryOptionsSpecified = true;
+		for (const tableName in _this.queryOptions.where) {
+			if (Object.keys(_this.queryOptions.where[tableName]).length) queryOptionsSpecified = true;
 		}
 		$('#copy-query-link-button').toggleClass('invisible', !queryOptionsSpecified);
 		
@@ -1813,7 +1822,7 @@ var BHIMSQuery = (function(){
 					}
 
 					for (tableName in queryOptionConfig) {
-						this.queryOptions[tableName] = {};
+						this.queryOptions.where[tableName] = {};
 						const titlecaseTableName = `${tableName[0].toUpperCase()}${tableName.slice(1).replace('_', ' ')}`;
 						const $tab = $(`
 							<li>
@@ -1956,7 +1965,7 @@ var BHIMSQuery = (function(){
 											const $sliderContainer = $(slider.handle).closest('.slider-container');
 											const tableName = $sliderContainer.data('table-name');
 											const fieldName = $sliderContainer.data('field-name');
-											this.queryOptions[tableName][fieldName] = {value: `${slider.values[0]} AND ${slider.values[1] + 1}`, operator: 'BETWEEN'};//`${tableName}.${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
+											this.queryOptions.where[tableName][fieldName] = {value: `${slider.values[0]} AND ${slider.values[1] + 1}`, operator: 'BETWEEN', type: 'numeric'};//`${tableName}.${fieldName} BETWEEN ${slider.values[0]} AND ${slider.values[1] + 1}`;
 
 											// Show the copy-permalink button
 											$('#copy-query-link-button').removeClass('hidden');
@@ -2108,7 +2117,7 @@ var BHIMSQuery = (function(){
 						$container.find('.select2-no-tag').val(null).trigger('change');
 
 						//remove option from query
-						delete _this.queryOptions[tableName][fieldName];
+						delete _this.queryOptions.where[tableName][fieldName];
 
 						_this.onQueryOptionChange(e);
 					});
@@ -2144,38 +2153,38 @@ var BHIMSQuery = (function(){
 
 						// exit if the user hasn't entered a value yet
 						if (!isNullOperator && (value == null || value === '')) {
-							delete this.queryOptions[tableName][fieldName];
+							delete this.queryOptions.where[tableName][fieldName];
 							return;
 						}	
 
 						var queryClause = '';
 						switch (operatorValue) {
 							case 'equals':
-								queryClause = {value: `'${value}'`, operator: '='};//`${tableName}.${fieldName} = '${value}'`;
+								queryClause = {value: `'${value}'`, operator: '=', type: 'text'};
 								break;
 							case "notEqual":
-								queryClause = {value: `'${value}'`, operator: '<>'};
+								queryClause = {value: `'${value}'`, operator: '<>', type: 'text'};
 								break;
 							case 'startsWith':
-								queryClause = {value: `'${value}%'`, operator: 'LIKE'};// `${tableName}.${fieldName} LIKE '${value}%'`;
+								queryClause = {value: `'${value}%'`, operator: 'LIKE', type: 'text'};
 								break;
 							case 'endsWith':
-								queryClause = {value: `'%${value}'`, operator: 'LIKE'};//`${tableName}.${fieldName} LIKE '%${value}'`;
+								queryClause = {value: `'%${value}'`, operator: 'LIKE', type: 'text'};
 								break;
 							case 'contains':
-								queryClause = {value: `'%${value}%'`, operator: 'LIKE'};//`${tableName}.${fieldName} LIKE '%${value}%'`;
+								queryClause = {value: `'%${value}%'`, operator: 'LIKE', type: 'text'};
 								break;
 							case 'is null':
-								queryClause = {value: 'NULL', operator: 'IS'};// `${tableName}.${fieldName} IS NULL`;
+								queryClause = {value: 'NULL', operator: 'IS', type: 'text'};
 								break;
 							case 'is not null':
-								queryClause = {value: 'NULL', operator: 'IS NOT'};//`${tableName}.${fieldName} IS NOT NULL`;
+								queryClause = {value: 'NULL', operator: 'IS NOT', type: 'text'};
 								break;
 							default:
 								console.log(`Could not underatnd operator ${$operatorField.val()} from #${operatorField.attr('id')}`)
 						}
 						
-						this.queryOptions[tableName][fieldName] = queryClause;
+						this.queryOptions.where[tableName][fieldName] = queryClause;
 					});
 
 					$('input.slider-value').change(e => {
@@ -2205,7 +2214,7 @@ var BHIMSQuery = (function(){
 						const tableName = $sliderRange.data('table-name');
 						const fieldName = $sliderRange.data('field-name');
 						var values = $input.parent().find('input.slider-value').map((_, el) => {return el.value});
-						_this.queryOptions[tableName][fieldName] = {value: `${values[0]} AND ${parseInt(values[1]) + 1}`, operator: 'BETWEEN'};
+						_this.queryOptions.where[tableName][fieldName] = {value: `${values[0]} AND ${parseInt(values[1]) + 1}`, operator: 'BETWEEN'};
 						_this.onQueryOptionChange(e);
 					}).keyup(e => {
 						/* Change the width of the input when the length of it changes*/
@@ -2254,7 +2263,7 @@ var BHIMSQuery = (function(){
 							}
 							queryClause = {value: `'${value}'`, operator: operatorValue};//`${tableName}.${fieldName} ${operatorValue} '${value}'`
 						}
-						this.queryOptions[tableName][fieldName] = queryClause;
+						this.queryOptions.where[tableName][fieldName] = queryClause;
 					});
 
 					// selects
@@ -2266,16 +2275,19 @@ var BHIMSQuery = (function(){
 						
 						// If it's empty, remove the query option
 						if (!valueString.length) {
-							delete this.queryOptions[tableName][fieldName];
+							delete this.queryOptions.where[tableName][fieldName];
 							return;
 						}
-						this.queryOptions[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
+						this.queryOptions.where[tableName][fieldName] = {value: `(${valueString})`, operator: 'IN'}
 						_this.onQueryOptionChange(e);
 					});
 
 					// When a query option input loses focus, hide/show the copy-permalink button, depending on 
 					//	whether the user has any query options specified
 					$('.query-option-input-field').blur(_this.onQueryOptionChange);
+
+					// When the user clicks the case-sensitive switch, run the result count query
+					$('#case-sensitive-slider-container input[type=checkbox]').change(() => {this.countQueryEncounters()});
 
 					//Select the first tab
 					$('.tabs').find('input[type="radio"]').first().click();
@@ -2405,10 +2417,13 @@ var BHIMSQuery = (function(){
 
 	/* Helper method to retrieve user-specified query options */
 	Constructor.prototype.getQueryOptions = function() {
-		var options = {};
-		for (const tableName in _this.queryOptions) {
-			const tableOptions = _this.queryOptions[tableName];
-		    if (Object.keys(tableOptions).length) options[tableName] = {...tableOptions};
+		var options = {
+			where: {},
+			case_sensitive: $('#case-sensitive-slider-container input[type=checkbox]').prop('checked')
+		};
+		for (const tableName in _this.queryOptions.where) {
+			const tableOptions = _this.queryOptions.where[tableName];
+		    if (Object.keys(tableOptions).length) options.where[tableName] = {...tableOptions};
 		}
 
 		return options;

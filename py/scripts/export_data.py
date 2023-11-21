@@ -84,16 +84,19 @@ def select_encounters(criteria_dict: Dict, engine: Engine) -> Tuple:
     bear (not exclusively) and then filter all other tables by those encounter ids.
 
     Args:
-        criteria_dict: the filtering criteria portion of parameters json passed from the php front-end.
+        criteria_dict: the filtering criteria portion of parameters json passed from the frontend.
 
-        {
-            "encounter_locations":{
-                "backcountry_unit_code": {"value":"(31, 74)","operator":"IN"}
-            },
-            "encounters": {
-                "group_size_encounter": {"value":"2","operator":">"},
-                "bear_charged": {"value": "1", "operator": "="}
-            } ...
+        {   
+            case_sensitive: False,
+            where: {
+                "encounter_locations":{
+                    "backcountry_unit_code": {"value":"(31, 74)","operator":"IN"}
+                },
+                "encounters": {
+                    "group_size_encounter": {"value":"2","operator":">"},
+                    "bear_charged": {"value": "1", "operator": "="}
+                } ...
+            }
         }
 
     Returns:
@@ -102,13 +105,20 @@ def select_encounters(criteria_dict: Dict, engine: Engine) -> Tuple:
     wheres = []
     joins = []
 
-    for table, criteria in criteria_dict.items():
+    for table, criteria in criteria_dict['where'].items():
 
         if table != 'encounters':
             joins.append(f"{table} on {table}.encounter_id = encounters.id")
 
         for field, field_filter in criteria.items():
-            wheres.append(f"{table}.{field} {field_filter['operator']} {field_filter['value']}")
+            # If the query should be case-insensitive and this field is a text field, make the comparison 
+            #   all lowercase
+            where_clause = (
+                f"lower({table}.{field}) {field_filter['operator']} lower({field_filter['value']})"
+                if field_filter.get('type', '') == 'text' and criteria_dict.get('case_sensitive', False) else
+                f"{table}.{field} {field_filter['operator']} {field_filter['value']}"
+            )
+            wheres.append(where_clause)
 
     query = build_query_string(table='encounters',
                                selects=['distinct(encounters.id)'],
@@ -120,7 +130,7 @@ def select_encounters(criteria_dict: Dict, engine: Engine) -> Tuple:
 
 
 def generate_query_parameters(query_json: Dict, engine: Engine, session: Session) -> Dict:
-    """From the php query parameters json, build the proper sql query parameters.
+    """From the frontend query parameters json, build the proper sql query parameters.
 
     Args:
         query_json: The parameters json passed from the php front-end.

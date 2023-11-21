@@ -74,7 +74,7 @@ CREATE TABLE encounters (
     bear_cohort_code INTEGER, 
     initial_distance_m INTEGER, 
     closest_distance_m INTEGER, 
-    bear_charged INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
+    bear_did_charge INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     greatest_charge_disance_m INTEGER, 
     charge_count INTEGER, 
     firearm_was_present INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
@@ -151,7 +151,7 @@ CREATE TABLE bears (
     bear_injury_code INTEGER, 
     bear_park_id VARCHAR(50), 
     bear_description varchar(255), 
-    previously_encountered INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
+    was_previously_encountered INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     PRIMARY KEY (encounter_id, bear_number)
 );
 CREATE TABLE reactions (
@@ -190,7 +190,7 @@ CREATE TABLE attachments (
     file_type_code INTEGER REFERENCES file_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     mime_type varchar(50),
     file_path VARCHAR(255), 
-    client_file_name VARCHAR(255),
+    client_filename VARCHAR(255),
     file_size_kb INTEGER,  
     file_description TEXT, 
     datetime_attached TIMESTAMP, 
@@ -334,6 +334,21 @@ CREATE TABLE users (
     role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
+-- create a view to get meta table information 
+--  for creating exports from the query page
+--  of the web app
+CREATE VIEW export_code_value_map_view AS 
+    SELECT 
+        table_name,
+        field_name, 
+        lookup_table,
+        table_name || '.' || field_name AS coded_value, 
+        replace(field_name, '_code', '') AS readable_value 
+    FROM data_entry_fields 
+    WHERE 
+        lookup_table IS NOT NULL AND 
+        coalesce(table_name, '') <> '' AND 
+        is_enabled;
 
 -- Only necessary because value columns were initially varchar(3)
 -- DO $$
@@ -545,6 +560,7 @@ WHERE
 ORDER BY 1;
 
 UPDATE visibility_codes SET code=CASE WHEN lower(name)='other' THEN -2 WHEN lower(name)='unknown' THEN -1 ELSE id END;
+
 
 -- copy schema to dev
   -- Function: clone_schema(text, text)

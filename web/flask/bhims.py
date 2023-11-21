@@ -2,8 +2,9 @@ import os, sys
 import traceback
 import re
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.engine import URL
+from sqlalchemy.orm import Session
 import bcrypt
 import pandas as pd
 import smtplib
@@ -17,6 +18,7 @@ from flask_mail import Mail, Message
 
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../py/scripts'))
 from export_data import export_data
+from tables import *
 
 
 CONFIG_FILE = '//inpdenaterm01/bhims/config/bhims_config.json'
@@ -36,16 +38,16 @@ if not app.config.from_file(CONFIG_FILE, load=json.load):
 	raise IOError(f'Could not read CONFIG_FILE: {CONFIG_FILE}')
 
 
-def connect_db(access='read'):
-	url = URL.create('postgresql', **app.config['DB_ADMIN_PARAMS' if access == 'write' else 'DB_READ_PARAMS'])
+def get_engine(access='read'):
+	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
 	return create_engine(url)
 
 
 def get_config_from_db():
-	engine = connect_db()
+	engine = get_engine()
 	db_config = {}		
 	with engine.connect() as conn:
-		cursor = conn.execute('TABLE config');
+		cursor = conn.execute('TABLE config')
 		for row in cursor:
 			app.config[row['property']] = (
 				float(row['value']) if row['data_type'] == 'float' else  
@@ -73,7 +75,7 @@ def hello():
 @app.route('/flask/park_form_id/<encounter_id>', methods=['GET', 'POST'])
 def create_park_form_id(encounter_id):
 	id_format = app.config['park_form_id_format']
-	engine = connect_db();
+	engine = get_engine()
 	sql = f'''
 		WITH search_date AS (
 			SELECT datetime_entered AS search_date
@@ -113,7 +115,7 @@ def get_next_park_form_id(year):
 	pattern = re.compile(r'(%[a-zA-Z])')
 	for result in pattern.finditer(id_format): 
 		id_format = '{' + id_format[result.start() : result.start() + 2] + '}' + id_format[result.start() + 2:]
-	engine = connect_db();
+	engine = get_engine()
 	sql = f'''
 		SELECT 
 			count(*) + 1 AS form_count, 
@@ -185,7 +187,40 @@ def send_submission_notification():
 	)
 	mailer.send(msg)
 
-	return 'true';
+	return 'true'
+
+
+#---------------------- DB i/o ----------------------#
+
+# Delete an encounter
+@app.route('/flask/deleteEncounter', methods=['POST'])
+def delete_encounter():
+
+	data = request.form
+
+	if not 'encounter_id' in data:
+		raise ValueError('No encounter ID in request data')
+
+	encounter_id = data['encounter_id']
+
+	engine = get_engine('write')
+	with Session(engine) as session:
+		with session.begin():
+			# Delete any attachments for this encounter, which are stored on the server
+			for attachment in session.scalars(select(Attachment).filter_by(encounter_id=encounter_id)):
+				file_path = attachment.file_path
+				if os.path.isfile(file_path):
+					os.remove(file_path)
+				thumbnail_path = os.path.join(os.path.dirname(file_path), attachment.thumbnail_filename)
+				if os.path.isfile(thumbnail_path):
+					os.remove(thumbnail_path)
+			
+			# Delete the encounter, which will cascade to all related tables
+			encounter = session.get(Encounter, encounter_id)
+			session.delete(encounter)
+
+	return 'true'
+
 
 if __name__ == '__main__':
 

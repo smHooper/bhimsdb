@@ -3054,7 +3054,7 @@ var BHIMSEntryForm = (function() {
 									const filename = filePath.split('/').pop();
 									const fileExtension = filename.split('.').pop();
 									const fileInfo = {
-										client_file_name: fileName,
+										client_filename: fileName,
 										file_path: result.filePath,//should be the saved filepath (with UUID)
 										file_size_kb: Math.floor(thisFile.size / 1000),
 										mime_type: thisFile.type,

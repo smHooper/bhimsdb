@@ -646,7 +646,7 @@ var BHIMSQuery = (function(){
 		 		.closest('.collapse').collapse('show') 
 		// Set the card title and the file label
 		$card.find('.card-link-label, .filename-label')
-		 	.text(attachmentInfo.client_file_name);
+		 	.text(attachmentInfo.client_filename);
 
 		$card.find('.input-field').filter((_, el) => {return el.name === 'file_description'})
 			.val(attachmentInfo.file_description);
@@ -839,13 +839,11 @@ var BHIMSQuery = (function(){
 
 	}
 
-	/*
-	Load a new encounter after an encounter has already been selected. This needs 
-	to be separated from the onResultItemClick event handler to enable control flow 
-	from modal asking user to confirm edit saves
-	*/
-	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
 
+	/*
+	Helper function to reset the form to its defaults
+	*/
+	Constructor.prototype.resetEncounterForm = function() {
 		// Reset flag to prevent confirm message from showing when a user switches 
 		//	to a new record before .dirty class can be removed from inputs
 		this.fieldsFull = false;
@@ -858,8 +856,19 @@ var BHIMSQuery = (function(){
 		if (entryForm.markerIsOnMap()) entryForm.encounterMarker.remove();
 		$('#input-location_type').val('Place name');
 		$('.coordinates-ddd, .coordinates-ddm, .coordinates-dms').val(null);
-		bhimsQuery.resetSelectDefault($('#input-location_accuracy'));//use bhimsQuery because it needs to reference the global from query.html
+		_this.resetSelectDefault($('#input-location_accuracy'));//use bhimsQuery because it needs to reference the global from query.html
 		$('#input-datum').val(1); //WGS84
+	}
+
+
+	/*
+	Load a new encounter after an encounter has already been selected. This needs 
+	to be separated from the onResultItemClick event handler to enable control flow 
+	from modal asking user to confirm edit saves
+	*/
+	Constructor.prototype.switchEncounterRecord = function(newRecordItemID) {
+
+		_this.resetEncounterForm();
 
 		// Deselect the currently selected encounter and select the clicked one
 		$('.query-result-list-item.selected').removeClass('selected');
@@ -869,6 +878,7 @@ var BHIMSQuery = (function(){
 		// Load data
 		_this.loadSelectedEncounter();
 	}
+
 
 	Constructor.prototype.confirmSaveEdits = function(afterActionCallbackStr='') {
 		//@param afterActionCallbackStr: string of code to be appended to html onclick attribute
@@ -933,51 +943,38 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.deleteEncounter = function() {
 
 		const encounterID = this.selectedID;
-		$.ajax({
-			url: 'bhims.php',
-			method: 'POST',
+		showLoadingIndicator('deleteEncounter');
+		return $.post({
+			url: 'flask/deleteEncounter',
 			data: {
-				action: 'deleteEncounter',
-				encounterID: encounterID
+				encounter_id: encounterID
 			},
 		}).done(deleteResultString => {
 			if (queryReturnedError(deleteResultString)) {
-				showModal('A problem occurred that prevented the server from deleting the encounter. Please try again later.');
-				return [];
+				showModal('A problem occurred that prevented the server from deleting the encounter. Please try again later. \n\n Error details: ' + deleteResultString, 'Database Error');
 			} else {
 				const $deletedEncounterElement = $('#query-result-item-' + encounterID)
 					.fadeOut(500, (_, el) => {
 						$(el).remove();
 					})
-				const filesToDelete = this.queryResult[this.selectedID].attachments
-					.map(attachmentRow => {return attachmentRow.file_path})
-				$deletedEncounterElement
-					.next()
-					.click();
-				return filesToDelete;
+				// Select the previous (or next) encounter in the list
+				const $previousEncounter = $deletedEncounterElement.prev();
+				const $newSelection = $previousEncounter.length ? 
+					$previousEncounter : 
+					$deletedEncounterElement.next();
+				// Check if the new selection exists. If so, switch to it
+				if ($newSelection.length) {
+					_this.switchEncounterRecord($newSelection.attr('id'));
+				} 
+				// If not, just reset the form
+				else {
+					_this.resetEncounterForm();
+				}
+
 			}
 		}).fail((xhr, status, error) => {
 			console.log(`An unexpected error occurred while deleting encounter ${encounterID}: ${error}`)
-		})
-		// Delete any attached files
-		.then(filesToDelete => {
-			var failedFiles = [];
-			for (const filePath of filesToDelete) {
-				$.ajax({
-					url: 'bhims.php',
-					method: 'POST',
-					data: {action: 'deleteFile', filePath: filePath},
-					cache: false,
-				}).done(result => {
-					if (result.trim() !== 'true') {
-						failedFiles.push(filePath);
-					}
-				}).fail((xhr, status, error) => {
-					console.log(`Failed to delete ${filePath} because ${error}`)
-				})
-			}
-		});
-
+		}).always(() => {hideLoadingIndicator()})
 
 	}
 
@@ -1165,7 +1162,7 @@ var BHIMSQuery = (function(){
 									updates[attachmentIndex] = {
 										id: uploadInfo.id,
 										values: {
-											client_file_name: fileName,
+											client_filename: fileName,
 											file_path: result.filePath,//should be the saved filepath (with UUID)
 											file_size_kb: Math.floor(thisFile.size / 1000),
 											mime_type: thisFile.type,
@@ -1802,7 +1799,7 @@ var BHIMSQuery = (function(){
 					// Add other fields
 					const otherQueryOptions = [
 						{id: 998, table_name: 'attachments', field_name: 'file_size_kb', html_input_type: 'number', html_id: 'input-file_size_kb', display_name: 'File size (kb)', description: 'File size of the attachment'},
-						{id: 999, table_name: 'attachments', field_name: 'client_file_name', html_input_type: 'text', html_id: 'input-client_file_name', display_name: 'File name', description: 'Name of the attached file'},
+						{id: 999, table_name: 'attachments', field_name: 'client_filename', html_input_type: 'text', html_id: 'input-client_filename', display_name: 'File name', description: 'Name of the attached file'},
 						{id: 0, table_name: 'encounters', field_name: 'id', html_input_type: 'select', html_id: null, display_name: 'Encounter ID', description: 'Database ID of this record in the "encounters" table'}
 					];
 					numericFieldRanges.attachments = {};

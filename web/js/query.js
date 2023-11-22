@@ -363,7 +363,13 @@ var BHIMSQuery = (function(){
 			//this.setReactionFieldsFromQuery();
 			// set query options
 			for (const tableName in queryParams.where) {
+				
 				const tableParams = queryParams.where[tableName];
+				
+				// set queryOptions here so query drawer state can be appropriately set when 
+				//	$optionElement.blur() is called
+				this.queryOptions.where[tableName] = {...tableParams};
+				
 				for (const fieldName in tableParams) {
 					const $optionElement = $(`#query-option-${fieldName}`);
 					
@@ -459,10 +465,9 @@ var BHIMSQuery = (function(){
 							.parent()
 							.addClass('hidden');
 					$optionElement.closest('.query-option-container').removeClass('hidden');
-					$('#copy-query-link-button').removeClass('hidden');
-					$optionElement.change();
+					$('#copy-query-link-button').removeClass('invisible');
+					$optionElement.blur();
 				}
-				this.queryOptions.where[tableName] = {...queryParams.where[tableName]};
 			}
 
 		});

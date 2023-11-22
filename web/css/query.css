@@ -50,7 +50,7 @@ body {
 }
 #query-options-drawer-body {
 	width: 100%;
-	height: calc(100% - 100px);
+	height: calc(100% - 160px);
 }
 .tabs { 
 	float: none;
@@ -114,7 +114,7 @@ body {
 		- 60px /*header menu*/
 		- 10px /*drawer padding*/
 		- 60px /*tab labels*/
-		- 100px /*drawer footer*/
+		- 160px /*drawer footer*/
 	);
 	margin-top: 60px;
 	/*column-width: 300px;*/
@@ -371,7 +371,7 @@ body {
 
 #query-options-drawer-footer {
 	width: 100%;
-	height: 80px;
+	height: 160px;
 	padding: 10px;
 	display: none;/*hide when dropdown is closed*/
 	justify-content: center;
@@ -385,6 +385,7 @@ body {
 	justify-content: space-between;
 	height: 100%;
 	align-items: center;
+	flex-wrap: wrap;
 }
 #query-options-drawer-footer-content > *:not(.run-query-button) {
 	margin: 0 40px;

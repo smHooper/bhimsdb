@@ -177,6 +177,13 @@ button > img {
 
 
 /* Toggle switch */
+.slider-container .slider-label {
+  height: 40px;
+  line-height: 40px;
+  vertical-align: middle;
+  margin-bottom: 0;
+  margin-right: 10px;
+}
 .switch {
   position: relative;
   display: inline-block;

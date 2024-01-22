@@ -15,7 +15,7 @@ def connect_pg_db(connection_txt):
         engine = sqlalchemy.create_engine(
             'postgresql://{username}:{password}@{ip_address}:{port}/{db_name}'.format(**connection_info))
     except:
-        message = '\n\t' + '\n\t'.join(['%s: %s' % (k, v) for k, v in connection_info.iteritems()])
+        message = '\n\t' + '\n\t'.join(['%s: %s' % (k, v) for k, v in connection_info.items()])
         raise ValueError('could not establish connection with parameters:%s' % message)
 
     return engine

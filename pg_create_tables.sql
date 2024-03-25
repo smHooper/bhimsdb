@@ -13,23 +13,32 @@ CREATE TABLE data_quality_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, nam
 CREATE TABLE datum_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE daylight_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE, is_light BOOLEAN);
 CREATE TABLE deterrent_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE development_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE duration_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE entry_status_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE file_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE, accepted_file_ext VARCHAR(255));
+CREATE TABLE firearm_calibre_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE firearm_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE firearm_success_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE firearm_user_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE food_present_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE general_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE habitat_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE hazing_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE human_group_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
-CREATE TABLE improper_reaction_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
-CREATE TABLE initial_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE human_injury_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE human_food_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE initial_bear_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE initial_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE improper_reaction_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE location_accuracy_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE location_source_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE making_noise_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE management_classification_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE management_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE mapping_method_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE nonlethal_round_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE natural_food_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE observation_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE park_unit_codes (id SERIAL PRIMARY KEY, alpha_code CHAR(4) UNIQUE, name VARCHAR(50) UNIQUE);
 CREATE TABLE people_present_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
@@ -79,7 +88,7 @@ CREATE TABLE encounters (
     charge_count INTEGER, 
     firearm_was_present INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
     bear_spray_was_present INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
-    bear_spray_used INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    bear_spray_was_used INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     bear_spray_was_effective INTEGER  REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     bear_spray_distance_m INTEGER,
     reported_probable_cause_code INTEGER,
@@ -123,7 +132,8 @@ CREATE TABLE property_damage (
     property_value NUMERIC(11, 2), 
     damage_cost NUMERIC (11, 2), 
     was_in_persons_control INTEGER REFERENCES boolean_response_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE, 
-    recovery_date DATE, recovered_value NUMERIC(11, 2)
+    recovery_date DATE, recovered_value NUMERIC(11, 2),
+    is_from_cir BOOLEAN
 );
 CREATE TABLE assessment (
     id SERIAL PRIMARY KEY, 
@@ -159,7 +169,8 @@ CREATE TABLE reactions (
     encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE, 
     reaction_order INTEGER, reaction_by_code INTEGER, 
     reaction_code INTEGER, 
-    reaction_details VARCHAR(255),
+    is_primary BOOLEAN,
+    reaction_description VARCHAR(255),
     other_reaction VARCHAR(255),
     PRIMARY KEY (encounter_id, reaction_order)
 );
@@ -213,13 +224,66 @@ CREATE TABLE people (
     phone_number VARCHAR(25), 
     email_address VARCHAR(50), 
     residency_code INTEGER, 
-    sex_codes INTEGER REFERENCES sex_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE
+    sex_code INTEGER REFERENCES sex_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    is_from_cir BOOLEAN --akro DB has tblCIRPerson and tblPerson, not sure if it matters to keep track of where the data came from
 );
+CREATE TABLE fireamrs (
+    id SERIAL PRIMARY KEY,
+    firearm_calibre_code INTEGER REFERENCES firearm_calibre_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    firearm_type_code INTEGER REFERENCES firearm_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    firearm_manufacturer VARCHAR(50),
+    nonlethal_round_code INTEGER REFERENCES nonlethal_round_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    firearm_success_code INTEGER REFERENCES firearm_success_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    firearm_user_code INTEGER REFERENCES firearm_user_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    shots_fired_count INTEGER,
+    display_order
+)
 CREATE TABLE improper_reactions (
     id SERIAL PRIMARY KEY,
     encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
     improper_reaction_code INTEGER REFERENCES improper_reaction_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     other_improper_reaction_description VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
+-- AKRO DB 'xref' tables
+CREATE TABLE habitat_types (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    habitat_type_code INTEGER REFERENCES habitat_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_habitat_type_descriotion VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
+CREATE TABLE human_foods_present (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    human_food_code INTEGER REFERENCES human_food_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_human_food_descriotion VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
+CREATE TABLE natural_foods_present (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    natural_food_code INTEGER REFERENCES natural_food_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_natural_food_descriotion VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
+CREATE TABLE hazing_actions (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    hazing_action_code INTEGER REFERENCES hazing_action_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_hazing_action_descriotion VARCHAR(255),
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
+CREATE TABLE development_types (
+    id SERIAL PRIMARY KEY,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    development_type_code INTEGER REFERENCES development_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    other_development_type_descriotion VARCHAR(255),
     display_order INTEGER,
     UNIQUE(encounter_id, display_order)
 );

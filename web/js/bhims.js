@@ -335,7 +335,7 @@ function addSidebarMenu() {
 					<ul class="sidebar-nav-group">
 
 						<li class="nav-item selected">
-							<a href="bhims-dashboard.html">
+							<a href="dashboard.html">
 								<img class="sidebar-nav-item-icon" src="imgs/dashboard_icon_50px.svg">
 								<span class="sidebar-nav-item-label">dashboard</span>
 							</a>
@@ -363,7 +363,7 @@ function addSidebarMenu() {
 						</li>
 
 						<li class="nav-item">
-							<a href="bhims-entry.html">
+							<a href="entry-form.html">
 								<img class="sidebar-nav-item-icon" src="imgs/entry_form_icon_50px.svg">
 								<span class="sidebar-nav-item-label">new encounter</span>
 							</a>

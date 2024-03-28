@@ -17,10 +17,10 @@ CREATE TABLE development_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE,
 CREATE TABLE duration_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE entry_status_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE file_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE, accepted_file_ext VARCHAR(255));
-CREATE TABLE firearm_calibre_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE firearm_caliber_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE firearm_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE firearm_success_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
-CREATE TABLE firearm_user_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE firearm_use_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE food_present_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE general_human_activity_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE habitat_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
@@ -37,8 +37,8 @@ CREATE TABLE making_noise_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, nam
 CREATE TABLE management_classification_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE management_action_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE mapping_method_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
-CREATE TABLE nonlethal_round_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE natural_food_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
+CREATE TABLE nonlethal_round_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE observation_type_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
 CREATE TABLE park_unit_codes (id SERIAL PRIMARY KEY, alpha_code CHAR(4) UNIQUE, name VARCHAR(50) UNIQUE);
 CREATE TABLE people_present_codes (id SERIAL PRIMARY KEY, code INTEGER UNIQUE, name VARCHAR(50) UNIQUE, short_name CHAR(3) UNIQUE);
@@ -227,17 +227,19 @@ CREATE TABLE people (
     sex_code INTEGER REFERENCES sex_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     is_from_cir BOOLEAN --akro DB has tblCIRPerson and tblPerson, not sure if it matters to keep track of where the data came from
 );
-CREATE TABLE fireamrs (
+CREATE TABLE firearms (
     id SERIAL PRIMARY KEY,
-    firearm_calibre_code INTEGER REFERENCES firearm_calibre_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
+    firearm_caliber_code INTEGER REFERENCES firearm_caliber_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     firearm_type_code INTEGER REFERENCES firearm_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     firearm_manufacturer VARCHAR(50),
-    nonlethal_round_code INTEGER REFERENCES nonlethal_round_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    nonlethal_round_type_code INTEGER REFERENCES nonlethal_round_type_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     firearm_success_code INTEGER REFERENCES firearm_success_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
-    firearm_user_code INTEGER REFERENCES firearm_user_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
+    firearm_use_code INTEGER REFERENCES firearm_use_codes(code) ON DELETE RESTRICT ON UPDATE CASCADE,
     shots_fired_count INTEGER,
-    display_order
-)
+    display_order INTEGER,
+    UNIQUE(encounter_id, display_order)
+);
 CREATE TABLE improper_reactions (
     id SERIAL PRIMARY KEY,
     encounter_id INTEGER REFERENCES encounters ON DELETE CASCADE,
@@ -634,7 +636,7 @@ UPDATE visibility_codes SET code=CASE WHEN lower(name)='other' THEN -2 WHEN lowe
 CREATE OR REPLACE FUNCTION clone_schema(
     source_schema text,
     dest_schema text,
-    include_recs boolean)
+    include_records boolean)
   RETURNS void AS
 $BODY$
 
@@ -651,6 +653,7 @@ DECLARE
   srctbl           text;
   default_         text;
   column_          text;
+  record_          record;
   qry              text;
   dest_qry         text;
   v_def            text;
@@ -724,7 +727,7 @@ BEGIN
             || sq_cycled || ' ;' ;
 
     buffer := quote_ident(dest_schema) || '.' || quote_ident(object);
-    IF include_recs 
+    IF include_records 
         THEN
             EXECUTE 'SELECT setval( ''' || buffer || ''', ' || sq_last_value || ', ' || sq_is_called || ');' ; 
     ELSE
@@ -735,17 +738,40 @@ BEGIN
 
 -- Create tables 
   FOR object IN
-    SELECT TABLE_NAME::text 
+    SELECT table_name::text 
       FROM information_schema.tables 
-     WHERE table_schema = quote_ident(source_schema)
-       AND table_type = 'BASE TABLE'
-
+     WHERE 
+        table_schema = quote_ident(source_schema) AND
+        table_type = 'BASE TABLE' AND 
+        to_regclass(table_name) IS NOT NULL
   LOOP
     buffer := dest_schema || '.' || quote_ident(object);
     EXECUTE 'CREATE TABLE ' || buffer || ' (LIKE ' || quote_ident(source_schema) || '.' || quote_ident(object) 
         || ' INCLUDING ALL)';
 
-    IF include_recs 
+    -- Make sure destination schema tables point to destination lookup tables
+    -- FOR record_ IN
+    --     SELECT oid, conname
+    --         FROM pg_constraint
+    --     WHERE 
+    --         contype = 'f' AND 
+    --         conrelid = (dest_schema || '.' || object)::regclass::oid
+    -- LOOP
+    --     RAISE NOTICE 'update constraint statements: %', format(
+    --         'ALTER TABLE %1$s DROP CONSTRAINT %2$s; ALTER TABLE %1$s ADD CONSTRAINT %2$s %3$s',
+    --         buffer, 
+    --         record_.conname,
+    --         replace(pg_get_constraintdef(record_.oid), record_.confrelid::regclass::text, buffer)
+    --     );
+    --     EXECUTE format(
+    --         'ALTER TABLE %1$s DROP CONSTRAINT %2$s; ALTER TABLE %1$s ADD CONSTRAINT %2$s %3$s',
+    --         buffer, 
+    --         record_.conname,
+    --         replace(pg_get_constraintdef(record_.oid), record_.confrelid::regclass::text, buffer)
+    --     );
+    -- END LOOP;
+
+    IF include_records 
       THEN 
       -- Insert records from source table
       EXECUTE 'INSERT INTO ' || buffer || ' SELECT * FROM ' || quote_ident(source_schema) || '.' || quote_ident(object) || ';';
@@ -779,6 +805,26 @@ BEGIN
 
     END LOOP;
 
+  -- Make sure destination schema tables point to destination lookup tables
+  FOR qry IN
+    SELECT 
+        format(
+            'ALTER TABLE %1$s DROP CONSTRAINT %2$s; ALTER TABLE %1$s ADD CONSTRAINT %2$s %3$s;', 
+            pgc.conrelid::regclass::text, 
+            constraint_name,  
+            replace(pg_get_constraintdef(pgc.oid), pgc.confrelid::regclass::text, dest_schema || '.' || pgc.confrelid::regclass::text)
+        ) 
+    FROM 
+        pg_constraint pgc 
+    JOIN information_schema.constraint_column_usage ccu ON conname=constraint_name 
+    WHERE 
+        constraint_schema <> table_schema AND 
+        constraint_schema=dest_schema AND 
+        conrelid::regclass::text LIKE dest_schema || '.%'
+    
+    LOOP
+        EXECUTE qry;
+    END LOOP;
 
 -- Create views 
   FOR object IN

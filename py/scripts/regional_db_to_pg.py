@@ -818,67 +818,71 @@ def main(db_path:str, pg_connection_txt:str, schema_name: str='public', force_sc
         del data['tblBearSpray']
         COLUMNS.drop(COLUMNS.index[COLUMNS.access_table == 'tblBearSpray'], inplace=True)
 
-    # INSERT data
-    if force_schema:
-        # Add the missing lookup values
-        print('Adding missing lookup values...')
-        for column_info_index, lookup_table in lookup_additions.items():
-            pg_column_name = COLUMNS.loc[column_info_index, 'pg_column']
-            table_name = pg_column_name + 's'
-            lookup_table.drop_duplicates(subset=['code']).to_sql(table_name, pg_engine, schema=schema_name, if_exists='append', index=False)
-
-    # Drop extraneous encounters columns
-    pg_inspector = sqla.inspect(pg_engine)
-    pg_columns = [c['name'] for c in pg_inspector.get_columns('encounters')]
-    extra_columns = encounters.columns[~encounters.columns.isin(pg_columns)]
-    encounters.drop(columns=extra_columns, inplace=True)
-
-    # insert encounters with the encounter ID already populated so that we know the ID values for related tables
-    print('Inserting encounters...')
+    # Get the next encounter ID. Do this outside of the with...as conn block because getting a cursor seems to prevent
+    #   any further inserts
     with pg_engine.connect() as conn:
         cursor = conn.execute(sqla.text(f'SELECT max(id) AS max_id FROM {schema_name}.encounters'))
         first_encounter_id = cursor.first().max_id + 1
-    encounters['id'] = range(first_encounter_id, first_encounter_id + len(encounters))
-    encounters.set_index('id', inplace=True)
-    encounters.to_sql('encounters', pg_engine, schema=schema_name, if_exists='append')
 
-    # Replace IncidentID with encounter_id
-    incident_id_lookup = pd.Series(encounters.index, index=encounters.incident_id)
-    # Drop tblEncounter and tblIncident since they were just INSERTed with encounters
-    related_data_columns = COLUMNS.loc[~COLUMNS.access_table.isin(['tblIncident', 'tblEncounter'])]
-    incident_id_tables = related_data_columns.loc[related_data_columns.access_column == 'IncidentID', 'access_table'].unique()
-    for access_table in incident_id_tables:
-        # skip tblBearSpray because I'm not supporting it for now
-        if access_table == 'tblBearSpray':
-            continue
-        table_data = data[access_table]
-        table_data.loc[:, 'encounter_id'] = table_data.loc[:, 'IncidentID'].replace(incident_id_lookup)
+    # INSERT data
+    with pg_engine.connect() as conn:
+        if force_schema:
+            # Add the missing lookup values
+            print('Adding missing lookup values...')
+            for column_info_index, lookup_table in lookup_additions.items():
+                pg_column_name = COLUMNS.loc[column_info_index, 'pg_column']
+                table_name = pg_column_name + 's'
+                lookup_table.drop_duplicates(subset=['code']).to_sql(table_name, conn, schema=schema_name, if_exists='append', index=False)
 
-    # Import all other tables
-    pg_table_dict = related_data_columns.loc[:, ['access_table', 'pg_table']].drop_duplicates().set_index('access_table').squeeze(axis=1)
-    print('Inserting other data...')
-    for access_table, pg_table in pg_table_dict.items():
-        print('...' + pg_table)
-        table_data = data[access_table]
-        pg_columns = [c['name'] for c in pg_inspector.get_columns(pg_table)]
-        extra_columns = table_data.columns[~table_data.columns.isin(pg_columns)]
-        if len(extra_columns):
-            # If the user wants to force the insert, drop the extra columns
-            if force_schema:
-                table_data.drop(columns=extra_columns, inplace=True)
-            # Otherwise, raise
-            else:
-                raise RuntimeError(f'The following columns exist in the Access table "{access_table}" but do not' +
-                                   f' exist in the Postgres table "{pg_table}":\n\t-' +
-                                    '\n\t-'.join(extra_columns) +
-                                   '\nTo automatically remove these columns before inserting data, run this' +
-                                   ' script with force_schema=True'
-                    )
-        try:
-            table_data.to_sql(pg_table, pg_engine, schema=schema_name, if_exists='append', index=False)
-        except Exception as e:
-            print(e)
-            import pdb; pdb.set_trace()
+        # Drop extraneous encounters columns
+        pg_inspector = sqla.inspect(pg_engine)
+        pg_columns = [c['name'] for c in pg_inspector.get_columns('encounters')]
+        extra_columns = encounters.columns[~encounters.columns.isin(pg_columns)]
+        encounters.drop(columns=extra_columns, inplace=True)
+
+        # insert encounters with the encounter ID already populated so that we know the ID values for related tables
+        print('Inserting encounters...')
+        encounters['id'] = range(first_encounter_id, first_encounter_id + len(encounters))
+        encounters.set_index('id', inplace=True)
+        encounters.to_sql('encounters', conn, schema=schema_name, if_exists='append')
+
+        # Replace IncidentID with encounter_id
+        incident_id_lookup = pd.Series(encounters.index, index=encounters.incident_id)
+        # Drop tblEncounter and tblIncident since they were just INSERTed with encounters
+        related_data_columns = COLUMNS.loc[~COLUMNS.access_table.isin(['tblIncident', 'tblEncounter'])]
+        incident_id_tables = related_data_columns.loc[related_data_columns.access_column == 'IncidentID', 'access_table'].unique()
+        for access_table in incident_id_tables:
+            # skip tblBearSpray because I'm not supporting it for now
+            if access_table == 'tblBearSpray':
+                continue
+            table_data = data[access_table]
+            table_data.loc[:, 'encounter_id'] = table_data.loc[:, 'IncidentID'].replace(incident_id_lookup)
+
+        # Import all other tables
+        pg_table_dict = related_data_columns.loc[:, ['access_table', 'pg_table']].drop_duplicates().set_index('access_table').squeeze(axis=1)
+        print('Inserting other data...')
+        for access_table, pg_table in pg_table_dict.items():
+            print('...' + pg_table)
+            table_data = data[access_table]
+            pg_columns = [c['name'] for c in pg_inspector.get_columns(pg_table)]
+            extra_columns = table_data.columns[~table_data.columns.isin(pg_columns)]
+            if len(extra_columns):
+                # If the user wants to force the insert, drop the extra columns
+                if force_schema:
+                    table_data.drop(columns=extra_columns, inplace=True)
+                # Otherwise, raise
+                else:
+                    raise RuntimeError(f'The following columns exist in the Access table "{access_table}" but do not' +
+                                       f' exist in the Postgres table "{pg_table}":\n\t-' +
+                                        '\n\t-'.join(extra_columns) +
+                                       '\nTo automatically remove these columns before inserting data, run this' +
+                                       ' script with force_schema=True'
+                        )
+            try:
+                table_data.to_sql(pg_table, conn, schema=schema_name, if_exists='append', index=False)
+            except Exception as e:
+                print(e)
+                import pdb; pdb.set_trace()
 
 if __name__ == '__main__':
     main(*sys.argv[1:])

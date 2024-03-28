@@ -1,13 +1,16 @@
 import sys
 import os
+
 import re
+import pandas as pd
 import pyodbc
 import warnings
-import pandas as pd
 
 from py.resource import db_utils
 
+
 pd.options.mode.chained_assignment = None # Turn off setting as copy warning
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 DATA_TABLE_NAME = 'BIMS MAY 2018'
 

@@ -2,12 +2,13 @@
 
 var MAP_DATA,
 	DASHBOARD_MAP,
+	MAX_INITIAL_ZOOM = 15,
 	MODAL_MAP_DATA = L.geoJSON(),
 	MODAL_MAP,
 	FIELD_INFO = {},
 	LOOKUP_TABLES = {},
 	PRESENT_MODE = false,
-	PRESENT_MODE_YEAR = 2022,
+	PRESENT_MODE_YEAR = 2023,
 	DATA_ACCESS_USER_ROLES = [2, 3];
 
 //add bhims-dashboard to main-content
@@ -352,7 +353,10 @@ function configureMap(divID, modalDivID=null) {
 	        			style: styleFunc,
 	        			pointToLayer: geojsonPointAsCircle
 	        		}).addTo(DASHBOARD_MAP);
-	        		DASHBOARD_MAP.fitBounds(geojsonLayer.getBounds());
+					DASHBOARD_MAP.fitBounds(
+						geojsonLayer.getBounds(),
+						{maxZoom: MAX_INITIAL_ZOOM}
+					);
 	        		
 	        		if (modalDivID) {
 	        			MODAL_MAP_DATA = L.geoJSON(features, {
@@ -446,6 +450,7 @@ function externalTooltipHandler(context) {
 
 
 function configureDailyEncounterChart() {
+	const queryDate = PRESENT_MODE ? `'${PRESENT_MODE_YEAR}-9-24'::date` : 'now()';
 	const sql = `
 		SELECT 
 			series.encounter_date AS full_date,
@@ -456,7 +461,7 @@ function configureDailyEncounterChart() {
 				SELECT 
 					generate_series(min(start_date), max(start_date), '1d')::date AS encounter_date 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now())
+				WHERE extract(year FROM start_date) = extract(year FROM ${queryDate})
 			) series 
 		LEFT JOIN 
 			(
@@ -464,7 +469,7 @@ function configureDailyEncounterChart() {
 					start_date::date AS encounter_date, 
 					count(*) AS n_encounters 
 				FROM encounters 
-				WHERE extract(year FROM start_date) = extract(year FROM now())
+				WHERE extract(year FROM start_date) = extract(year FROM ${queryDate})
 				GROUP BY encounter_date
 			) n 
 		USING (encounter_date) 

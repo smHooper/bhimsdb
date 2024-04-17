@@ -105,7 +105,7 @@ var BHIMSQuery = (function(){
 			SELECT 
 				DISTINCT table_name 
 			FROM information_schema.columns 
-			WHERE table_schema='public' AND column_name='encounter_id'
+			WHERE table_schema='${entryForm.dbSchema}' AND column_name='encounter_id'
 		;`;
 		return queryDB(tablesSQL).done( tableQueryResultString => {
 			const rightSideTables = $.parseJSON(tableQueryResultString);
@@ -1616,7 +1616,7 @@ var BHIMSQuery = (function(){
 		const sql = `
 			SELECT table_name 
 			FROM information_schema.tables 
-			WHERE table_schema='public' AND table_name LIKE '%_codes';
+			WHERE table_schema='${entryForm.dbSchema}' AND table_name LIKE '%_codes';
 		`;
 		// Since this array of deferreds will get returned before all the $.Deferreds get added, 
 		//	initialize with a dummy Deferred. When the for-loop is done, this dummy Deferred can 

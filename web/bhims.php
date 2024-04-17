@@ -189,13 +189,14 @@ if (isset($_POST['action'])) {
 
 	// Get username and user role
 	if ($_POST['action'] == 'getUser') {
+		$schema = getEnvironment() == 'dev' ? 'dev' : 'public';
 		if ($_SERVER['AUTH_USER']) {
 			$user = preg_replace("/^.+\\\\/", "", strtolower($_SERVER["AUTH_USER"]));
     	} else {
     		echo "ERROR: no auth_user";
     		exit();
     	}
-		$sql = "SELECT ad_username as username, role FROM users WHERE ad_username='$user'";
+		$sql = "SELECT ad_username as username, role FROM $schema.users WHERE ad_username='$user'";
 		$userRole = runQuery($dbhost, $dbport, $dbname, $username, $password, $sql);
 		
 		// Check if the query result is valid. If not, the user probably doesn't exist in the table yet

@@ -2,7 +2,7 @@ import os, sys
 import traceback
 import re
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text as sqlatext
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 import bcrypt
@@ -38,9 +38,23 @@ if not app.config.from_file(CONFIG_FILE, load=json.load):
 	raise IOError(f'Could not read CONFIG_FILE: {CONFIG_FILE}')
 
 
+@app.route('/flask/environment', methods=['POST'])
+def get_environment() -> str:
+	""" return a string indicating whether this is the production or development env."""
+	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
+
+
+def get_schema() -> str:
+	"""
+	Return the appropriate database schema based on this file's path (i.e., the environment)
+	"""
+	return 'public' if get_environment() == 'prod' else 'dev'
+
+
 def get_engine(access='read'):
 	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
-	return create_engine(url)
+	schema = get_schema()
+	return create_engine(url, execution_options={'schema_translate_map': {None: schema}})
 
 
 def get_config_from_db():
@@ -63,13 +77,61 @@ def get_unique_id() -> str:
 	return hex(int(datetime.now().timestamp() * 10000000))[2:]
 
 
-def get_environment() -> str:
-	""" return a string indicating whether this is the production or development env."""
-	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
-
 @app.route('/flask/test', methods=['GET', 'POST'])
 def hello():
 	return 'hello'
+
+
+# -------------- User Management ---------------- #
+def query_user_info(username):
+	"""
+	Helper function to get DB user info using AD username 
+	"""
+
+	schema = get_schema()
+
+	sql = f'''
+		SELECT id, 
+			:username AS ad_username, 
+			role 
+		FROM {schema}.users 
+		WHERE ad_username=:username 
+	'''
+
+	engine = get_engine('write')
+	result = engine.execute(sqlatext(sql), {'username': username})
+	if result.rowcount == 0:
+		# Add the user with the data entry role
+		sql = f'''
+			INSERT INTO {schema}.users (ad_username, role) 
+			VALUES (:username, 1)
+		'''
+		engine.execute(sqlatext(sql), {'username': username})
+	else:
+		return result.first()._asdict()
+
+
+# Get username and role
+@app.route('/flask/user_info', methods=['POST'])
+def get_user_info():
+	
+	username = ''
+	try:
+		# strip domain ('nps') from username, and make sure it's all lowercase
+		username = re.sub(r'^.+\\', '', request.remote_user).lower()
+	except:
+		return 'ERROR: no auth_user'
+	if not username:
+		return 'ERROR: no auth_user'
+
+	data = request.form
+	if 'client_secret' in data:
+		if data['client_secret'] == app.config['TEST_CLIENT_SECRET']:
+			username = 'test'
+		else:
+			return json.dumps({'ad_username': username, 'user_role_code': None, 'user_status_code': None})
+
+	return query_user_info(username)
 
 
 @app.route('/flask/park_form_id/<encounter_id>', methods=['GET', 'POST'])
@@ -191,6 +253,9 @@ def send_submission_notification():
 
 
 #---------------------- DB i/o ----------------------#
+
+# get meta tables
+
 
 # Delete an encounter
 @app.route('/flask/deleteEncounter', methods=['POST'])

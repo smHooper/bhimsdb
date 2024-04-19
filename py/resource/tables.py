@@ -14,7 +14,7 @@ from sqlalchemy.orm import relationship, declared_attr, backref
 class Base:
     id = Column(INTEGER, primary_key=True)
 
-Base.metadata.schema = 'public'
+#Base.metadata.schema = 'public'
 
 model_dict = lambda: {mapper.class_.__tablename__: mapper.class_ for mapper in Base.registry.mappers}
 

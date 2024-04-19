@@ -117,12 +117,6 @@ function uuid() {
 	);
 }
 
-
-function getEnvironment() {
-	return strpos(getcwd(), 'git') ? 'dev' : 'prod';
-}
-
-
 function getAttachmentDir($configAttachmentPath) {
 	$rootDir = strpos(getcwd(), 'git') ? 'git' : 'prod';
 	return preg_replace("/prod/", $rootDir, $configAttachmentPath);

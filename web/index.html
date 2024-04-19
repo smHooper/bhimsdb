@@ -7,7 +7,6 @@
 	<link rel="icon" type="image/x-icon" href="/imgs/favicon.ico">
 
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-	<!--<script src="http://malsup.github.com/jquery.form.js"></script>-->
 	
 	<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css"/>
 	<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
@@ -35,21 +34,16 @@
 
 	<script>
 		$(document).ready(function(){
-			$.ajax({
-				url: 'bhims.php',
-				method: 'POST',
-				data: {action: 'getUser'},
-				cache: false
-			}).done(function(resultString) {
-				if (queryReturnedError(resultString)) {
-					throw 'User role query failed: ' + resultString;
-				} else {
-					const result = $.parseJSON(resultString);
-					if (result[0].role >= 2) {
-						$('#dashboard-button').removeClass('hidden');
+			getUserInfo()
+				.done(result => {
+					if (pythonReturnedError(result)) {
+						throw 'User role query failed: ' + result;
+					} else {
+						if (result.role >= 2) {
+							$('#dashboard-button').removeClass('hidden');
+						}
 					}
-				}
-			});
+				});
 		});
 	</script>
 

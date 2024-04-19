@@ -85,6 +85,7 @@ var BHIMSEntryForm = (function() {
 			fieldContainers = {},
 			fields = {};
 
+		// ajax
 		const getEnvDeferred = getEnvironment()
 			.done(resultString => {
 				this.serverEnvironment = resultString.trim();
@@ -105,23 +106,28 @@ var BHIMSEntryForm = (function() {
 		}
 
 		//var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
-
+		// ajax
 		var deferred = $.Deferred();
 		const userInfoDeferred = getUserInfo()
-			.then(resultString => {
-				const userInfo = $.parseJSON(resultString)[0];
-				_this.username = userInfo.username;
-				_this.userRole = userInfo.role;
-				
-				if (!isNewEntry) {
-					// If this is the query page, check if the user has permission to access it
-					const canAccessData = _this.dataAccessUserRoles.includes(parseInt(userInfo.role))
-					if (!canAccessData) {
-						showPermissionDeniedAlert();
+			.then(result => {
+				if (pythonReturnedError(result)) {
+
+				} else {
+					const userInfo = result;
+					_this.username = userInfo.username;
+					_this.userRole = userInfo.role;
+					
+					if (!isNewEntry) {
+						// If this is the query page, check if the user has permission to access it
+						const canAccessData = _this.dataAccessUserRoles.includes(parseInt(userInfo.role))
+						if (!canAccessData) {
+							showPermissionDeniedAlert();
+						}
 					}
 				}
 			});
-			
+		
+		// ajax
 		// Query configuration tables from database
 		getEnvDeferred.done(() => {
 			$.when(
@@ -643,6 +649,7 @@ var BHIMSEntryForm = (function() {
 					.addClass('hidden');
 
 				// fill selects
+				// ajax
 				let deferreds = $('select').map( (_, el) => {
 					const $el = $(el);
 					const placeholder = $el.attr('placeholder');
@@ -886,6 +893,7 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
+				// ajax
 				queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
 					.then(
 						doneFilter=function(queryResultString){

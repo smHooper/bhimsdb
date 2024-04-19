@@ -1,3 +1,5 @@
+PWA_DISPLAY_MODES = ['fullscreen', 'standalone', 'minimal-ui'];
+
 function deepCopy(inObject) {
 	/*
 	Return a true deep copy of an object
@@ -167,12 +169,15 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 
 function getUserInfo() {
 	return $.post({
-		url: 'bhims.php',
-		data: {action: 'getUser'},
-		cache: false
+		url: 'flask/user_info',
 	}).done(function(resultString) {
-		if (queryReturnedError(resultString)) {
-			throw 'User role query failed: ' + resultString;
+		if (pythonReturnedError(resultString)) {
+			const message = 'An error occurred while retrieving user information. Try reloading the page. If this problem persists, contact your system administrator.'
+			const footerButton = '<a class="generic-button" href="bhims-index.html">OK</a>';
+			hideLoadingIndicator();
+			showModal(message, 'Error Retrieving User Info', 'alert', footerButton, {dismissable: false});
+			console.log(resultString);
+
 		} else {
 
 		}
@@ -183,7 +188,7 @@ function getUserInfo() {
 function showPermissionDeniedAlert() {
 	$('.main-content-wrapper').remove();
 	const message = 'You do not have sufficient permissions to view data. Contact the BHIIMS program administrator if you need access.';
-	const footerButton = '<a class="generic-button" href="bhims-index.html">OK</a>'
+	const footerButton = '<a class="generic-button" href="index.html">OK</a>'
 	showModal(message, 'Permission Denied', 'alert', footerButton, {dismissable: false});
 }
 
@@ -192,6 +197,17 @@ Helper function to check a Postgres query result for an error
 */
 function queryReturnedError(queryResultString) {
 	return queryResultString.trim().startsWith('ERROR') || queryResultString.trim() === '["query returned an empty result"]';
+}
+
+
+/*
+Helper function to check a flask request threw an error
+*/
+function pythonReturnedError(resultString) {
+	resultString = String(resultString); // force as string in case it's something else
+	return resultString.startsWith('ERROR: Internal Server Error') ?
+		resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
+		false;
 }
 
 
@@ -413,11 +429,20 @@ Helper function to ask server if the app is running in the production or develop
 function getEnvironment() {
 
 	return $.post({
-		url: 'bhims.php',
-		data: {action: 'getEnvironment'}
+		url: '/flask/environment'
 	});
-
 }
+
+
+/*
+Check if the app is running as a PWA
+*/
+function isPwa() {
+	return PWA_DISPLAY_MODES.some(
+		(displayMode) => window.matchMedia(`(display-mode: ${displayMode})`).matches
+	);
+}
+
 
 /*
 Load configuration values from the database
@@ -469,11 +494,4 @@ function parseURLQueryString(queryString=window.location.search) {
 		// no search string so return an empty object
 		return {};
 	}
-}
-
-function pythonReturnedError(resultString) {
-
-	return resultString.startsWith('ERROR: Internal Server Error') ?
-	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
-	   false;
 }

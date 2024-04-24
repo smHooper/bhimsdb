@@ -47,6 +47,11 @@ var BHIMSEntryForm = (function() {
 		this.encounterMarker = new  L.marker(
 			[0, 0], 
 			{
+				icon: L.icon({
+					iconUrl: LEAFLET_MARKER_ICON_URL, //defined in bhims.js
+					iconSize: [25, 41],
+					iconAnchor: [12, 41]
+				}),
 				draggable: true,
 				autoPan: true,
 			}
@@ -79,11 +84,16 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
-		var pages = {},
-			sections = {},
-			accordions = {},
-			fieldContainers = {},
-			fields = {};
+		var formConfiguration = {
+			pages: {},
+			sections: {},
+			accordions: {},
+			fieldContainers: {},
+			fields: {}
+		};
+
+		const queryParams = parseURLQueryString();
+		this.presentMode = queryParams.present === 'true'
 
 		// ajax
 		const getEnvDeferred = getEnvironment()
@@ -91,19 +101,6 @@ var BHIMSEntryForm = (function() {
 				this.serverEnvironment = resultString.trim();
 				this.dbSchema = this.serverEnvironment === 'prod' ? 'public' : 'dev';
 			})
-
-		const queryParams = parseURLQueryString();
-		this.presentMode = queryParams.present === 'true'
-
-
-		const processQueryResult = (obj, result) => {
-			const queryResult = $.parseJSON(result);
-			if (queryResult) {
-				for (const row of queryResult) {
-					obj[row.id] = {...row};
-				};
-			} 
-		}
 
 		//var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
 		// ajax
@@ -129,38 +126,11 @@ var BHIMSEntryForm = (function() {
 		
 		// ajax
 		// Query configuration tables from database
+		var pages = formConfiguration.pages;
 		getEnvDeferred.done(() => {
 			$.when(
 				userInfoDeferred,
-				this.getFieldInfo(),
-				loadConfigValues(this.dataEntryConfig),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_pages ORDER BY page_index;`)
-					.done(result => {processQueryResult(pages, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`)
-					.done(result => {processQueryResult(sections, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;`)
-					.done(result => {processQueryResult(accordions, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;`)
-					.done(result => {processQueryResult(fieldContainers, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;`)
-					.done(result => {processQueryResult(fields, result)}),
-				// Query accepted file attachment extensions for each file type
-				queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryReturnedError(queryResultString)) {
-								throw 'Accepted file extension query failed: ' + queryResultString;
-							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								for (const object of queryResult) {//queryResult.forEach(function(object) {
-									_this.acceptedAttachmentExtensions[object.code] = object.accepted_file_ext;
-								}
-							}
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`Accepted file extension query failed with status ${status} because ${error}`)
-						}
-					)
+				this.getFormConfiguration(formConfiguration)
 			).then(() => {
 				if (isNewEntry) {
 					if (Object.keys(_this.dataEntryConfig).length) {
@@ -175,6 +145,7 @@ var BHIMSEntryForm = (function() {
 					}
 
 					// Add all pages
+					
 					if (Object.keys(pages).length) {
 						for (const id in pages) {
 							const pageInfo = pages[id];
@@ -200,6 +171,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Add sections
+				const sections = formConfiguration.sections;
 				if (Object.keys(sections).length) {
 					for (const id in sections) {
 						const sectionInfo = sections[id];
@@ -229,6 +201,7 @@ var BHIMSEntryForm = (function() {
 				var sectionChildren = {};
 
 				// Accordions
+				const accordions = formConfiguration.accordions;
 				if (Object.keys(accordions).length) {
 					for (const id in accordions) {
 						const accordionInfo = accordions[id];
@@ -286,6 +259,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Field containers
+				const fieldContainers = formConfiguration.fieldContainers;
 				if (Object.keys(fieldContainers).length) {
 					for (const id in fieldContainers) {
 						const containerInfo = fieldContainers[id];
@@ -315,6 +289,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Add fields
+				const fields = formConfiguration.fields;
 				if (Object.keys(fields).length) {
 					// Gather and sort field info within their containers
 					var sortedFields = {};
@@ -534,7 +509,7 @@ var BHIMSEntryForm = (function() {
 					<div class="field-container map-container">
 						<div class="marker-container collapse show" id="encounter-marker-container">
 							<label class="marker-label">Type coordinates manually above or drag and drop the marker onto the map</label>
-							<img id="encounter-marker-img" src="https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
+							<img id="encounter-marker-img" src="imgs/leaflet-marker-icon-2x.png" class="draggable-marker" alt="drag and drop the marker">
 						</div>
 						
 						<div id="expand-map-button-container">
@@ -1095,40 +1070,62 @@ var BHIMSEntryForm = (function() {
 			(xhr, status, error) => {
 			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
 		})//.always(() => {hideLoadingIndicator()});
-		/*// Check if the user has a field values from a saved session
+	}
 
 
-		// Determine which table each column belongs to
-		const sql = `
-			SELECT 
-				table_name,
-				column_name,
-				data_type 
-			FROM information_schema.columns 
-			WHERE 
-				table_schema='public' AND 
-				table_name NOT LIKE '%_codes' AND 
-				column_name NOT IN ('encounter_id', 'id')
-			;
-		`;
-		queryDB(sql)
-			.done(
-				queryResultString => {
-					const queryResult = $.parseJSON(queryResultString);
-					if (queryResult) {
-						const hasSavedSession = Object.keys(this.fieldValues).length;
-						queryResult.forEach( (row) => {
-							const columnName = row.column_name;
-							this.fieldInfo[columnName] = {};
-							this.fieldInfo[columnName].tableName = row.table_name;
-							this.fieldInfo[columnName].dataType = row.data_type;
-						});
-					}
-				}
-			).fail(
-				(xhr, status, error) => {
-				showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-			});*/
+	/*
+	Get form configuration either from the database or cached data
+	*/
+	Constructor.prototype.getFormConfiguration = function(formConfigObject) {
+		
+		// Local helper function to cache each data entry config table response
+		const processQueryResult = (obj, result) => {
+			const queryResult = $.parseJSON(result);
+			if (queryResult) {
+				for (const row of queryResult) {
+					obj[row.id] = {...row};
+				};
+			} 
+		}
+
+		if (isPWA()) {
+			// get config
+
+			// Synchronously loading data so return a resolved promise
+			return $.Deferred().resolve();
+		} else {
+			return $.when(
+				loadConfigValues(this.dataEntryConfig),
+				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_pages ORDER BY page_index;`)
+					.done(result => {processQueryResult(formConfigObject.pages, result)}),
+				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`)
+					.done(result => {processQueryResult(formConfigObject.sections, result)}),
+				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;`)
+					.done(result => {processQueryResult(formConfigObject.accordions, result)}),
+				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;`)
+					.done(result => {processQueryResult(formConfigObject.fieldContainers, result)}),
+				this.getFieldInfo()
+				//queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;`)
+					.done(result => {processQueryResult(formConfigObject.fields, result)}),
+				// Query accepted file attachment extensions for each file type
+				queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
+					.then(
+						doneFilter=function(queryResultString){
+							if (queryReturnedError(queryResultString)) {
+								throw 'Accepted file extension query failed: ' + queryResultString;
+							} else {
+								const queryResult = $.parseJSON(queryResultString);
+								for (const object of queryResult) {//queryResult.forEach(function(object) {
+									_this.acceptedAttachmentExtensions[object.code] = object.accepted_file_ext;
+								}
+							}
+						},
+						failFilter=function(xhr, status, error) {
+							console.log(`Accepted file extension query failed with status ${status} because ${error}`)
+						}
+					)
+			);
+		 }
 	}
 
 

@@ -63,12 +63,18 @@ def get_config_from_db():
 	with engine.connect() as conn:
 		cursor = conn.execute('TABLE config')
 		for row in cursor:
-			app.config[row['property']] = (
+			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
 				int(row['value']) if row['data_type'] == 'integer' else
 				(row['value'] == 'true') if row['data_type'] == 'boolean' else
 				row['value']
 			)
+			app.config[row['property']] = value
+			db_config[row['property']] = value
+
+	return db_config
+
+# Add to app.config
 get_config_from_db()
 
 
@@ -132,6 +138,87 @@ def get_user_info():
 			return json.dumps({'ad_username': username, 'user_role_code': None, 'user_status_code': None})
 
 	return query_user_info(username)
+# -------------- User Management ---------------- #
+
+
+# -------------- Entry Form Config ---------------- #
+@app.route('/flask/db_config', methods=['POST'])
+def db_config():
+	return get_config_from_db()
+
+
+@app.route('/flask/entry_form_config', methods=['GET'])
+def entry_form_config():
+
+	schema = get_schema()
+	engine = get_engine()
+	with engine.connect() as conn:
+		pages = {
+			row.id: row._asdict() for row in 
+			conn.execute(f'SELECT * FROM {schema}.data_entry_pages ORDER BY page_index')
+		}
+		sections = {
+			row.id: row._asdict() for row in 
+			conn.execute(f'SELECT * FROM {schema}.data_entry_sections WHERE is_enabled ORDER BY display_order')
+		}
+		accordions = {
+			row.id: row._asdict() for row in 
+			conn.execute(f'SELECT * FROM {schema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order')
+		}
+		containers = {
+			row.id: row._asdict() for row in 
+			conn.execute(f'SELECT * FROM {schema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order')
+		}
+		fields_sql = f'''
+			SELECT 
+				fields.* 
+			FROM {schema}.data_entry_fields fields 
+				JOIN data_entry_field_containers containers 
+				ON fields.field_container_id=containers.id 
+			WHERE 
+				fields.is_enabled 
+			ORDER BY 
+				containers.display_order,
+				fields.display_order
+		'''
+		fields = {
+			row.id: row._asdict() for row in 
+			conn.execute(fields_sql)
+		}
+		accepted_attachment_extensions = {
+			row.code: row.accepted_file_ext for row in
+			conn.execute(f'SELECT code, accepted_file_ext FROM {schema}.file_type_codes WHERE sort_order IS NOT NULL')
+		}
+
+		return {
+			'form_config': {
+				'pages': pages,
+				'sections': sections,
+				'accordions': accordions,
+				'fieldContainers': containers,
+				'fields': fields
+			},
+			'accepted_attachment_extensions': accepted_attachment_extensions
+		}
+
+
+@app.route('/flask/lookup_options', methods=['GET'])
+def lookup_options():
+	schema = get_schema()
+	engine = get_engine()
+	sql = f''' SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema='{schema}' AND table_name LIKE '%_codes' AND column_name='sort_order' '''
+	with engine.connect() as conn:
+		lookup_tables = {}
+		for table_row in conn.execute(sqlatext(sql)):
+			table_name = table_row.table_name
+			lookup_sql = f'SELECT * FROM {table_name} WHERE sort_order IS NOT NULL ORDER BY sort_order'
+			lookup_tables[table_name] = [lookup_row._asdict() for lookup_row in conn.execute(lookup_sql)]
+
+	return lookup_tables
+			
+		
+
+# -------------- Entry Form Config ---------------- #
 
 
 @app.route('/flask/park_form_id/<encounter_id>', methods=['GET', 'POST'])

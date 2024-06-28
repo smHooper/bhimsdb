@@ -1,4 +1,5 @@
-PWA_DISPLAY_MODES = ['fullscreen', 'standalone', 'minimal-ui'];
+const PWA_DISPLAY_MODES = ['fullscreen', 'standalone', 'minimal-ui'];
+const LEAFLET_MARKER_ICON_URL = 'imgs/leaflet-marker-icon.png';
 
 function deepCopy(inObject) {
 	/*
@@ -36,38 +37,16 @@ function queryDB(sql, {schema='public'}={}) {
 }
 
 
-function fillSelectOptions(selectElementID, queryString, optionClassName='') {
+function fillSelectOptions(selectElementID, options, optionClassName='') {
 	
-	let deferred = queryDB(queryString)
-	deferred.then(
-		doneFilter=function(queryResultString){
-			
-			queryResultString = queryResultString.trim();
-
-			var queryResult;
-			try {
-				queryResult = $.parseJSON(queryResultString);
-			} catch {
-				//console.log(`error filling in ${selectElementID}: ${queryResultString}`);
-			}
-			if (queryResult) {
-				const $select = $('#' + selectElementID)
-				$select.find('option:not([value=""])').remove();
-				queryResult.forEach(function(object) {
-					$select.append(
-						`<option class="${optionClassName}" value="${object.value}">${object.name}</option>`
-					);
-				})
-			} else {
-				console.log(`error filling in ${selectElementID}: ${queryResultString}`);
-			}
-		},
-		failFilter=function(xhr, status, error) {
-			console.log(`fill select failed with status ${status} because ${error} on #${selectElementID}`)
-		}
-	);
-
-	return deferred;
+	const $select = $('#' + selectElementID)
+	$select.find('option:not([value=""])').remove();
+	
+	for (const object of options) {
+		$select.append(
+			`<option class="${optionClassName}" value="${object.code}">${object.name}</option>`
+		);
+	}
 }
 
 
@@ -437,7 +416,7 @@ function getEnvironment() {
 /*
 Check if the app is running as a PWA
 */
-function isPwa() {
+function isPWA() {
 	return PWA_DISPLAY_MODES.some(
 		(displayMode) => window.matchMedia(`(display-mode: ${displayMode})`).matches
 	);
@@ -449,17 +428,13 @@ Load configuration values from the database
 */
 function loadConfigValues(config) {
 
-	return queryDB('SELECT property, data_type, value FROM config')
-		.done(queryResultString => {
-			if (queryReturnedError(queryResultString)) {
-				print('Problem querying config values: ' + queryResultString);
+	return $.post({url: '/flask/db_config'})
+		.done(response => {
+			if (pythonReturnedError(response)) {
+				print('Problem querying config values: ' + response);
 			} else {
-				for (const {property, data_type, value, ...rest} of $.parseJSON(queryResultString)) {
-					config[property] = 
-						data_type === 'integer' ? parseInt(value) : 
-						data_type === 'float' ? parseFloat(value) : 
-						data_type === 'boolean' ? value.toLowerCase().startsWith('t') :
-						value; // it's a string
+				for (const property in response) {
+					config[property] = response[property];
 				}
 			}
 		})

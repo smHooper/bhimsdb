@@ -76,6 +76,14 @@ var BHIMSEntryForm = (function() {
 		this.roadsGeoJSON;
 		this.dataEntryConfig = {};
 		this.dbSchema = 'public';
+		this.reactionCodes = {};
+		this.formConfiguration = {
+			pages: {},
+			sections: {},
+			accordions: {},
+			fieldContainers: {},
+			fields: {}
+		};
 		_this = this;
 	}
 
@@ -84,13 +92,6 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
-		var formConfiguration = {
-			pages: {},
-			sections: {},
-			accordions: {},
-			fieldContainers: {},
-			fields: {}
-		};
 
 		const queryParams = parseURLQueryString();
 		this.presentMode = queryParams.present === 'true'
@@ -126,12 +127,13 @@ var BHIMSEntryForm = (function() {
 		
 		// ajax
 		// Query configuration tables from database
-		var pages = formConfiguration.pages;
 		getEnvDeferred.done(() => {
 			$.when(
 				userInfoDeferred,
-				this.getFormConfiguration(formConfiguration)
+				loadConfigValues(this.dataEntryConfig),
+				this.getFormConfiguration()
 			).then(() => {
+				const pages = this.formConfiguration.pages;
 				if (isNewEntry) {
 					if (Object.keys(_this.dataEntryConfig).length) {
 						$('#title-page-title').text(_this.dataEntryConfig.entry_form_title);
@@ -145,7 +147,6 @@ var BHIMSEntryForm = (function() {
 					}
 
 					// Add all pages
-					
 					if (Object.keys(pages).length) {
 						for (const id in pages) {
 							const pageInfo = pages[id];
@@ -171,7 +172,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Add sections
-				const sections = formConfiguration.sections;
+				const sections = this.formConfiguration.sections;
 				if (Object.keys(sections).length) {
 					for (const id in sections) {
 						const sectionInfo = sections[id];
@@ -201,7 +202,7 @@ var BHIMSEntryForm = (function() {
 				var sectionChildren = {};
 
 				// Accordions
-				const accordions = formConfiguration.accordions;
+				const accordions = this.formConfiguration.accordions;
 				if (Object.keys(accordions).length) {
 					for (const id in accordions) {
 						const accordionInfo = accordions[id];
@@ -259,7 +260,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Field containers
-				const fieldContainers = formConfiguration.fieldContainers;
+				const fieldContainers = this.formConfiguration.fieldContainers;
 				if (Object.keys(fieldContainers).length) {
 					for (const id in fieldContainers) {
 						const containerInfo = fieldContainers[id];
@@ -289,7 +290,7 @@ var BHIMSEntryForm = (function() {
 				}
 
 				// Add fields
-				const fields = formConfiguration.fields;
+				const fields = this.formConfiguration.fields;
 				if (Object.keys(fields).length) {
 					// Gather and sort field info within their containers
 					var sortedFields = {};
@@ -342,7 +343,7 @@ var BHIMSEntryForm = (function() {
 								if (fieldInfo.css_class.includes(MULTIPLE_SELECT_ENTRY_CLASS))
 									inputFieldAttributes += ' multiple="true"';
 								const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
-								const required = fieldInfo.required === 't';
+								const required = fieldInfo.required === true;
 								const $field = $(`
 									<div class="${fieldInfo.parent_css_class}">
 										<${inputTag} ${inputFieldAttributes} ${required ? 'required' : ''}>${inputTagClosure}
@@ -625,23 +626,43 @@ var BHIMSEntryForm = (function() {
 
 				// fill selects
 				// ajax
-				let deferreds = $('select').map( (_, el) => {
-					const $el = $(el);
-					const placeholder = $el.attr('placeholder');
-					const lookupTable = $el.data('lookup-table');
-					const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
-					const id = el.id;
-					if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
-						if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
-						if (!$el.is('.no-option-fill')) {
-							return fillSelectOptions(id, `SELECT code AS value, name FROM ${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`);
+				const lookupTableDeferred = $.get({url: '/flask/lookup_options'})
+					.done(response => {
+						var deferred = $.Deferred();
+						if (pythonReturnedError(response)) {
+							showModal('The form cannot be loaded because of an error while retrieving lookup values from the database:\n' + response,
+								'Database Error'
+							)
+							return; 
 						}
-					}
+						$('select').map( (_, el) => {
+							const $el = $(el);
+							const placeholder = $el.attr('placeholder');
+							const lookupTable = $el.data('lookup-table');
+							const lookupTableName = lookupTable ? lookupTable : $el.attr('name') + 's';
+							const id = el.id;
+
+							// reaction code selects get updated when the 'reaction by' 
+							//	select is updated 
+							if (lookupTableName === 'reaction_codes') {
+								for (row of response[lookupTableName]) {
+									const actionBy = row.action_by;
+									if (!(actionBy in this.reactionCodes) ) this.reactionCodes[actionBy] = [];
+									this.reactionCodes[actionBy].push({code: row.code, name: row.name})
+								}
+							
+							} else if (lookupTableName in response) { 
+								if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
+								if (!$el.is('.no-option-fill')) {
+									fillSelectOptions(id, response[lookupTableName]);
+								}
+							}
+							deferred.resolve();
+						})
+						return deferred;
 				})
 
-				$.when(
-					...deferreds
-				).then(function() {
+				lookupTableDeferred.then(function() {
 					if (isNewEntry) {
 						_this.setDefaultInputValues();
 						_this.fillFieldValues(_this.fieldValues);
@@ -845,7 +866,7 @@ var BHIMSEntryForm = (function() {
 					if (this.userRole < 2) { // >2 === assessment or admin
 						// Remove the asseessment section bcecause this user doesn't have 
 						//	the permission to assess the encounter
-						$('form-section.requires-assessment-role').remove();
+						$('.form-section.requires-assessment-role').remove();
 					} else {
 						// Remove locks on admin sections
 						$('.unlock-button, .locked-section-screen').remove();
@@ -1006,23 +1027,19 @@ var BHIMSEntryForm = (function() {
 					//	deferred returned from it and we don't want to call it twice. Other .change
 					// 	event handlers aren't necessary
 
-				reactionDeferreds.push(
-					this.updateReactionsSelect($reactionBy)
-						.then(() => {
-							// For some reason the index var doesn't correspond to the appropriate 
-							//	iteration of the for loop (even though $reaction does). Get the 
-							//index from the id to set the select with the right val
-							const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
-							$reaction
-								.val(reactions[thisIndex].reaction_code)
-								.change();
-						})
-				);
+				
+				this.updateReactionsSelect($reactionBy)
+				// For some reason the index var doesn't correspond to the appropriate 
+				//	iteration of the for loop (even though $reaction does). Get the 
+				//index from the id to set the select with the right val
+				const thisIndex = $reaction.attr('id').match(/\d+$/)[0]
+				$reaction
+					.val(reactions[thisIndex].reaction_code)
+					.change();
 			}
 			// Once reaction_code fields have been set, dispatch the fields-full event
-			$.when(...reactionDeferreds).then(
-				() => {window.dispatchEvent(fieldsFullEvent)}
-			)
+			window.dispatchEvent(fieldsFullEvent);
+			
 			
 		} else { 
 			// If there are no reactions to worry about, signal that fields have been filled
@@ -1034,59 +1051,25 @@ var BHIMSEntryForm = (function() {
 	/* 
 	Get info from the database about each field 
 	*/
-	Constructor.prototype.getFieldInfo = function() {
+	Constructor.prototype.getFieldInfo = function(entryFieldConfig) {
 		const pageName = window.location.pathname.split('/').pop();
 		const fieldValueString = window.localStorage[pageName] ? window.localStorage[pageName] : null;
 		if (fieldValueString) this.fieldValues = $.parseJSON(fieldValueString).fieldValues;
 
-		const sql = `
-			SELECT 
-				fields.* 
-			FROM ${_this.dbSchema}.data_entry_fields fields 
-				JOIN data_entry_field_containers containers 
-				ON fields.field_container_id=containers.id 
-			WHERE 
-				fields.is_enabled 
-			ORDER BY 
-				containers.display_order,
-				fields.display_order
-			;
-		`;
-
-		return queryDB(sql).done(
-			queryResultString => {
-				const queryResult = $.parseJSON(queryResultString);
-				if (queryResult) {
-					for (const row of queryResult) {
-						const columnName = row.field_name;
-						this.fieldInfo[columnName] = {};
-						for (const property in row) {
-							this.fieldInfo[columnName][property] = row[property];
-						}
-					};
-				}
+		for (const row of Object.values(entryFieldConfig)) {
+			const columnName = row.field_name;
+			this.fieldInfo[columnName] = {};
+			for (const property in row) {
+				this.fieldInfo[columnName][property] = row[property];
 			}
-		).fail(
-			(xhr, status, error) => {
-			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		})//.always(() => {hideLoadingIndicator()});
+		}
 	}
 
 
 	/*
 	Get form configuration either from the database or cached data
 	*/
-	Constructor.prototype.getFormConfiguration = function(formConfigObject) {
-		
-		// Local helper function to cache each data entry config table response
-		const processQueryResult = (obj, result) => {
-			const queryResult = $.parseJSON(result);
-			if (queryResult) {
-				for (const row of queryResult) {
-					obj[row.id] = {...row};
-				};
-			} 
-		}
+	Constructor.prototype.getFormConfiguration = function() {
 
 		if (isPWA()) {
 			// get config
@@ -1094,38 +1077,20 @@ var BHIMSEntryForm = (function() {
 			// Synchronously loading data so return a resolved promise
 			return $.Deferred().resolve();
 		} else {
-			return $.when(
-				loadConfigValues(this.dataEntryConfig),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_pages ORDER BY page_index;`)
-					.done(result => {processQueryResult(formConfigObject.pages, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`)
-					.done(result => {processQueryResult(formConfigObject.sections, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;`)
-					.done(result => {processQueryResult(formConfigObject.accordions, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;`)
-					.done(result => {processQueryResult(formConfigObject.fieldContainers, result)}),
-				this.getFieldInfo()
-				//queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;`)
-					.done(result => {processQueryResult(formConfigObject.fields, result)}),
-				// Query accepted file attachment extensions for each file type
-				queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryReturnedError(queryResultString)) {
-								throw 'Accepted file extension query failed: ' + queryResultString;
-							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								for (const object of queryResult) {//queryResult.forEach(function(object) {
-									_this.acceptedAttachmentExtensions[object.code] = object.accepted_file_ext;
-								}
-							}
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`Accepted file extension query failed with status ${status} because ${error}`)
-						}
-					)
-			);
-		 }
+			return $.get({url: '/flask/entry_form_config'})
+				.done(response => {
+					if (pythonReturnedError(response)) {
+						showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
+					} else {
+						this.formConfiguration = deepCopy(response.form_config);
+						this.acceptedAttachmentExtensions = deepCopy(response.accepted_attachment_extensions);
+						this.getFieldInfo(this.formConfiguration.fields);
+					}
+				})
+				.fail((xhr, status, error) => {
+					showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
+				})
+		}
 	}
 
 
@@ -2568,16 +2533,7 @@ var BHIMSEntryForm = (function() {
 		
 		// Return the deferred object so other functions can be triggered 
 		//	after the select is filled
-		return fillSelectOptions(reactionSelectID, 
-			`
-			SELECT code AS value, name 
-			FROM reaction_codes 
-			WHERE 
-				sort_order IS NOT NULL AND 
-				action_by=${actionBy} 
-			ORDER BY sort_order
-			`
-		);
+		return fillSelectOptions(reactionSelectID, this.reactionCodes[actionBy]);
 	}
 
 

@@ -1,11 +1,12 @@
 :root {
   --ui-primary-color: hsl(211 68% 52%);
+  --default-font-family: 'Barlow', system-ui, sans-serif;
 }
 
 html, body {
   height: 100%;
   overflow: hidden;
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--default-font-family);
 }
 
 .generic-button  {
@@ -921,7 +922,7 @@ input[type=number] {
 
 .leaflet-popup .leaflet-popup-content-wrapper,
 .leaflet-tooltip-point-label {
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--default-font-family);
 }
 .leaflet-tooltip-point-label {
   background-color: #00000000; /*make bg transparent*/
@@ -933,4 +934,7 @@ input[type=number] {
 }
 .leaflet-tooltip-point-label:before {
   display: none !important;
+}
+.leaflet-control-layers-toggle {
+  background-image: url('../imgs/leaflet-layers-icon.png') !important;
 }

@@ -125,10 +125,10 @@ def get_user_info():
 	try:
 		# strip domain ('nps') from username, and make sure it's all lowercase
 		username = re.sub(r'^.+\\', '', request.remote_user).lower()
-	except:
-		return 'ERROR: no auth_user'
+	except Exception as e:
+		raise RuntimeError('Could not retrieve username with error message ' + e)
 	if not username:
-		return 'ERROR: no auth_user'
+		raise RuntimeError('request.remote_user not accessible')
 
 	data = request.form
 	if 'client_secret' in data:

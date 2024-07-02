@@ -374,6 +374,7 @@ CREATE TABLE data_entry_fields (
     html_min INTEGER,
     html_max INTEGER,
     html_step REAL,
+    max_length INTEGER,
     is_enabled BOOLEAN,
     description VARCHAR(255),
     UNIQUE(field_name, table_name)

@@ -3290,7 +3290,7 @@ var BHIMSEntryForm = (function() {
 					cache: false
 				}).done(queryResultString => {
 					if (queryReturnedError(queryResultString)) {
-						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.<br><br>Try reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 						return;
 					}
 

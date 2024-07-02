@@ -191,7 +191,7 @@ function showPermissionDeniedAlert() {
 Helper function to check a Postgres query result for an error
 */
 function queryReturnedError(queryResultString) {
-	return queryResultString.trim().startsWith('ERROR') || queryResultString.trim() === '["query returned an empty result"]';
+	return queryResultString.match(/^[\s["]*ERROR/) || queryResultString.trim() === '["query returned an empty result"]';
 }
 
 

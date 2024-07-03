@@ -3041,6 +3041,21 @@ var BHIMSEntryForm = (function() {
 			}
 		}	
 
+		// Record that the user clicked the submission button to log 
+		//	any potential silent faliures
+		$.post({
+			url: 'flask/save_submission_time',
+			data: {
+				username: _this.username
+			}
+		}).done(response => {
+			if (!(response === true)) {
+				console.log(response)
+			}
+		}).fail(() => {
+			console.log('save_submission_time failed')
+		});
+
 		// Save attachments
 		const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
 		var deferreds = [],

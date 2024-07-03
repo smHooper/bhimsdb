@@ -237,6 +237,32 @@ def delete_encounter():
 	return 'true'
 
 
+@app.route('/flask/save_submission_time', methods=['POST'])
+def save_submission_time():
+	"""
+	When a user clicks the submit button, update the last_submission_attempt 
+	field in the users table to be able to keep track of potentially failed 
+	submissions
+	"""
+	data = request.form
+	if not 'username' in data:
+		raise ValueError('No username in request data')
+
+	username = data['username']
+
+	#engine = get_engine(acess='write', schema=get_db_schema())
+	with WriteSession() as session:
+		statement = (
+			update(User)
+				.where(User.ad_username == username)
+				.values(last_submission_attempt=datetime.now().strftime('%Y-%m-%d %H:%M'))
+		)
+		session.execute(statement)
+		session.commit()
+
+	return 'true'
+
+
 if __name__ == '__main__':
 
 	app.run()#debug=True)

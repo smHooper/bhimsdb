@@ -398,7 +398,8 @@ CREATE TABLE user_role_codes (
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     ad_username varchar(50),
-    role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT
+    role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT,
+    last_submission_attempt TIMESTAMP
 );
 
 -- create a view to get meta table information 

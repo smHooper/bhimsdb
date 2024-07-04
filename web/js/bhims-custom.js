@@ -10,7 +10,24 @@ function customizeEntryForm() {
 	
 	// Make the reactions accordion match the DENA BHIMS form
 	const $reactionsAccordion = $('#reactions-accordion');
-	
+
+	// Hide the add reaction button
+	$('.add-item-button[data-target="reactions-accordion"]').parent().addClass('hidden')
+
+	let $reactionCards = $reactionsAccordion.find('.card:not(.cloneable)');
+	// I can't figure out why there are sometimes fewer reaction cards and other times not,
+	// 	so just make sure there are exactly 2
+	if ($reactionCards.length !== 2) {
+		// const message = 'Oops! The BHIMS form did not load properly. Click <strong>OK</strong> to reload the page, which should resolve the problem.';
+		// const footerButton = `<a class="generic-button" href=${window.location.href}>OK</a>`;
+		// showModal(message, 'Form Loading Error', 'alert', footerButton, {dismissable: false});
+		$reactionCards.remove(); // remvoe from DOM
+		$reactionCards = $(); // remove reference
+		while ($reactionCards.length < 2)  {
+			$reactionCards = $reactionCards.add(entryForm.addNewCard($reactionsAccordion));
+		}
+	}
+
 	// Remove the .card-label-field from inputs to turn off the delegated event 
 	//	handler for onCardLabelFieldChange()
 	$reactionsAccordion.find('.card-label-field').removeClass('card-label-field');
@@ -20,10 +37,6 @@ function customizeEntryForm() {
 		.parent()
 			.addClass('hidden');
 
-	// Hide the add reaction button
-	$('.add-item-button[data-target="reactions-accordion"]').parent().addClass('hidden')
-
-	const $reactionCards = $('#reactions-accordion .card:not(.cloneable)');
 	const $personCard = $reactionCards.first();
 	// If the reaction_code field isn't yet set, set the select options
 	if ($personCard.find('.input-field[name="reaction_code"]').val() === '') {

@@ -1346,7 +1346,7 @@ var BHIMSEntryForm = (function() {
 
 			// If this is the first time a field has been changed in this 
 			//	accordion, this.fieldValues[tableName] will be undefined
-			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = [];
 			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion
@@ -1400,7 +1400,7 @@ var BHIMSEntryForm = (function() {
 
 			// If this is the first time a field has been changed in this 
 			//	accordion, this.fieldValues[tableName] will be undefined
-			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = [];
 			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion

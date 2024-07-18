@@ -374,6 +374,7 @@ CREATE TABLE data_entry_fields (
     html_min INTEGER,
     html_max INTEGER,
     html_step REAL,
+    max_length INTEGER,
     is_enabled BOOLEAN,
     description VARCHAR(255),
     UNIQUE(field_name, table_name)
@@ -397,7 +398,8 @@ CREATE TABLE user_role_codes (
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     ad_username varchar(50),
-    role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT
+    role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT,
+    last_submission_attempt TIMESTAMP
 );
 
 -- create a view to get meta table information 

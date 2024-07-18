@@ -314,7 +314,10 @@ var BHIMSEntryForm = (function() {
 
 								var inputFieldAttributes = `id="${fieldInfo.html_id}" class="${fieldInfo.css_class}" name="${fieldInfo.field_name || ''}" data-table-name="${fieldInfo.table_name || ''}" placeholder="${fieldInfo.placeholder}" title="${fieldInfo.description}"`;
 								
-								var fieldLabelHTML = `<label class="field-label" for="${fieldInfo.html_id}">${fieldInfo.label_text || ''}</label>`
+								const characterCounterHTML = fieldInfo.max_length ?
+									`<span class="character-count-container hidden ml-2">(<em class="character-count"></em> of ${fieldInfo.max_length})</span>` : 
+									'';
+								var fieldLabelHTML = `<label class="field-label" for="${fieldInfo.html_id}">${fieldInfo.label_text || ''}${characterCounterHTML}</label>`
 								var inputTag = fieldInfo.html_input_type;
 								if (inputTag !== 'select' && inputTag !== 'textarea'){ 
 									inputFieldAttributes += ` type="${fieldInfo.html_input_type}"`;
@@ -338,6 +341,8 @@ var BHIMSEntryForm = (function() {
 									inputFieldAttributes += ` max="${fieldInfo.html_max}"`;
 								if (fieldInfo.html_step) 
 									inputFieldAttributes += ` step="${fieldInfo.html_step}"`;
+								if (fieldInfo.max_length && fieldInfo.html_input_type === 'text')
+									inputFieldAttributes += ` data-max-length=${fieldInfo.max_length}`;
 								if (fieldInfo.html_input_type == 'datetime-local') 
 									inputFieldAttributes +=' pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"';
 								if (fieldInfo.css_class.includes(MULTIPLE_SELECT_ENTRY_CLASS))
@@ -1311,7 +1316,7 @@ var BHIMSEntryForm = (function() {
 
 			// If this is the first time a field has been changed in this 
 			//	accordion, this.fieldValues[tableName] will be undefined
-			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = [];
 			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion
@@ -1365,7 +1370,7 @@ var BHIMSEntryForm = (function() {
 
 			// If this is the first time a field has been changed in this 
 			//	accordion, this.fieldValues[tableName] will be undefined
-			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = {};
+			if (!_this.fieldValues[tableName]) _this.fieldValues[tableName] = [];
 			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion
@@ -1384,7 +1389,7 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
 
 		// If the user has disabled validation, just return true to indicate that they're all valid
-		if ($('#disable-required-slider-container input[type=checkbox]').is(':checked')) return true;
+		const validationDisabled = $('#disable-required-slider-container input[type=checkbox]').is(':checked');
 
 		const $fields = $parent
 			.find('.field-container:not(.disabled)')
@@ -1392,10 +1397,24 @@ var BHIMSEntryForm = (function() {
 			(_, el) => {
 				const $el = $(el);
 				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
-				if (!($el.hasClass(MULTIPLE_SELECT_ENTRY_CLASS) ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
+				// Only check for empty fields if validation is enabled (it can be disabled by admins)
+				if (!validationDisabled) {
+					if (!($el.hasClass(MULTIPLE_SELECT_ENTRY_CLASS) ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
+						$el.addClass('error');
+					} else {
+						$el.removeClass('error');
+					}
+				}
+				// Always check if a value exceeds the max length, regardless of whether validation is disabled
+				const maxLength = $el.data('max-length');
+				let valueLength = 0;
+				try {
+					valueLength = el.value.length;
+				} catch {
+					console.log('Could not get value length for field ' + el.id);
+				}
+				if (valueLength > maxLength) {
 					$el.addClass('error');
-				} else {
-					$el.removeClass('error');
 				}
 		});
 
@@ -1810,7 +1829,31 @@ var BHIMSEntryForm = (function() {
 	When a user types anything in a text field, remove the error class
 	*/
 	Constructor.prototype.onInputFieldKeyUp = function(e) {
-		$(e.target).removeClass('error');
+
+		const $el = $(e.target);
+		const maxLength = $el.data('max-length');
+		const valueLength = $el.val().length;
+		if (maxLength && valueLength && valueLength > maxLength) {
+			// Show a message if the user pressed any key other than delete or backspace
+			const keyCode = e.keyCode || e.charCode;
+			if (!(keyCode == 8 || keyCode == 46)) { 
+				const message = 
+				`You've entered a value that exceeds the maximum number of characters for this field (${maxLength}).` + 
+				' If you need to add more detail to your response, you can specify that in the narrative description' + 
+				' of the encounter.';
+				showModal(message, 'Value Exceeds Maximum Field Length');
+			}
+			$el.addClass('error');
+		} else {
+			$el.removeClass('error');
+		}
+
+		// show character counter and update (if it exists)
+		$el.closest('.field-container')
+			.find('.character-count-container')
+				.removeClass('hidden')
+				.find('.character-count')
+					.text(valueLength);
 	}
 
 
@@ -2959,6 +3002,21 @@ var BHIMSEntryForm = (function() {
 			}
 		}	
 
+		// Record that the user clicked the submission button to log 
+		//	any potential silent faliures
+		$.post({
+			url: 'flask/save_submission_time',
+			data: {
+				username: _this.username
+			}
+		}).done(response => {
+			if (!(response === true)) {
+				console.log(response)
+			}
+		}).fail(() => {
+			console.log('save_submission_time failed')
+		});
+
 		// Save attachments
 		const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
 		var deferreds = [],
@@ -3208,7 +3266,7 @@ var BHIMSEntryForm = (function() {
 					cache: false
 				}).done(queryResultString => {
 					if (queryReturnedError(queryResultString)) {
-						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.<br><br>Try reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
 						return;
 					}
 

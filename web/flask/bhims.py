@@ -2,9 +2,9 @@ import os, sys
 import traceback
 import re
 
-from sqlalchemy import create_engine, select, text as sqlatext
+from sqlalchemy import create_engine, select, update, text as sqlatext
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 import bcrypt
 import pandas as pd
 import smtplib
@@ -81,6 +81,44 @@ get_config_from_db()
 def get_unique_id() -> str:
 	"""equivalent to php uniqid()"""
 	return hex(int(datetime.now().timestamp() * 10000000))[2:]
+
+
+def get_environment() -> str:
+	""" return a string indicating whether this is the production or development env."""
+	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
+
+
+def get_db_schema() -> str:
+	""" return the database schema based on the current environment"""
+	return 'public' if get_environment() == 'prod' else 'dev'
+
+
+def get_engine(access='read', schema='public'):
+	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
+	return create_engine(url).execution_options(schema_translate_map={'public': schema, None: schema})
+
+
+def get_config_from_db(schema='public'):
+	engine = get_engine()
+	db_config = {}		
+	with engine.connect() as conn:
+		cursor = conn.execute(f'TABLE {schema}.config')
+		for row in cursor:
+			app.config[row['property']] = (
+				float(row['value']) if row['data_type'] == 'float' else  
+				int(row['value']) if row['data_type'] == 'integer' else
+				(row['value'] == 'true') if row['data_type'] == 'boolean' else
+				row['value']
+			)
+
+db_schema = get_db_schema()
+get_config_from_db(db_schema)
+
+# Establish global scope sessionmakers to reuse at the function scope
+read_engine = get_engine(access='read', schema=db_schema)
+write_engine = get_engine(access='write', schema=db_schema)
+ReadSession = sessionmaker(read_engine)
+WriteSession = sessionmaker(write_engine)
 
 
 @app.route('/flask/test', methods=['GET', 'POST'])
@@ -283,7 +321,6 @@ def get_next_park_form_id(year):
 	
 
 
-
 @app.route('/flask/export_data', methods=['POST'])
 def run_export_data():
 
@@ -309,10 +346,11 @@ def get_email_logo_base64():
 	with open('imgs/bhims_icon_50px.jpg', 'rb') as f:
 		return base64.b64encode(f.read()).decode('utf-8')
 
-# new account creation
-# This endpoint sends an activation notification to a user whose account was just created by an admin
 @app.route('/flask/notifications/submission', methods=['POST'])
 def send_submission_notification():
+	"""
+	Send a notification to the admin that there's a new submission
+	"""
 	data = dict(request.form)
 
 	data['logo_base64_string'] = 'data:image/jpg;base64,' + get_email_logo_base64()	
@@ -340,14 +378,15 @@ def send_submission_notification():
 
 
 #---------------------- DB i/o ----------------------#
-
 # get meta tables
 
 
 # Delete an encounter
 @app.route('/flask/deleteEncounter', methods=['POST'])
 def delete_encounter():
-
+	""" 
+	Delete an encounter 
+	"""
 	data = request.form
 
 	if not 'encounter_id' in data:
@@ -355,8 +394,8 @@ def delete_encounter():
 
 	encounter_id = data['encounter_id']
 
-	engine = get_engine('write')
-	with Session(engine) as session:
+	#engine = get_engine('write')
+	with WriteSession() as session:
 		with session.begin():
 			# Delete any attachments for this encounter, which are stored on the server
 			for attachment in session.scalars(select(Attachment).filter_by(encounter_id=encounter_id)):
@@ -370,6 +409,32 @@ def delete_encounter():
 			# Delete the encounter, which will cascade to all related tables
 			encounter = session.get(Encounter, encounter_id)
 			session.delete(encounter)
+
+	return 'true'
+
+
+@app.route('/flask/save_submission_time', methods=['POST'])
+def save_submission_time():
+	"""
+	When a user clicks the submit button, update the last_submission_attempt 
+	field in the users table to be able to keep track of potentially failed 
+	submissions
+	"""
+	data = request.form
+	if not 'username' in data:
+		raise ValueError('No username in request data')
+
+	username = data['username']
+
+	#engine = get_engine(acess='write', schema=get_db_schema())
+	with WriteSession() as session:
+		statement = (
+			update(User)
+				.where(User.ad_username == username)
+				.values(last_submission_attempt=datetime.now().strftime('%Y-%m-%d %H:%M'))
+		)
+		session.execute(statement)
+		session.commit()
 
 	return 'true'
 

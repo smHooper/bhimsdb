@@ -227,6 +227,8 @@ class StructureTypeCode(Base, CodeMixin):
 class VisibilityCode(Base, CodeMixin):
     __tablename__ = 'visibility_codes'
 
+class UserRoleCode(Base, CodeMixin):
+    __tablename__ = 'user_role_codes'
 
 # -------- QUERIED TABLES -------- #
 
@@ -532,3 +534,11 @@ class StructureInteraction(Base, EncounterMixin):
 
     structure_type = relationship(StructureTypeCode)
     structure_interaction = relationship(StructureInteractionCode)
+
+
+class User(Base):
+    __tablename__ = 'users'
+
+    ad_username = Column(VARCHAR(50))
+    role = Column(INTEGER, ForeignKey(UserRoleCode.code))
+    last_submission_attempt = Column(TIMESTAMP)

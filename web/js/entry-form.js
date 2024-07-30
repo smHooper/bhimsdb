@@ -3146,21 +3146,24 @@ var BHIMSEntryForm = (function() {
 			}
 		}
 
+		const showFailedFilesMessage = failedFiles => {
+			const message = `
+				The following files could not be saved to the server:<br>
+				<ul>
+					<li>${failedFiles.join('</li><li>')}</li>
+				</ul>
+				<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
+			hideLoadingIndicator();
+			showModal(message, 'File uploads failed');
+		}
+
 		// When all of the uploads have finished (or failed), check if any failed. 
 		//	If they all succeeded, then insert data
 		$.when(
 			...deferreds
-		).then(function() {
+		).done(function() {
 			if (failedFiles.length) {
-
-				const message = `
-					The following files could not be saved to the server:<br>
-					<ul>
-						<li>${failedFiles.join('</li><li>')}</li>
-					</ul>
-					<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
-				hideLoadingIndicator();
-				showModal(message, 'File uploads failed');
+				showFailedFilesMessage(failedFiles);
 				return;
 			} else {
 				
@@ -3359,6 +3362,20 @@ var BHIMSEntryForm = (function() {
 					hideLoadingIndicator();
 				})
 			}
+		}).fail((failedXHR, status, error) => {
+			if (failedFiles.length) {
+				showFailedFilesMessage(failedFiles);
+			} else {
+				console.log(failedXHR.responseJSON || failedXHR.responseText);
+				showModal(
+					'An unexpected error occurred while saving data to the database. Make sure you' +
+					' are connected to the NPS network and try again. If the problem persists,' + 
+					' contact the database administrator.', 
+					'Database Error'
+				);
+				hideLoadingIndicator();
+			}
+			return; 
 		});
 	}
 

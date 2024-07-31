@@ -59,6 +59,8 @@ function runCmd($cmd) {
 		array('bypass_shell' => true)
 	);
 
+	$returnCode = proc_close($process);
+
 	if (is_resource($process)) {
 
 	    $stdout = stream_get_contents($pipes[1]);
@@ -78,6 +80,17 @@ function runCmd($cmd) {
 		return false;
 	}
 }
+
+// function runCmd($cmd) {
+// 	$output = null;
+// 	$resultCode = null;
+// 	exec($cmd, $output, $resultCode);
+
+// 	return array(
+// 		$result => $output,
+// 		$resultCode => $resultCode
+// 	);
+// }
 
 
 function deleteFile($filePath) {

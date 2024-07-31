@@ -41,54 +41,56 @@ function runQueryWithinTransaction($conn, $queryStr, $parameters=array()) {
 }
 
 
-// function runCmd($cmd) {
-// 	// can't get this to work for python commands because conda throws
-// 	// an error in conda-script (can't import cli.main)
-	
-// 	$pipes = array();
-// 	$process = proc_open(
-// 		$cmd, 
-// 		array(
-// 			0 => array("pipe", "r"), //STDIN
-// 		    1 => array('pipe', 'w'), // STDOUT
-// 		    2 => array('pipe', 'w')  // STDERR
-// 		), 
-// 		$pipes,
-// 		NULL,
-// 		NULL,
-// 		array('bypass_shell' => true)
-// 	);
-
-// 	if (is_resource($process)) {
-
-// 	    $stdout = stream_get_contents($pipes[1]);
-// 	    fclose($pipes[1]);
-
-// 	    $stderr = stream_get_contents($pipes[2]);
-// 	    fclose($pipes[2]);
-
-// 	    $returnCode = proc_close($process);
-
-// 		return array(
-// 			"stdout" => $stdout,
-// 			"stderr" => $stderr
-// 		);
-
-// 	} else {
-// 		return false;
-// 	}
-// }
-
 function runCmd($cmd) {
-	$output = null;
-	$resultCode = null;
-	exec($cmd, $output, $resultCode);
-
-	return array(
-		$result => $output,
-		$resultCode => $resultCode
+	// can't get this to work for python commands because conda throws
+	// an error in conda-script (can't import cli.main)
+	
+	$pipes = array();
+	$process = proc_open(
+		$cmd, 
+		array(
+			0 => array("pipe", "r"), //STDIN
+		    1 => array('pipe', 'w'), // STDOUT
+		    2 => array('pipe', 'w')  // STDERR
+		), 
+		$pipes,
+		NULL,
+		NULL,
+		array('bypass_shell' => true)
 	);
+
+	$returnCode = proc_close($process);
+
+	if (is_resource($process)) {
+
+	    $stdout = stream_get_contents($pipes[1]);
+	    fclose($pipes[1]);
+
+	    $stderr = stream_get_contents($pipes[2]);
+	    fclose($pipes[2]);
+
+	    $returnCode = proc_close($process);
+
+		return array(
+			"stdout" => $stdout,
+			"stderr" => $stderr
+		);
+
+	} else {
+		return false;
+	}
 }
+
+// function runCmd($cmd) {
+// 	$output = null;
+// 	$resultCode = null;
+// 	exec($cmd, $output, $resultCode);
+
+// 	return array(
+// 		$result => $output,
+// 		$resultCode => $resultCode
+// 	);
+// }
 
 
 function deleteFile($filePath) {

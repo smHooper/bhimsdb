@@ -2895,18 +2895,19 @@ var BHIMSEntryForm = (function() {
 		
 		// Reset submission page
 		const $confirmationContainer = $('.submition-confirmation-container')
-			.addClass('hidden');
+			.addClass('hidden').attr('aria-hidden', true);
 		const $postSubmitMessage = $('#post-submit-message');
 		$postSubmitMessage.find('.post-submit-append-message')
-			.addClass('hidden').attr('aria-hidden', false);
+			.addClass('hidden').attr('aria-hidden', true);
 		$postSubmitMessage.find('.encounter-id-text')
 			.text('');
 		// hide the link to the new submission
 		$('.success-query-link')
 			.attr('href', '#')
-			.addClass('hidden').attr('aria-hidden', false);
+			.addClass('hidden').attr('aria-hidden', true);
 		$confirmationContainer.siblings()
-			.removeClass('hidden');
+			.removeClass('hidden')
+			.attr('aria-hidden', false);
 
 		$('.form-footer').removeClass('transparent');
 
@@ -3329,7 +3330,8 @@ var BHIMSEntryForm = (function() {
 					// Send email notification only if this
 					const result = $.parseJSON(queryResultString)[0];
 					const queryURL = window.encodeURI(`query.html?{"encounters": {"id": {"value": ${result.id}, "operator": "="}}}`)
-					if (_this.userRolesForNotification.includes(parseInt(_this.userRole))) {
+					const userRole = parseInt(_this.userRole);
+					if (_this.userRolesForNotification.includes(userRole)) {
 						$.post({
 							url: 'flask/notifications/submission', 
 							data: {query_url: queryURL}
@@ -3340,8 +3342,8 @@ var BHIMSEntryForm = (function() {
 						})
 						.fail((xhr, status, error) => {console.log('Email notification failed with')})
 					}
-					// If this is an admin user, show them a link to the data via the query page
-					if (_this.userRole == 3) {
+					// If this is an rating or admin user, show them a link to the data via the query page
+					if (_this.dataAccessUserRoles.includes(userRole)) {
 						// Show encounter ID
 						if (parkFormID) {
 							const $postSubmitMessage = $('#post-submit-message');

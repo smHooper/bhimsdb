@@ -1862,7 +1862,7 @@ var BHIMSEntryForm = (function() {
 
 		const $el = $(e.target);
 		const maxLength = $el.data('max-length');
-		const valueLength = $el.val().length;
+		const valueLength = ($el.val() || '').length;
 		if (maxLength && valueLength && valueLength > maxLength) {
 			// Show a message if the user pressed any key other than delete or backspace
 			const keyCode = e.keyCode || e.charCode;

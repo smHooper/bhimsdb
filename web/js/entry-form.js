@@ -911,7 +911,7 @@ var BHIMSEntryForm = (function() {
 					.then(
 						doneFilter=function(queryResultString){
 							if (queryReturnedError(queryResultString)) {
-								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+								throw 'Placename coordinates query failed: ' + queryResultString;
 							} else {
 								const queryResult = $.parseJSON(queryResultString);
 								queryResult.forEach(function(object) {
@@ -920,7 +920,7 @@ var BHIMSEntryForm = (function() {
 							}
 						},
 						failFilter=function(xhr, status, error) {
-							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+							console.log(`Placename coordinates query failed with status ${status} because ${error}`)
 						}
 					);
 

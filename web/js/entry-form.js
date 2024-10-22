@@ -891,11 +891,27 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
+				queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+					.then(
+						doneFilter=function(queryResultString){
+							if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+							} else {
+								const queryResult = $.parseJSON(queryResultString);
+								queryResult.forEach(function(object) {
+									_this.backcountryUnitCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
+								})
+							}
+						},
+						failFilter=function(xhr, status, error) {
+							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+						}
+					);
 				queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
 					.then(
 						doneFilter=function(queryResultString){
 							if (queryReturnedError(queryResultString)) {
-								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+								throw 'Placename coordinates query failed: ' + queryResultString;
 							} else {
 								const queryResult = $.parseJSON(queryResultString);
 								queryResult.forEach(function(object) {
@@ -904,7 +920,7 @@ var BHIMSEntryForm = (function() {
 							}
 						},
 						failFilter=function(xhr, status, error) {
-							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+							console.log(`Placename coordinates query failed with status ${status} because ${error}`)
 						}
 					);
 

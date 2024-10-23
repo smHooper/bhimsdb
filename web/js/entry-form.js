@@ -894,12 +894,29 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
-				// ajax
+				// async
+				queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
+					.then(
+						doneFilter=function(queryResultString){
+							if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+							} else {
+								const queryResult = $.parseJSON(queryResultString);
+								queryResult.forEach(function(object) {
+									_this.backcountryUnitCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
+								})
+							}
+						},
+						failFilter=function(xhr, status, error) {
+							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+						}
+					);
+
 				queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
 					.then(
 						doneFilter=function(queryResultString){
 							if (queryReturnedError(queryResultString)) {
-								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
+								throw 'Placename coordinates query failed: ' + queryResultString;
 							} else {
 								const queryResult = $.parseJSON(queryResultString);
 								queryResult.forEach(function(object) {
@@ -908,7 +925,7 @@ var BHIMSEntryForm = (function() {
 							}
 						},
 						failFilter=function(xhr, status, error) {
-							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
+							console.log(`Placename coordinates query failed with status ${status} because ${error}`)
 						}
 					);
 
@@ -1832,7 +1849,7 @@ var BHIMSEntryForm = (function() {
 
 		const $el = $(e.target);
 		const maxLength = $el.data('max-length');
-		const valueLength = $el.val().length;
+		const valueLength = ($el.val() || '').length;
 		if (maxLength && valueLength && valueLength > maxLength) {
 			// Show a message if the user pressed any key other than delete or backspace
 			const keyCode = e.keyCode || e.charCode;
@@ -2320,7 +2337,7 @@ var BHIMSEntryForm = (function() {
 		const latDecimalSeconds = $('#input-lat_dec_sec').val();
 		const lonDecimalSeconds = $('#input-lon_dec_sec').val();
 
-		if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
+		if (latDegrees && latMinutes && lonDegrees && lonMinutes && latDecimalSeconds && lonDecimalSeconds) {
 			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
 			if (_this.markerIsOnMap()) { 
 				_this.confirmMoveEncounterMarker(latDDD, lonDDD);
@@ -2856,18 +2873,19 @@ var BHIMSEntryForm = (function() {
 		
 		// Reset submission page
 		const $confirmationContainer = $('.submition-confirmation-container')
-			.addClass('hidden');
+			.addClass('hidden').attr('aria-hidden', true);
 		const $postSubmitMessage = $('#post-submit-message');
 		$postSubmitMessage.find('.post-submit-append-message')
-			.addClass('hidden').attr('aria-hidden', false);
+			.addClass('hidden').attr('aria-hidden', true);
 		$postSubmitMessage.find('.encounter-id-text')
 			.text('');
 		// hide the link to the new submission
 		$('.success-query-link')
 			.attr('href', '#')
-			.addClass('hidden').attr('aria-hidden', false);
+			.addClass('hidden').attr('aria-hidden', true);
 		$confirmationContainer.siblings()
-			.removeClass('hidden');
+			.removeClass('hidden')
+			.attr('aria-hidden', false);
 
 		$('.form-footer').removeClass('transparent');
 
@@ -3107,21 +3125,24 @@ var BHIMSEntryForm = (function() {
 			}
 		}
 
+		const showFailedFilesMessage = failedFiles => {
+			const message = `
+				The following files could not be saved to the server:<br>
+				<ul>
+					<li>${failedFiles.join('</li><li>')}</li>
+				</ul>
+				<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
+			hideLoadingIndicator();
+			showModal(message, 'File uploads failed');
+		}
+
 		// When all of the uploads have finished (or failed), check if any failed. 
 		//	If they all succeeded, then insert data
 		$.when(
 			...deferreds
-		).then(function() {
+		).done(function() {
 			if (failedFiles.length) {
-
-				const message = `
-					The following files could not be saved to the server:<br>
-					<ul>
-						<li>${failedFiles.join('</li><li>')}</li>
-					</ul>
-					<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
-				hideLoadingIndicator();
-				showModal(message, 'File uploads failed');
+				showFailedFilesMessage(failedFiles);
 				return;
 			} else {
 				
@@ -3287,7 +3308,8 @@ var BHIMSEntryForm = (function() {
 					// Send email notification only if this
 					const result = $.parseJSON(queryResultString)[0];
 					const queryURL = window.encodeURI(`query.html?{"encounters": {"id": {"value": ${result.id}, "operator": "="}}}`)
-					if (_this.userRolesForNotification.includes(parseInt(_this.userRole))) {
+					const userRole = parseInt(_this.userRole);
+					if (_this.userRolesForNotification.includes(userRole)) {
 						$.post({
 							url: 'flask/notifications/submission', 
 							data: {query_url: queryURL}
@@ -3298,8 +3320,8 @@ var BHIMSEntryForm = (function() {
 						})
 						.fail((xhr, status, error) => {console.log('Email notification failed with')})
 					}
-					// If this is an admin user, show them a link to the data via the query page
-					if (_this.userRole == 3) {
+					// If this is an rating or admin user, show them a link to the data via the query page
+					if (_this.dataAccessUserRoles.includes(userRole)) {
 						// Show encounter ID
 						if (parkFormID) {
 							const $postSubmitMessage = $('#post-submit-message');
@@ -3320,6 +3342,20 @@ var BHIMSEntryForm = (function() {
 					hideLoadingIndicator();
 				})
 			}
+		}).fail((failedXHR, status, error) => {
+			if (failedFiles.length) {
+				showFailedFilesMessage(failedFiles);
+			} else {
+				console.log(failedXHR.responseJSON || failedXHR.responseText);
+				showModal(
+					'An unexpected error occurred while saving data to the database. Make sure you' +
+					' are connected to the NPS network and try again. If the problem persists,' + 
+					' contact the database administrator.', 
+					'Database Error'
+				);
+				hideLoadingIndicator();
+			}
+			return; 
 		});
 	}
 

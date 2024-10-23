@@ -79,6 +79,17 @@ function runCmd($cmd) {
 	}
 }
 
+// function runCmd($cmd) {
+// 	$output = null;
+// 	$resultCode = null;
+// 	exec($cmd, $output, $resultCode);
+
+// 	return array(
+// 		$result => $output,
+// 		$resultCode => $resultCode
+// 	);
+// }
+
 
 function deleteFile($filePath) {
 

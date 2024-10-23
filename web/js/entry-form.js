@@ -2366,7 +2366,7 @@ var BHIMSEntryForm = (function() {
 		const latDecimalSeconds = $('#input-lat_dec_sec').val();
 		const lonDecimalSeconds = $('#input-lon_dec_sec').val();
 
-		if (latDegrees && latDecimalMinutes && lonDegrees && lonDecimalMinutes && latDecimalSeconds && lonDecimalSeconds) {
+		if (latDegrees && latMinutes && lonDegrees && lonMinutes && latDecimalSeconds && lonDecimalSeconds) {
 			var [latDDD, lonDDD] = coordinatesToDDD(latDegrees, lonDegrees, latMinutes, lonMinutes, latDecimalSeconds, lonDecimalSeconds);
 			if (_this.markerIsOnMap()) { 
 				_this.confirmMoveEncounterMarker(latDDD, lonDDD);

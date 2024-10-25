@@ -106,10 +106,10 @@ var BHIMSEntryForm = (function() {
 				this.dbSchema = this.serverEnvironment === 'prod' ? 'public' : 'dev';
 			})
 
-		//var _this = this; //this hack needed for scope of anonymous functions to reach the Constructor object
 		// ajax
 		var deferred = $.Deferred();
-		const userInfoDeferred = getUserInfo()
+		const offlineID = queryParams.offlineid
+		const userInfoDeferred = getUserInfo(offlineID)
 			.then(result => {
 				if (pythonReturnedError(result)) {
 

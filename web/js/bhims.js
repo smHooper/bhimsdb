@@ -93,7 +93,7 @@ function hideLoadingIndicator(caller) {
 	}
 
 	// Hide the indicator if there are no more callers
-	if (!indicator.data('callers').length) {
+	if (!(indicator.data('callers') || []).length) {
 		$('#loading-indicator-background').addClass('hidden');
 		indicator.addClass('hidden');
 	}
@@ -150,9 +150,10 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 }
 
 
-function getUserInfo() {
+function getUserInfo(offlineID=null) {
+	const offlineIDString = offlineID ? '/' + offlineID : ''
 	return $.get({
-		url: 'flask/user_info',
+		url: 'flask/user_info' + offlineIDString,
 	}).done(function(resultString) {
 		if (pythonReturnedError(resultString)) {
 			const message = 'An error occurred while retrieving user information. Try reloading the page. If this problem persists, contact your system administrator.'
@@ -456,7 +457,7 @@ function parseURLQueryString(queryString=window.location.search) {
 					} else {
 						// Need to return [key, value]
 						return [
-							s.slice(0, match.index), 
+							s.slice(0, match.index).toLowerCase(), 
 							s.slice(match.index + 1, s.length) //+1 to skip the = separator
 						]
 					}

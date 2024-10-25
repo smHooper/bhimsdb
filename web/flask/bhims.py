@@ -5,6 +5,7 @@ import re
 from sqlalchemy import create_engine, select, update, text as sqlatext
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 import bcrypt
 #import pandas as pd
 import smtplib
@@ -55,7 +56,14 @@ def get_schema() -> str:
 def get_engine(access='read'):
 	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
 	schema = get_schema()
-	return create_engine(url, execution_options={'schema_translate_map': {'public': schema, None: schema}})
+	
+	# Use NullPool to prevent connection pooling. Since IIS spins up a 
+	#	new instance for every request (or maybe just every request 
+	#	with a different URL), each app instance creates its own connection. 
+	#	With SQLAlchemy connection pooling, connections stay open and the 
+	#	postgres simultaneous connection limit can easily be exceeded
+	return create_engine(url, poolclass=NullPool)\
+		.execution_options(schema_translate_map={'public': schema, None: schema})
 
 
 def get_config_from_db(schema='public'):
@@ -130,7 +138,7 @@ def hello():
 
 
 # -------------- User Management ---------------- #
-def query_user_info(username):
+def query_user_info(username: str='', offline_id:str=''):
 	"""
 	Helper function to get DB user info using AD username 
 	"""
@@ -141,7 +149,10 @@ def query_user_info(username):
 		User.role,
 		User.offline_id
 	).where(
-		User.ad_username == username
+		(User.ad_username == username) 
+		if username 
+		else
+		(User.offline_id == offline_id) 
 	)
 
 	with WriteSession() as session:
@@ -156,6 +167,8 @@ def query_user_info(username):
 				offline_id=str(uuid4())
 			)
 			session.add(User(**insert_data))
+			session.commit()
+			
 			return insert_data
 			
 
@@ -180,7 +193,15 @@ def get_user_info():
 		else:
 			return json.dumps({'ad_username': username, 'user_role_code': None, 'user_status_code': None})
 
-	return query_user_info(username)
+	return query_user_info(username=username)
+
+
+@app.route('/flask/user_info/<offline_id>', methods=['GET', 'POST'])
+def get_user_info_offline(offline_id):
+	if not offline_id:
+		raise ValueError('offline_id cannot be null')
+
+	return query_user_info(offline_id=offline_id)
 # -------------- User Management ---------------- #
 
 

@@ -541,4 +541,5 @@ class User(Base):
 
     ad_username = Column(VARCHAR(50))
     role = Column(INTEGER, ForeignKey(UserRoleCode.code))
+    offline_id = Column(VARCHAR(50))
     last_submission_attempt = Column(TIMESTAMP)

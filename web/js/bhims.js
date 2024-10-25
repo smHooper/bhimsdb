@@ -36,6 +36,10 @@ function queryDB(sql, {schema='public'}={}) {
 	});
 }
 
+function print(args) {
+	console.log(args)
+}
+
 
 function fillSelectOptions(selectElementID, options, optionClassName='') {
 	
@@ -147,7 +151,7 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 
 
 function getUserInfo() {
-	return $.post({
+	return $.get({
 		url: 'flask/user_info',
 	}).done(function(resultString) {
 		if (pythonReturnedError(resultString)) {
@@ -407,7 +411,7 @@ Helper function to ask server if the app is running in the production or develop
 */
 function getEnvironment() {
 
-	return $.post({
+	return $.get({
 		url: '/flask/environment'
 	});
 }
@@ -428,7 +432,7 @@ Load configuration values from the database
 */
 function loadConfigValues(config) {
 
-	return $.post({url: '/flask/db_config'})
+	return $.get({url: '/flask/db_config'})
 		.done(response => {
 			if (pythonReturnedError(response)) {
 				print('Problem querying config values: ' + response);
@@ -468,5 +472,27 @@ function parseURLQueryString(queryString=window.location.search) {
 	} else {
 		// no search string so return an empty object
 		return {};
+	}
+}
+
+
+function registerServiceWorker() {
+	/*
+	Try to register the ServiceWorker. If the user's browser doesn't 
+	support he API and they've installed the PWA, warn them 
+	*/
+	// register service worker
+	if ('serviceWorker' in navigator) {
+		navigator.serviceWorker.register('/service-worker.js');
+		return true;
+	} else if (isPWA()) {
+		const message = 'You\'ve installed the BHIMS app but your system does' + 
+			' not support the ServiceWorker API, which is necessary for the' + 
+			' app to run properly. Contact your database administrator to help' +
+			' you install the app properly on your mobile device';
+		showModal(message, 'System Not Supported')
+		return false;
+	} else {
+		return false;
 	}
 }

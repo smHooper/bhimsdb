@@ -18,13 +18,13 @@
 			"src": "pwa/screenshots/entry-screenshot-1.jpg",
 			"type": "image/jpg",
 			"form_factor": "wide",
-			"label": "Home Page"
+			"label": "Entry Form"
 		},
 		{
-			"src": "pwa/screenshots/index-screenshot-2.jpg",
+			"src": "pwa/screenshots/entry-screenshot-2.jpg",
 			"type": "image/jpg",
 			"form_factor": "wide",
-			"label": "Home Page"
+			"label": "Entry Form"
 		}
 	],
 	"icons": [

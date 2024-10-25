@@ -6,9 +6,10 @@ from sqlalchemy import create_engine, select, update, text as sqlatext
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 import bcrypt
-import pandas as pd
+#import pandas as pd
 import smtplib
 import base64
+from uuid import uuid4
 
 from datetime import datetime
 from argparse import Namespace
@@ -38,7 +39,7 @@ if not app.config.from_file(CONFIG_FILE, load=json.load):
 	raise IOError(f'Could not read CONFIG_FILE: {CONFIG_FILE}')
 
 
-@app.route('/flask/environment', methods=['POST'])
+@app.route('/flask/environment', methods=['GET'])
 def get_environment() -> str:
 	""" return a string indicating whether this is the production or development env."""
 	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
@@ -54,14 +55,14 @@ def get_schema() -> str:
 def get_engine(access='read'):
 	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
 	schema = get_schema()
-	return create_engine(url, execution_options={'schema_translate_map': {None: schema}})
+	return create_engine(url, execution_options={'schema_translate_map': {'public': schema, None: schema}})
 
 
-def get_config_from_db():
+def get_config_from_db(schema='public'):
 	engine = get_engine()
 	db_config = {}		
 	with engine.connect() as conn:
-		cursor = conn.execute('TABLE config')
+		cursor = conn.execute(f'TABLE {schema}.config')
 		for row in cursor:
 			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
@@ -73,9 +74,6 @@ def get_config_from_db():
 			db_config[row['property']] = value
 
 	return db_config
-
-# Add to app.config
-get_config_from_db()
 
 
 def get_unique_id() -> str:
@@ -104,12 +102,17 @@ def get_config_from_db(schema='public'):
 	with engine.connect() as conn:
 		cursor = conn.execute(f'TABLE {schema}.config')
 		for row in cursor:
-			app.config[row['property']] = (
+			property_name = row['property']
+			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
 				int(row['value']) if row['data_type'] == 'integer' else
 				(row['value'] == 'true') if row['data_type'] == 'boolean' else
 				row['value']
 			)
+			app.config[property_name] = value
+			db_config[property_name] = value
+
+	return db_config
 
 db_schema = get_db_schema()
 get_config_from_db(db_schema)
@@ -132,31 +135,33 @@ def query_user_info(username):
 	Helper function to get DB user info using AD username 
 	"""
 
-	schema = get_schema()
+	statement = select(
+		User.id,
+		User.ad_username,
+		User.role,
+		User.offline_id
+	).where(
+		User.ad_username == username
+	)
 
-	sql = f'''
-		SELECT id, 
-			:username AS ad_username, 
-			role 
-		FROM {schema}.users 
-		WHERE ad_username=:username 
-	'''
-
-	engine = get_engine('write')
-	result = engine.execute(sqlatext(sql), {'username': username})
-	if result.rowcount == 0:
-		# Add the user with the data entry role
-		sql = f'''
-			INSERT INTO {schema}.users (ad_username, role) 
-			VALUES (:username, 1)
-		'''
-		engine.execute(sqlatext(sql), {'username': username})
-	else:
-		return result.first()._asdict()
+	with WriteSession() as session:
+		result = session.execute(statement).first()
+		if result:
+			return result._asdict()
+		else:
+			# Add the user with the data entry role
+			insert_data = dict(
+				ad_username=username,
+				role=1,
+				offline_id=str(uuid4())
+			)
+			session.add(User(**insert_data))
+			return insert_data
+			
 
 
 # Get username and role
-@app.route('/flask/user_info', methods=['POST'])
+@app.route('/flask/user_info', methods=['GET'])
 def get_user_info():
 	
 	username = ''
@@ -180,7 +185,7 @@ def get_user_info():
 
 
 # -------------- Entry Form Config ---------------- #
-@app.route('/flask/db_config', methods=['POST'])
+@app.route('/flask/db_config', methods=['GET'])
 def db_config():
 	return get_config_from_db()
 

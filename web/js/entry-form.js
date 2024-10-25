@@ -93,6 +93,9 @@ var BHIMSEntryForm = (function() {
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
 
+		// Register the service worker to make the app run as a PWA
+		registerServiceWorker();
+
 		const queryParams = parseURLQueryString();
 		this.presentMode = queryParams.present === 'true'
 
@@ -1093,26 +1096,19 @@ var BHIMSEntryForm = (function() {
 	*/
 	Constructor.prototype.getFormConfiguration = function() {
 
-		if (isPWA()) {
-			// get config
-
-			// Synchronously loading data so return a resolved promise
-			return $.Deferred().resolve();
-		} else {
-			return $.get({url: '/flask/entry_form_config'})
-				.done(response => {
-					if (pythonReturnedError(response)) {
-						showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
-					} else {
-						this.formConfiguration = deepCopy(response.form_config);
-						this.acceptedAttachmentExtensions = deepCopy(response.accepted_attachment_extensions);
-						this.getFieldInfo(this.formConfiguration.fields);
-					}
-				})
-				.fail((xhr, status, error) => {
+		return $.get({url: '/flask/entry_form_config'})
+			.done(response => {
+				if (pythonReturnedError(response)) {
 					showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
-				})
-		}
+				} else {
+					this.formConfiguration = deepCopy(response.form_config);
+					this.acceptedAttachmentExtensions = deepCopy(response.accepted_attachment_extensions);
+					this.getFieldInfo(this.formConfiguration.fields);
+				}
+			})
+			.fail((xhr, status, error) => {
+				showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
+			})
 	}
 
 

@@ -399,6 +399,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     ad_username varchar(50),
     role INTEGER REFERENCES user_role_codes(code) ON UPDATE CASCADE ON DELETE RESTRICT,
+    offline_id varchar(50) DEFAULT gen_random_uuid(),
     last_submission_attempt TIMESTAMP
 );
 

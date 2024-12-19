@@ -70,7 +70,7 @@ def get_config_from_db(schema='public'):
 	engine = get_engine()
 	db_config = {}		
 	with engine.connect() as conn:
-		cursor = conn.execute(f'TABLE {schema}.config')
+		cursor = conn.execute(f'TABLE {db_schema}.config')
 		for row in cursor:
 			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
@@ -108,7 +108,7 @@ def get_config_from_db(schema='public'):
 	engine = get_engine()
 	db_config = {}		
 	with engine.connect() as conn:
-		cursor = conn.execute(f'TABLE {schema}.config')
+		cursor = conn.execute(f'TABLE {db_schema}.config')
 		for row in cursor:
 			property_name = row['property']
 			value = (
@@ -235,7 +235,7 @@ def entry_form_config():
 		fields_sql = f'''
 			SELECT 
 				fields.* 
-			FROM {schema}.data_entry_fields fields 
+			FROM {db_schema}.data_entry_fields fields 
 				JOIN data_entry_field_containers containers 
 				ON fields.field_container_id=containers.id 
 			WHERE 
@@ -273,7 +273,7 @@ def lookup_options():
 		lookup_tables = {}
 		for table_row in conn.execute(sqlatext(sql)):
 			table_name = table_row.table_name
-			lookup_sql = f'SELECT * FROM {schema}.{table_name} WHERE sort_order IS NOT NULL ORDER BY sort_order'
+			lookup_sql = f'SELECT * FROM {db_schema}.{table_name} WHERE sort_order IS NOT NULL ORDER BY sort_order'
 			lookup_tables[table_name] = [lookup_row._asdict() for lookup_row in conn.execute(lookup_sql)]
 
 	return lookup_tables

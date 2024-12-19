@@ -214,24 +214,23 @@ def db_config():
 @app.route('/flask/entry_form_config', methods=['GET'])
 def entry_form_config():
 
-	schema = get_schema()
 	engine = get_engine()
 	with engine.connect() as conn:
 		pages = {
 			row.id: row._asdict() for row in 
-			conn.execute(f'SELECT * FROM {schema}.data_entry_pages ORDER BY page_index')
+			conn.execute(f'SELECT * FROM {db_schema}.data_entry_pages ORDER BY page_index')
 		}
 		sections = {
 			row.id: row._asdict() for row in 
-			conn.execute(f'SELECT * FROM {schema}.data_entry_sections WHERE is_enabled ORDER BY display_order')
+			conn.execute(f'SELECT * FROM {db_schema}.data_entry_sections WHERE is_enabled ORDER BY display_order')
 		}
 		accordions = {
 			row.id: row._asdict() for row in 
-			conn.execute(f'SELECT * FROM {schema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order')
+			conn.execute(f'SELECT * FROM {db_schema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order')
 		}
 		containers = {
 			row.id: row._asdict() for row in 
-			conn.execute(f'SELECT * FROM {schema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order')
+			conn.execute(f'SELECT * FROM {db_schema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order')
 		}
 		fields_sql = f'''
 			SELECT 
@@ -251,7 +250,7 @@ def entry_form_config():
 		}
 		accepted_attachment_extensions = {
 			row.code: row.accepted_file_ext for row in
-			conn.execute(f'SELECT code, accepted_file_ext FROM {schema}.file_type_codes WHERE sort_order IS NOT NULL')
+			conn.execute(f'SELECT code, accepted_file_ext FROM {db_schema}.file_type_codes WHERE sort_order IS NOT NULL')
 		}
 
 		return {
@@ -268,14 +267,13 @@ def entry_form_config():
 
 @app.route('/flask/lookup_options', methods=['GET'])
 def lookup_options():
-	schema = get_schema()
 	engine = get_engine()
-	sql = f''' SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema='{schema}' AND table_name LIKE '%_codes' AND column_name='sort_order' '''
+	sql = f''' SELECT DISTINCT table_name FROM information_schema.columns WHERE table_schema='{db_schema}' AND table_name LIKE '%_codes' AND column_name='sort_order' '''
 	with engine.connect() as conn:
 		lookup_tables = {}
 		for table_row in conn.execute(sqlatext(sql)):
 			table_name = table_row.table_name
-			lookup_sql = f'SELECT * FROM {table_name} WHERE sort_order IS NOT NULL ORDER BY sort_order'
+			lookup_sql = f'SELECT * FROM {schema}.{table_name} WHERE sort_order IS NOT NULL ORDER BY sort_order'
 			lookup_tables[table_name] = [lookup_row._asdict() for lookup_row in conn.execute(lookup_sql)]
 
 	return lookup_tables
@@ -292,7 +290,7 @@ def create_park_form_id(encounter_id):
 	sql = f'''
 		WITH search_date AS (
 			SELECT datetime_entered AS search_date
-			FROM encounters
+			FROM {db_schema}.encounters
 			WHERE id={encounter_id}
 		)
 		SELECT
@@ -301,7 +299,7 @@ def create_park_form_id(encounter_id):
 		FROM (
 			SELECT 
 				start_date, start_time, id, row_number() OVER (ORDER BY datetime_entered)
-			FROM encounters 
+			FROM {db_schema}.encounters 
 			JOIN search_date ON 
 				extract(year FROM encounters.datetime_entered) = extract(year FROM search_date.search_date) AND 
 				encounters.datetime_entered <= search_date.search_date
@@ -333,7 +331,7 @@ def get_next_park_form_id(year):
 		SELECT 
 			count(*) + 1 AS form_count, 
 			max(extract(year FROM start_date)) AS "%%Y" 
-		FROM encounters 
+		FROM {db_schema}.encounters 
 		WHERE extract(year FROM start_date)={year}
 	'''
 	with engine.connect() as conn:

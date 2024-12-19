@@ -1010,14 +1010,29 @@ var BHIMSQuery = (function(){
 	Helper function to get a parametized SQL UPDATE statement
 	*/
 	Constructor.prototype.getUpdateSQL = function(tableName, fieldValues, idField, id) {
-		var sortedFields = Object.keys(fieldValues).sort();
-		var parameters = sortedFields.map(f => fieldValues[f]);
-		parametized = [];
-		for (const index in sortedFields) {
-			parametized.push(`${sortedFields[index]}=$${parseInt(index) + 1}`);
-		}
-		const sql = `UPDATE ${tableName} SET ${parametized.join(', ')} WHERE ${idField}=${id};`
-		
+		const sortedFields = Object.keys(fieldValues).sort();
+		const parameters = sortedFields.map(f => fieldValues[f]);
+		const parametized = sortedFields
+			.map((field, index) => `${field}=$${index + 1}`)
+			.join(', ');
+		const sql = `UPDATE ${tableName} SET ${parametized} WHERE ${idField}=${id};`;
+
+		return [sql, parameters];
+	}
+
+
+	/*
+	Helper function to get a parametized SQL INSERT statement
+	*/
+	Constructor.prototype.getInsertSQL = function(tableName, fieldValues, idField) {
+		const sortedFields = Object.keys(fieldValues).sort();
+		const parameters = sortedFields.map(f => fieldValues[f]);
+		const parametized = sortedFields
+			.map((field, index) => `$${index + 1}`)
+			.join(', ');
+
+		const sql = `INSERT INTO ${tableName} (${sortedFields.join(', ')}) VALUES (${parametized}) RETURNING id`;
+
 		return [sql, parameters];
 	}
 
@@ -1063,11 +1078,17 @@ var BHIMSQuery = (function(){
 		//TODO: need to handle attachment changes/new attachments
 		//TODO: also need to make sure all required fields are filled in somehow 
 
-		var oneToOneUpdates = {},
-			oneToManyUpdates = {},
+		var oneToOneEdits = {},
+			oneToManyEdits = {},
 			sqlStatements = [],
-			sqlParameters = [];
+			sqlParameters = [],
+			multipleSelectStatements = [],
+			multipleSelectParameters = [],
+			inserts = []; // for updating query result after save
 		//var fileUploads = {};
+
+		const queryRecord = _this.queryResult[_this.selectedID];
+
 		for (const input of $dirtyInputs) {
 			const $input = $(input);
 			let inputValue = $input.val();
@@ -1096,9 +1117,9 @@ var BHIMSQuery = (function(){
 			//	append it to the appropriate object (as IDed by the index of the card)
 			if ($accordion.length) {
 				// If this is the first time a field has been changed in this 
-				//	table, oneToManyUpdates[tableName] will be undefined
-				if (!oneToManyUpdates[tableName]) oneToManyUpdates[tableName] = {};
-				const tableUpdates = oneToManyUpdates[tableName];
+				//	table, oneToManyEdits[tableName] will be undefined
+				if (!oneToManyEdits[tableName]) oneToManyEdits[tableName] = {};
+				const tableUpdates = oneToManyEdits[tableName];
 
 				// Get the index of this card within the accordion
 				const index = $input.closest('.card').index() - 1;//attr('id').match(/\d+$/)[0];
@@ -1109,7 +1130,7 @@ var BHIMSQuery = (function(){
 				//	relationship for this table and this encounter. In that case, the id will 
 				//	remain undefined. Otherwise, set the ID so the item can be updated
 				if (entryForm.fieldValues[tableName] != undefined) {
-					const queryRecord = _this.queryResult[_this.selectedID];
+					
 					if (tableName in queryRecord && index in queryRecord[tableName] && index in entryForm.fieldValues[tableName]) {
 						// Get DB row ID from queryResult because entryForm.fieldValues doesn't have it
 						tableUpdates[index].id = (queryRecord[tableName][index] || {}).id; // will be undefined if this is a new card
@@ -1125,36 +1146,91 @@ var BHIMSQuery = (function(){
 				sqlParameters.push([encounterID]);
 
 				const [statements, params] = entryForm.getMultipleSelectSQL(input, encounterID);
-				sqlStatements = [...sqlStatements, ...statements];
-				sqlParameters = [...sqlParameters, ...params];
+				// Because there could be other inserts that the tables for multiple selects
+				//	depend on, these should be last in the execution order
+				multipleSelectStatements = [...multipleSelectStatements, ...statements];
+				multipleSelectParameters = [...multipleSelectParameters, ...params];
 
 			} else {
-				if (!oneToOneUpdates[tableName]) oneToOneUpdates[tableName] = {};
-				oneToOneUpdates[tableName][fieldName] = inputValue;
+				if (!oneToOneEdits[tableName]) oneToOneEdits[tableName] = {};
+				oneToOneEdits[tableName][fieldName] = inputValue;
 			}
 		}
 
 		// Add meta fields to encounters table
-		if (!('encounters' in oneToOneUpdates)) oneToOneUpdates.encounters = {};
-		oneToOneUpdates.encounters.last_edited_by = entryForm.username;
-		oneToOneUpdates.encounters.datetime_last_edited = getFormattedTimestamp();
+		if (!('encounters' in oneToOneEdits)) oneToOneEdits.encounters = {};
+		oneToOneEdits.encounters.last_edited_by = entryForm.username;
+		oneToOneEdits.encounters.datetime_last_edited = getFormattedTimestamp();
 		
-		for (const tableName in oneToOneUpdates) {
-			const updates = oneToOneUpdates[tableName];
-			// If this is just a normal table update (not part of a 1-to-many relationship), 
-			//	just construct the UPDATE statement
-			const idField = tableName === 'encounters' ? 'id' : 'encounter_id';
-			var [sql, parameters] = _this.getUpdateSQL(tableName, updates, idField, _this.selectedID);
+		for (const tableName in oneToOneEdits) {
+			const updates = oneToOneEdits[tableName];
+
+			// if every field in this table is undefined in the queryResult, 
+			//	this needs to be an insert. Otherwise, it's an update
+			const tableValues = Object.values(entryForm.fieldInfo)
+				.filter(i => i.table_name === tableName)
+				.map(i => queryRecord[i.field_name]);
+			const isInsert = tableValues.every(v => v === undefined);
+			var sql,
+				parameters;
+			if (isInsert) {
+				updates.encounter_id = _this.selectedID;
+				[sql, parameters] = _this.getInsertSQL(tableName, updates, 'id');
+				inserts.push({
+					sqlIndex: sqlStatements.length,
+					tableName: tableName, 
+					fieldValues: {...updates}
+				});
+			} else {
+				// If this is just a normal table update (not part of a 1-to-many relationship), 
+				//	just construct the UPDATE statement
+				const idField = tableName === 'encounters' ? 'id' : 'encounter_id';
+				[sql, parameters] = _this.getUpdateSQL(tableName, updates, idField, _this.selectedID);
+			}
 			sqlStatements.push(sql);
 			sqlParameters.push(parameters);
 		} 
+
+		// Create SQL statements for all other updates
+		for (const tableName in oneToManyEdits) {
+
+			// Either UPDATE the proper row or INSERT if this is a new row
+			const updates = oneToManyEdits[tableName];
+			for (const cardID in updates) {
+				const dbID = updates[cardID].id;
+				var values = updates[cardID].values;
+				if (dbID === undefined) {
+					// new row that needs to be INSERTed
+					// Add the encounter_id field, since all related records need this
+					values['encounter_id'] = _this.selectedID;
+					const [sql, parameters] = _this.getInsertSQL(tableName, values, 'id');
+					inserts.push({
+						sqlIndex: sqlStatements.length,
+						tableName: tableName,
+						fieldValues: {...values},
+						tableIndex: cardID
+					});
+					sqlStatements.push(sql);
+					sqlParameters.push(parameters);
+				} else {
+					// just a regular UPDATE
+					var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
+					sqlStatements.push(sql);
+					sqlParameters.push(parameters);			
+				}
+			}
+		}
+
+		// Add SQL statements for multiple selects last
+		sqlStatements = [...sqlStatements, ...multipleSelectStatements];
+		sqlParameters = [...sqlParameters, ...multipleSelectParameters];
 
 		// Gather info from any attachments where the actual attachment (not associated fields)
 		//	were updated
 		var failedFiles = [];
 		var fileUploadDeferreds = [];
-		if ('attachments' in oneToManyUpdates) {
-			updates = oneToManyUpdates.attachments;
+		if ('attachments' in oneToManyEdits) {
+			updates = oneToManyEdits.attachments;
 			for (const attachmentIndex in updates) {
 				if ('uploadedFile' in updates[attachmentIndex].values) {
 					const uploadInfo = updates[attachmentIndex];
@@ -1211,9 +1287,9 @@ var BHIMSQuery = (function(){
 		}
 
 		
-		$.when(
+		return $.when(
 			...fileUploadDeferreds
-		).done(() => {
+		).then(() => {
 			
 			if (failedFiles.length) {
 				const message = `
@@ -1224,35 +1300,7 @@ var BHIMSQuery = (function(){
 					<br>Your encounter was not saved as a result. Check your internet and network connection, and try to submit the encounter again.`;
 				hideLoadingIndicator();
 				showModal(message, 'File uploads failed');
-				return;
-			}
-
-			// Create SQL statements for all other updates
-			for (const tableName in oneToManyUpdates) {
-
-				// Either UPDATE the proper row or INSERT if this is a new row
-				const updates = oneToManyUpdates[tableName];
-				for (const cardID in updates) {
-					const dbID = updates[cardID].id;
-					var values = updates[cardID].values;
-					if (dbID === undefined) {
-						// new row that needs to be INSERTed
-						// Add the encounter_id field, since all related records need this
-						values['encounter_id'] = _this.selectedID;
-						
-						const sortedFields = Object.keys(values).sort();
-						var parameters = sortedFields.map(f => values[f]);
-						parametized = '$' + sortedFields.map(f => sortedFields.indexOf(f) + 1).join(', $');
-						sql = `INSERT INTO ${tableName} (${sortedFields.join(', ')}) VALUES (${parametized}) RETURNING id;`;
-						sqlStatements.push(sql);
-						sqlParameters.push(parameters);
-					} else {
-						// just a regular UPDATE
-						var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
-						sqlStatements.push(sql);
-						sqlParameters.push(parameters);			
-					}
-				}
+				return $.Deferred().reject();
 			}
 
 			// In case this dummy function isn't implemented, only do reassign the sql vars if 
@@ -1261,7 +1309,7 @@ var BHIMSQuery = (function(){
 			if (beforeSaveResult && beforeSaveResult.length === 2) [sqlStatements, sqlParameters] = beforeSaveResult;
 
 			// Send queries to server
-			$.ajax({
+			return $.ajax({
 				url: 'bhims.php',
 				method: 'POST',
 				data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
@@ -1273,51 +1321,51 @@ var BHIMSQuery = (function(){
 
 				if (queryReturnedError(queryResultString)) {
 					showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.`, 'Unexpected error')
-					return;
+					return $.Deferred().reject();
 				} else {
 					// For any INSERTs, the result will contain the id from the associated table for the new record
 					const result = $.parseJSON(queryResultString);
 
 					$dirtyInputs.removeClass('dirty');
 					// Set values in the in-memory queried data so when this record is reloaded, it has the right values
-					for (const tableName in oneToOneUpdates) {
-						const updates = oneToOneUpdates[tableName];
+					for (const tableName in oneToOneEdits) {
+						const updates = oneToOneEdits[tableName];
 						for (const fieldName in updates) {
 							selectedEncounterData[fieldName] = updates[fieldName];
 						}
 					}
-					// Keep track of which SQL update is being processed so that the returned ID can be assigned 
-					//	to the entryForm.fieldValues for any INSERTed rows. The purpose of this is so that if the
-					//	user makes a change to a card that was added during this session, the saveEdits function 
-					//	will know that this is now an UPDATE, not an INSERT.
-					var updateIndex = Object.keys(oneToOneUpdates).length;
-
-					for (const tableName in oneToManyUpdates) {
-						const updates = oneToManyUpdates[tableName];
-						for (const index in updates) {
-							const rowValues = updates[index].values;
+					// Update in-memory data. For one-to-one tables, this just means adding
+					//	each field's values to the queryResult record. For one-to-many,
+					//	results need to be added to both the queryResult and fieldValues
+					for (const {sqlIndex, tableName, fieldValues, tableIndex} of inserts) {
+						// tableIndex is only defined for one-to-many inserts
+						if (tableIndex === undefined) {
+							// this is a one-to-one update
+							for (const [name, value] of Object.entries(fieldValues)) {
+								selectedEncounterData[name] = value;
+							}
+						} else {
 							// Only INSERTs will return an ID. Otherwise, the return result will be null
-							if (result[updateIndex]) rowValues.id = result[updateIndex].id;
-							
+							fieldValues.id = (result[sqlIndex] || {}).id;
+
 							// If this was an insert, no record exists in the queried data yet
 							if (!selectedEncounterData[tableName]) {
 								selectedEncounterData[tableName] = [];
 							}
-							const selectedRowData = selectedEncounterData[tableName][index];
+							const selectedRowData = selectedEncounterData[tableName][tableIndex];
 							if (!selectedRowData) {
-								selectedEncounterData[tableName][index] = {...rowValues};
+								selectedEncounterData[tableName][tableIndex] = {...fieldValues};
 							} else {
-								for (fieldName in rowValues) {
+								for (fieldName in fieldValues) {
 									if (fieldName in selectedRowData) {
-										selectedRowData[fieldName] = rowValues[fieldName];
+										selectedRowData[fieldName] = fieldValues[fieldName];
 									}
 								}
 							}
-							updateIndex ++; //increment to match the returned result from the queries
-						}
 
-						// Use deep copy to avoid tying fieldValues to queryResult
-						entryForm.fieldValues[tableName] = deepCopy(selectedEncounterData[tableName])
+							// Use deep copy to avoid tying fieldValues to queryResult
+							entryForm.fieldValues[tableName] = deepCopy(selectedEncounterData[tableName])
+						}
 					}
 
 					// Call in case it's implemented in bhims-custom.js

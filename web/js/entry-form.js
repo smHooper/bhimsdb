@@ -897,7 +897,6 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
-				// async
 				queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
 					.then(
 						doneFilter=function(queryResultString){

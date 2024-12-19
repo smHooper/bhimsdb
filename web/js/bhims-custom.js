@@ -39,7 +39,7 @@ function customizeEntryForm() {
 
 	const $personCard = $reactionCards.first();
 	// If the reaction_code field isn't yet set, set the select options
-	if ($personCard.find('.input-field[name="reaction_code"]').val() === '') {
+	if (!$personCard.find('.input-field[name="reaction_code"]').val()) {
 		$personCard.find('.input-field[name="reaction_by"]').val(1).change();//set to person
 	}
 	$personCard.find('.card-link-label').text('What was your initial reaction when you first observed the bear?');
@@ -48,7 +48,7 @@ function customizeEntryForm() {
 	if (!$bearCard.length) {
 		$bearCard = entryForm.addNewCard($reactionsAccordion);
 	}
-	if ($bearCard.find('.input-field[name="reaction_code"]').val() === '') {
+	if (!$bearCard.find('.input-field[name="reaction_code"]').val()) {
 		$bearCard.find('.input-field[name="reaction_by"]').val(2).change();//set to bear
 	}
 	$bearCard.find('.card-link-label').text(`What was the bear's PRIMARY reaction to your presence?`);

@@ -15,6 +15,7 @@ const PRECACHE_RESOURCES = [
 	'/css/entry-form-dena.css',
 	'/imgs/favicon.ico',
 	'/flask/db_config',
+	'/flask/db/select/locations',
 	'/flask/entry_form_config',
 	'/flask/environment',
 	'/flask/lookup_options',

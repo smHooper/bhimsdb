@@ -88,6 +88,32 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.getLocationCoordinates = function() {
+		return $.get({
+			url: '/flask/db/select/locations',
+		}).done(response => {
+			if (pythonReturnedError(response)) {
+				const message = 
+					'Default coordinates for encounter locations could not be loaded. When you select' + 
+					' a placename or backcountry unit where the encounter occurred, the latitude and' +
+					' longitude will not be filled with default values. You should fill in these fields' +
+					' mannually if you know the location where the encounter occurred.';
+				showModal(message, 'Warning: Default Coordinates Unavailable');
+			} else {
+				const result = response.data || {};
+				for (const {code, latitude, longitude} of (result.backcountry_unit_codes || [])) {
+					_this.backcountryUnitCoordinates[code] = {lat: latitude, lon: longitude}
+				};
+				for (const {code, latitude, longitude} of (result.place_name_codes || [])) {
+					_this.placeNameCoordinates[code] = {lat: latitude, lon: longitude}
+				};
+			}
+		}).fail(() => {
+			print('getting placename/BC coordinates failed')
+		})
+	}
+
+
 	/* 
 	Configure the form using meta tables in the database
 	*/
@@ -897,39 +923,7 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
-				queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
-								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
-							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								queryResult.forEach(function(object) {
-									_this.backcountryUnitCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
-								})
-							}
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
-						}
-					);
-
-				queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryReturnedError(queryResultString)) {
-								throw 'Placename coordinates query failed: ' + queryResultString;
-							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								queryResult.forEach(function(object) {
-									_this.placeNameCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
-								})
-							}
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`Placename coordinates query failed with status ${status} because ${error}`)
-						}
-					);
+				_this.getLocationCoordinates();
 
 				window.addEventListener('fields-full', e => {
 					customizeEntryForm();//setTimeout(() => {customizeEntryForm()}, 5000);
@@ -1098,7 +1092,7 @@ var BHIMSEntryForm = (function() {
 		return $.get({url: '/flask/entry_form_config'})
 			.done(response => {
 				if (pythonReturnedError(response)) {
-					showModal('Error when retrieving form configuration: ' + error, 'Form Configuration Error')
+					showModal('Error when retrieving form configuration: <br><br>' + response, 'Form Configuration Error')
 				} else {
 					this.formConfiguration = deepCopy(response.form_config);
 					this.acceptedAttachmentExtensions = deepCopy(response.accepted_attachment_extensions);

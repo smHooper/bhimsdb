@@ -1,22 +1,21 @@
-import os, sys
-import traceback
+from argparse import Namespace
+import base64
+import bcrypt
+import datetime
+from decimal import Decimal
+from flask import Flask, json, jsonify, render_template, request, url_for
+from flask_mail import Mail, Message
+import os
 import re
-
+import smtplib
 from sqlalchemy import create_engine, select, update, text as sqlatext
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
-import bcrypt
-#import pandas as pd
-import smtplib
-import base64
+import sys
+import traceback
+from typing import Any
 from uuid import uuid4
-
-from datetime import datetime
-from argparse import Namespace
-
-from flask import Flask, render_template, request, json, url_for
-from flask_mail import Mail, Message
 
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../py/scripts'))
 from export_data import export_data
@@ -86,7 +85,7 @@ def get_config_from_db(schema='public'):
 
 def get_unique_id() -> str:
 	"""equivalent to php uniqid()"""
-	return hex(int(datetime.now().timestamp() * 10000000))[2:]
+	return hex(int(datetime.datetime.now().timestamp() * 10000000))[2:]
 
 
 def get_environment() -> str:
@@ -121,6 +120,34 @@ def get_config_from_db(schema='public'):
 			db_config[property_name] = value
 
 	return db_config
+
+
+def sanitize_query_value(value: Any) -> Any:
+
+	if isinstance(value, Decimal):
+		return float(value) 
+	elif isinstance(value, (datetime.date, datetime.datetime)): 
+		return value.strftime('%Y-%m-%d %H:%M') 
+	elif isinstance(value, datetime.time):
+		return value.strftime('%H:%M')
+	else:
+		return value
+
+
+# helper function to process an ORM class instance into a dictionary
+def orm_to_dict(orm_class_instance: Any, selected_columns:[str]=[]) -> dict:
+	
+	# If specific columns weren't specified, return all
+	columns = (
+		selected_columns or 
+		[column.name for column in orm_class_instance.__table__.columns]
+	)
+
+	return {
+		column_name: sanitize_query_value(getattr(orm_class_instance, column_name))
+		for column_name in columns
+	}
+
 
 db_schema = get_db_schema()
 get_config_from_db(db_schema)
@@ -209,6 +236,28 @@ def get_user_info_offline(offline_id):
 @app.route('/flask/db_config', methods=['GET'])
 def db_config():
 	return get_config_from_db()
+
+
+@app.route('/flask/db/select/locations', methods=['GET'])
+def get_encounter_location_coordinates():
+
+	with ReadSession() as session:
+		result = session.query(BackcountryUnitCode).where(BackcountryUnitCode.sort_order.is_not(None))
+		first_row = result.first()
+		columns = [column.name for column in first_row.__table__.columns]
+		bc_unit_data = [orm_to_dict(row, columns) for row in result]
+
+		result = session.query(PlaceNameCode).where(PlaceNameCode.sort_order.is_not(None))
+		first_row = result.first()
+		columns = [column.name for column in first_row.__table__.columns]
+		place_name_data = [orm_to_dict(row, columns) for row in result]
+
+	return jsonify({
+		'data': {
+			'backcountry_unit_codes': bc_unit_data,
+			'place_name_codes': place_name_data
+		}
+	})
 
 
 @app.route('/flask/entry_form_config', methods=['GET'])
@@ -312,7 +361,7 @@ def create_park_form_id(encounter_id):
 		if row:
 			start_date = row.start_date
 			start_time = row.start_time
-			start_datetime = datetime.combine(start_date, start_time)
+			start_datetime = datetime.datetime.combine(start_date, start_time)
 			#format dateime, then substitue encounter data and configuration values
 			return start_datetime.strftime(id_format.format(**{**row, **app.config}))
 		else:
@@ -383,7 +432,7 @@ def send_submission_notification():
 	data['heading_title'] = 'New BHIMS submission'
 	data['db_admin_email'] = app.config['DB_ADMIN_EMAIL'][1] # Message() requires name, addres pair for some stupid reason
 
-	now = datetime.now()
+	now = datetime.datetime.now()
 	data['formatted_date'] = f'''{now.strftime('%B')} {now.strftime('%d').lstrip('0')}'''
 	data['formatted_time'] = now.strftime('%I:%M %p').lstrip('0')
 
@@ -455,7 +504,7 @@ def save_submission_time():
 		statement = (
 			update(User)
 				.where(User.ad_username == username)
-				.values(last_submission_attempt=datetime.now().strftime('%Y-%m-%d %H:%M'))
+				.values(last_submission_attempt=datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
 		)
 		session.execute(statement)
 		session.commit()

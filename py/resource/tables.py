@@ -163,6 +163,9 @@ class PeoplePresentCode(Base, CodeMixin):
 class PlaceNameCode(Base, CodeMixin):
     __tablename__ = 'place_name_codes'
 
+    latitude = Column(NUMERIC(10, 7))
+    longitude = Column(NUMERIC(10, 7))
+
 
 class PreparednessClassificationCode(Base, CodeMixin):
     __tablename__ = 'preparedness_classification_codes'

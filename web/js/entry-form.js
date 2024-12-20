@@ -790,12 +790,22 @@ var BHIMSEntryForm = (function() {
 				$('#input-road_mile').change(this.onRoadMileChange);
 
 				if (!this.maps.main.mileposts) {
-					this.configureMap('encounter-location-map', this.maps.main);
+					const mapDeferred = this.configureMap('encounter-location-map', this.maps.main);
 					this.configureMap('modal-encounter-location-map', this.maps.modal)
 					this.maps.modal.map.on('moveend', e => { // on pan, get center and re-center this.maps.main.map
 							const modalMap = e.target;
 							this.maps.main.map.setView(modalMap.getCenter(), modalMap.getZoom());
 						}).scrollWheelZoom.enable();
+					
+					// If the coordinates have not been set and the app is running as a PWA,
+					//	try to get the coordinates from the Geolocation API
+					mapDeferred.then(() => {
+						// Location services is blocked on DOI computers, but it might work on mobile
+						//	I can't test on a laptop though
+						if (!this.markerIsOnMap() && isPWA()) {
+							this.getCurrentLocation();
+						}
+					})
 				}
 
 				// Prevent form submission when the user hits the 'Enter' key
@@ -2007,7 +2017,7 @@ var BHIMSEntryForm = (function() {
 			return layer;
 		}
 
-		$.get({url: 'resources/management_units.json'})
+		const unitsDeferred = $.get({url: 'resources/management_units.json'})
 			.done(geojson => {
 				const defaultStyle = {
 					color: '#000',
@@ -2026,7 +2036,7 @@ var BHIMSEntryForm = (function() {
 			}).fail((xhr, error, status) => {
 				console.log('BC unit geojson read failed: ' + error);
 			})
-		$.get({url: 'resources/roads.json'})
+		const roadsDeferred = $.get({url: 'resources/roads.json'})
 			.done(geojson => {
 				const defaultStyle = {
 					color: '#a72d0c',
@@ -2043,7 +2053,7 @@ var BHIMSEntryForm = (function() {
 			}).fail((xhr, error, status) => {
 				console.log('Road geojson read failed: ' + error);
 			});
-		$.get({url: 'resources/mileposts.json'})
+		const milepostsDeferred = $.get({url: 'resources/mileposts.json'})
 			.done(geojson => {
 				const markerOptions = {
 					radius: 3,
@@ -2107,6 +2117,8 @@ var BHIMSEntryForm = (function() {
 		$('#encounter-location-map').droppable({drop: this.markerDroppedOnMap});
 
 		mapObject.map = map;
+
+		return $.when(unitsDeferred, roadsDeferred, milepostsDeferred);
 	}
 
 	/*
@@ -2348,6 +2360,34 @@ var BHIMSEntryForm = (function() {
 		$('#input-location_accuracy').val(4).change(); // == < 20km
 	}
 
+
+	/*
+	The Geolocation API method .getCurrentPosition() takes a success and an error function
+	as it's arguments. 
+	*** This method is completely untested because location services are blocked 
+		for browsers on DOI laptop/desktop devices. Need to test on mobile device
+	*/
+	Constructor.prototype.onGeolocationPositionSuccess = function(position) {
+		const coordinates = position.coords;
+		$('#input-lat_dec_deg').val(coordinates.latitude);
+		$('#input-lon_dec_deg').val(coordinates.longitude).change();
+		$('#input-datum').val(1).change(); //WGS84
+		$('#input-location_accuracy').val(1).change(); //<=10m
+	}
+
+	Constructor.prototype.onGeolocationPositionError = function(error) {
+		print(error)
+	}
+
+	/*
+	Convenience method for testing
+	*/
+	Constructor.prototype.getCurrentLocation = function() {
+		navigator.geolocation.getCurrentPosition(
+			this.onGeolocationPositionSuccess,
+			this.onGeolocationPositionError
+		)
+	}
 
 	/*
 	Event handler for when either the place name or BC unit select changes. 

@@ -1,5 +1,8 @@
 const PWA_DISPLAY_MODES = ['fullscreen', 'standalone', 'minimal-ui'];
-const LEAFLET_MARKER_ICON_URL = 'imgs/leaflet-marker-icon.png';
+const LEAFLET_MARKER_ICON_URL = {
+	icon: 'imgs/leaflet-marker-icon.png',
+	shadow: 'imgs/leaflet-marker-shadow.png'
+};
 
 function deepCopy(inObject) {
 	/*

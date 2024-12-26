@@ -27,3 +27,6 @@ web/export_cache/*
 
 # virtualenv
 .venv/
+
+#MBTiles are huge so don't include
+*.mbtiles

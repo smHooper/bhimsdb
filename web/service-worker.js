@@ -32,6 +32,7 @@ const PRECACHE_RESOURCES = [
 	'/imgs/leaflet-layers-icon.png',
 	'/imgs/leaflet-marker-icon.png',
 	'/imgs/leaflet-marker-icon-2x.png',
+	'/imgs/leaflet-marker-shadow.png',
 	'/imgs/maximize_window_icon_50px.svg',
 	'/imgs/minimize_window_icon_50px.svg',
 	'/js/bhims.js',
@@ -45,11 +46,13 @@ const PRECACHE_RESOURCES = [
 	'/packages/jquery/jquery-ui.1.12.1.min.js',
 	'/packages/leaflet/leaflet.1.7.1.css',
 	'/packages/leaflet/leaflet.1.7.1.js',
+	'/packages/leaflet/leaflet.tilelayer.mbtiles.js',
 	'/packages/select2/select2.min.css',
 	'/packages/select2/select2.min.js',
 	'/resources/management_units.json',
 	'/resources/mileposts.json',
-	'/resources/roads.json'
+	'/resources/roads.json',
+	'/resources/topo.mbtiles'
 ];
 
 /*

@@ -48,9 +48,10 @@ var BHIMSEntryForm = (function() {
 			[0, 0], 
 			{
 				icon: L.icon({
-					iconUrl: LEAFLET_MARKER_ICON_URL, //defined in bhims.js
+					iconUrl: LEAFLET_MARKER_ICON_URL.icon, //defined in bhims.js
 					iconSize: [25, 41],
-					iconAnchor: [12, 41]
+					iconAnchor: [12, 41],
+					shadowUrl: LEAFLET_MARKER_ICON_URL.shadow
 				}),
 				draggable: true,
 				autoPan: true,
@@ -803,7 +804,7 @@ var BHIMSEntryForm = (function() {
 						// Location services is blocked on DOI computers, but it might work on mobile
 						//	I can't test on a laptop though
 						if (!this.markerIsOnMap() && isPWA()) {
-							this.getCurrentLocation();
+							//this.getCurrentLocation();
 						}
 					})
 				}
@@ -1958,21 +1959,32 @@ var BHIMSEntryForm = (function() {
 			zoom: mapZoom || 7
 		});
 
-		const baseMaps = {
-			'USGS Topos': L.tileLayer(
-				'https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', 
-				{
-					attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
-				}
-			).addTo(map),
-			'Satellite':  L.tileLayer(
-				'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
-				{
-					attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-				}
-			)
-		};
-		const layerControl = L.control.layers(baseMaps).addTo(map);
+
+		var layerControl,
+			baseMaps; //.addTo(map); 
+		if (window.navigator.onLine) {
+			// if connected to the network, use tile services for basemap
+			baseMaps = {
+				'USGS Topos': L.tileLayer(
+					'https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', 
+					{
+						attribution: `Tiles &copy; Esri &mdash; Source: <a href="http://goto.arcgisonline.com/maps/USA_Topo_Maps" target="_blank">Esri</a>, ${new Date().getFullYear()}`
+					}
+				).addTo(map),
+				'Satellite':  L.tileLayer(
+					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+					{
+						attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+					}
+				)
+			};
+			layerControl = L.control.layers(baseMaps);
+			
+		} else {
+			// If not connected to the netowrk, load mbtiles from cache
+			baseMaps = {'USGS Topos': L.tileLayer.mbTiles('resources/topo.mbtiles').addTo(map)};
+		}
+		layerControl = L.control.layers(baseMaps).addTo(map);
 
 		// Add pane to get mileposts on top of roads
 		map.createPane('mileposts');

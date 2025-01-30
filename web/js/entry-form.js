@@ -76,6 +76,7 @@ var BHIMSEntryForm = (function() {
 		this.dataAccessUserRoles = [2, 3]; // to determine if user should be able to open query page
 		this.roadsGeoJSON;
 		this.dataEntryConfig = {};
+		this.fileCacheTiming = {}; // for estimating download times for large files when installing PWA
 		this.dbSchema = 'public';
 		this.reactionCodes = {};
 		this.formConfiguration = {
@@ -115,13 +116,148 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.showFetchProgress = function({resourceName, loaded, total}) {
+		const $list = $('#alert-modal .modal-download-progress-list');
+		let $li = $list.find(`li[data-resource="${resourceName}"]`);
+		let cacheTiming = (_this.fileCacheTiming[resourceName] = _this.fileCacheTiming[resourceName] || {});
+		// If it doesn't exist yet in the list, add it
+		const progressText = `${(loaded/1000000).toFixed(1)} / ${Math.round(total/1000000)} MB`;
+		if (!$li.length) {
+			const htmlID = 'progress-item-' + removeSpecialCharacters(resourceName);
+			$li = $(`
+				<li class="modal-download-progress-item" data-resource="${resourceName}">
+					<label class="modal-download-progress-label" for="${htmlID}">${resourceName}</label>
+					<div class="attachment-progress-bar-container">
+						<div class="attachment-progress-bar">
+							<div class="attachment-progress-indicator"></div>
+						</div>
+					</div>
+					<span class="modal-download-progress-ratio">${progressText}</span>
+				</li>
+			`).appendTo($list);
+
+			cacheTiming.startTime = new Date();
+		}
+
+		// Set progress bar width and progress text
+		const progress = (cacheTiming.progress = loaded / total);
+		const $barContainer = $li.find('.attachment-progress-bar');
+		$li.find('.attachment-progress-indicator')
+			.css('width', `${$barContainer.width() * progress}px`);
+		$li.find('.modal-download-progress-ratio')
+			.text(progressText);
+
+		// calculate remaining time for this file
+		const elapsedTime = new Date() - cacheTiming.startTime;
+		if (elapsedTime === 0) return;
+
+		cacheTiming.totalTime = elapsedTime * (1 / progress);
+		cacheTiming.remainingTime = cacheTiming.totalTime - elapsedTime;
+
+		// find the file with the most time remaining and set the estimated timer with that
+		const remainingTimes = Object.values(_this.fileCacheTiming).map(t => t.remainingTime);
+
+		if (remainingTimes.every(t => t === 0)) {
+			// show new message telling the user to install
+			showModal('The BHIMS app is ready to install. ', 'Installation Ready')
+
+		}
+
+		const maxRemaining = Math.max(...remainingTimes);
+		const fileWithMostRemaining = Object.values(_this.fileCacheTiming).filter(f => f.remainingTime === maxRemaining)[0];
+		// if all files are reporting and progress is at least 5% on the one 
+		//	with the longest to go, set the timer
+		if (remainingTimes.every(t => t !== undefined) && fileWithMostRemaining.progress >= 0.05) {
+			const remainingTimeText = millisecondsToTimeInterval(maxRemaining);
+			// millisecondsToTimeInterval() will return an empty string if 
+			//	the given milliseconds < 1 second
+			if (remainingTimeText) {
+				$('#alert-modal .modal-download-time-value')
+					.removeClass('blink')
+					.text();
+			}
+		}
+
+	}
+
+
+	Constructor.prototype.preparePWAInstall = function() {
+		const eventHandler = () => {
+			$('#alert-modal .confirm-button').click(() => {
+				// When the user clicks the confirm button, register the service worker
+				registerServiceWorker();
+				// and show them the download progress
+				navigator.serviceWorker.ready.then(registration => {
+					const modalBody = `
+						<div class="mb-3">
+						There are a few resources that will take a while to download.
+						Please leave your device on and this tab open while the downloads 
+						finish.
+						</div>
+						<h6 class="w-100 mb-2">Download Progress</h6>
+						<ul class="modal-download-progress-list"></ul>
+						<div class="d-inline w-100">
+							<label class="modal-download-time-label mr-2 me-2">Estimated time remaining:</label>
+							<span class="modal-download-time-value blink">Calculating...</span>
+						</div>
+					`;
+					showModal(modalBody, 'Preparing BHIMS App Installation', {footerButtons: '<!--empty-->'});
+
+					// listen for progress communication from service worker
+					navigator.serviceWorker.onmessage = e => {
+						const messageType = e.data.type;
+						if (messageType === 'cache progress') {
+							_this.showFetchProgress(e.data);
+						} else if (messageType === 'large cache resources') {
+							for (const url of e.data.largeResources) {
+								fetch(url).then(response => {
+									// add the file to the cache timing property so that showFetchProgress
+									//	knows how many files to expect
+									const resourceName = response.url.split('/').pop();
+									_this.fileCacheTiming[resourceName] = {}; 	
+								})
+							}
+						}
+					// // *** TODO: get this from service work message event
+					// const largeResources = [
+					// 	'/resources/topo.mbtiles'
+					// ]
+					}
+
+					// Send a message to the service worker requesting the large resource list
+				});
+			})
+		}
+		const message = 
+			'Looks like you\'re viewing the BHIMS web app on a mobile device.' +
+			' Would you like to install the app for offline use? If you don\'t' +
+			' install the app, you won\'t be able to collect BHIMS reports without'+
+			' a connection to the NPS network.';
+		const footerButtons = `
+			<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">No</button>
+			<button class="generic-button modal-button confirm-button">Yes</button>
+		`
+		showModal(
+			message, 
+			'Install App?', 
+			{
+				footerButtons: footerButtons,
+				eventHandlerCallable: eventHandler, 
+				dismissable: false
+			}
+		);
+	}
+
+
 	/* 
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
 
 		// Register the service worker to make the app run as a PWA
-		registerServiceWorker();
+		if (isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
+			this.preparePWAInstall();
+		}
 
 		const queryParams = parseURLQueryString();
 		this.presentMode = queryParams.present === 'true'
@@ -1751,7 +1887,7 @@ var BHIMSEntryForm = (function() {
 				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
 				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
 			`;
-			showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, 'confirm', footerButtons);
+			showModal(`Are you sure you want to delete this ${itemName}?`, `Delete ${itemName}?`, {modalType: 'confirm', footerButtons: footerButtons});
 		}
 	}
 
@@ -1978,8 +2114,6 @@ var BHIMSEntryForm = (function() {
 					}
 				)
 			};
-			layerControl = L.control.layers(baseMaps);
-			
 		} else {
 			// If not connected to the netowrk, load mbtiles from cache
 			baseMaps = {'USGS Topos': L.tileLayer.mbTiles('resources/topo.mbtiles').addTo(map)};
@@ -2295,7 +2429,7 @@ var BHIMSEntryForm = (function() {
 			<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onConfirmClick}">Yes</button>
 		`;
 		const message = `You've already placed the encounter location marker on the map. Are you sure you want to move it to a new location? Click 'No' to keep it in the current location.`
-		showModal(message, `Move the encounter location?`, 'confirm', footerButtons);
+		showModal(message, `Move the encounter location?`, {modalType: 'confirm', footerButtons: footerButtons});
 	}
 
 
@@ -2692,7 +2826,7 @@ var BHIMSEntryForm = (function() {
 				.filter((_, option) => {return option.value === fileTypeCode})
 				.html()
 				.toLowerCase();
-			showModal(`You already selected a file. Do you want to upload a new <strong>${fileType}</strong> file instead?`, `Upload a new file?`, 'confirm', footerButtons);
+			showModal(`You already selected a file. Do you want to upload a new <strong>${fileType}</strong> file instead?`, `Upload a new file?`, {modalType: 'confirm', footerButtons: footerButtons});
 		} else {
 			_this.updateAttachmentAcceptString($fileTypeSelect.attr('id'));
 		}
@@ -2945,7 +3079,7 @@ var BHIMSEntryForm = (function() {
 			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
 			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="entryForm.resetForm()">Yes</button>
 		`;
-		showModal(message, 'Reset Form?', 'confirm', footerButtons);
+		showModal(message, 'Reset Form?', {modalType: 'confirm', footerButtons: footerButtons});
 	}
 
 
@@ -3056,7 +3190,7 @@ var BHIMSEntryForm = (function() {
 				`;
 				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
 				const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onClick}">OK</button>`
-				showModal(modalMessage, 'Missing or invalid information', 'alert', buttonHTML);
+				showModal(modalMessage, 'Missing or invalid information', {modalType: 'alert', footerButtons: buttonHTML});
 				return;
 			}
 		}	

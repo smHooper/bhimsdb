@@ -51,9 +51,125 @@ const PRECACHE_RESOURCES = [
 	'/packages/select2/select2.min.js',
 	'/resources/management_units.json',
 	'/resources/mileposts.json',
-	'/resources/roads.json',
+	'/resources/roads.json'
+];
+// These also get added to pre-cached resources, but they're large files
+//	so we want to show the user their download progress so they know when 
+//	it's safe to navigate away from the page
+const LARGE_RESOURCES = [
 	'/resources/topo.mbtiles'
 ];
+
+
+function dispatchProgress({client, resourceName, loaded, total}) {
+	client.postMessage({type: 'cache progress', resourceName, loaded, total})
+}
+
+
+function respondWithProgressMonitor(clientId, requestURL, response) {
+	if (!response.body) {
+		console.warn("ReadableStream is not yet supported in this browser. See https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream")
+		return response;
+	}
+	if (!response.ok) {
+		// HTTP error code response
+		return response;
+	}
+
+	// server must send custom x-file-size header if gzip or other content-encoding is used
+	const contentEncoding = response.headers.get('content-encoding');
+	const contentLength = response.headers.get(contentEncoding ? 'x-file-size' : 'content-length');
+	if (contentLength === null) {
+		// don't track download progress if we can't compare against a total size
+		console.warn('Response size header unavailable. Cannot measure progress');
+		return response;
+	}
+
+	let loaded = 0;
+	debugReadIterations = 0; // direct correlation to server's response buffer size
+	const total = parseInt(contentLength, 10);
+	const reader = response.body.getReader();
+	const resourceName = requestURL.split('/').pop();
+
+	return new Response(
+		new ReadableStream({
+			start(controller) {        
+				// get client to post message. Awaiting resolution first read() progress
+				// is sent for progress indicator accuracy
+				let client;
+				clients.get(clientId).then(c => {
+					client = c;
+					read();
+				});
+
+				function read() {
+					debugReadIterations++;
+					reader.read().then(({done, value}) => {
+						if (done) {
+							console.log('read()', debugReadIterations);
+							controller.close();
+							return;
+						}
+
+						controller.enqueue(value);
+						loaded += value.byteLength;
+						// console.log('        SW', Math.round(loaded/total*100)+'%');
+						dispatchProgress({client, resourceName, loaded, total});
+						read();
+					})
+					.catch(error => {
+						// error only typically occurs if network fails mid-download
+						console.error('error in read()', error);
+						controller.error(error)
+					});
+				}
+			},
+
+			// Firefox excutes this on page stop, Chrome does not
+			cancel(reason) {
+				console.log('cancel()', reason);
+			}
+		})
+	)
+}
+
+
+function fetchWithProgressMonitor(e) {
+	/*  opaque request responses won't give us access to Content-Length and
+	*  Response.body.getReader(), which are required for calculating download
+	*  progress.  Respond with a newly-constructed Request from the original Request
+	*  that will give us access to those.
+	*  See https://stackoverflow.com/questions/39109789/what-limitations-apply-to-opaque-responses
+
+	*  'Access-Control-Allow-Origin' header in the response must not be the
+	*  wildcard '*' when the request's credentials mode is 'include'.  We'll omit credentials in this demo.
+	*/
+	const newRequest = new Request(e.request.clone())//, {
+	// 	mode: 'cors',
+	// 	credentials: 'omit'
+	// });
+	return fetch(newRequest).then(response => {
+		caches.add(
+			respondWithProgressMonitor(
+				e.clientId, 
+				e.request.url, 
+				response
+			)
+		)
+	});
+}
+
+// listen for the app to indicate the user wants to download/install
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.message === 'fetch large resources') {
+    for (const url of LARGE_RESOURCES) {
+    	// don't need to do anything with the promise because the fetch event 
+    	//	listener will handle it
+    	fetch(url);
+    }
+  }
+});
+
 
 /*
 When the service worker is installing, open the cache and add the precache 
@@ -65,18 +181,23 @@ self.addEventListener('install', e => {
 		caches.open(CACHE_NAME)
 			.then( cache => {
 				//cache.addAll(PRECACHE_RESOURCES)
-				for (const url of PRECACHE_RESOURCES) {
-					cache.add(url)
+				for (const url of [...PRECACHE_RESOURCES, ...LARGE_RESOURCES]) {
+					cache.add(url) 
 						.catch(() => console.log(`can't load ${url} to cache`));
 					
 				}
-				// return fetch('/flask/user_info', {method: 'POST'})
-				// 	.then(response => {
-				// 		if (response.offline_id) {
-
-				// 		}
-				// 	})
-
+				// TODO: figure out if progress monitoring caching could happen here
+				/* something like:
+				for (const url of PRECACHE_RESOURCES) {
+					...
+				} 
+				for (const url of LARGE_RESOURCES) {
+					// this won't work thought because I need the client ID from the event
+					//	unless I can get it from the install event
+					//	or I could use a different messaging API like BroadcastChannel
+					cache.add(new Request(url).respondWith(....))
+				}
+				*/
 			})
 			
 	);
@@ -88,13 +209,17 @@ When there's an incoming fetch request, try and respond with a precached
 resource, otherwise fall back to the network
 */
 self.addEventListener('fetch', e => {
-	
+	const requestURL = e.request.url.replace(self.location.origin, '');
 	e.respondWith(
 		caches.match(e.request).then( cachedResponse => {
+			
 			if (cachedResponse) {
 				// console.log('[Service Worker] Fetched cached data for : ' + e.request.url);
 				return cachedResponse;
-			} else {
+			} else if (LARGE_RESOURCES.includes(requestURL)) {
+				fetchWithProgressMonitor(e)
+			}
+			else {
 				// console.log('[Service Worker] Fetched request for : ' + e.request.url);
 				return fetch(e.request);
 			}

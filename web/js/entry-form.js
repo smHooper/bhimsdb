@@ -2739,6 +2739,7 @@ var BHIMSEntryForm = (function() {
 		const $reactionSelect = $('#' + reactionSelectID).empty();
 		const reactionOptions = this.reactionCodes[actionBy] || [];
 		
+		// If the actionBy value doesn't exist in the ractionCodes, exit
 		if (reactionOptions.length === 0) {
 			return $.Deferred().resolve();
 		}
@@ -3035,9 +3036,12 @@ var BHIMSEntryForm = (function() {
 			if ($select.closest('.cloneable').length) continue;
 
 			// set the value of the select to the first option
-			$select.val(
-				$select.find('option')[0].value
-			).change();
+			const $options = $select.find('option');
+			if ($options.length) {
+				$select.val(
+					($options[0] || {}).value
+				).change();
+			}
 		}
 
 		// reset default values

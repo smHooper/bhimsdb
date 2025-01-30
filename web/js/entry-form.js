@@ -3052,6 +3052,9 @@ var BHIMSEntryForm = (function() {
 			$('#encounter-marker-container').slideDown(0);
 		}
 
+		// If the user has any errors, remove them
+		$('.input-field.error').removeClass('error');
+
 		// Clear localStorage
 		_this.fieldValues = {};
 		window.localStorage.clear();

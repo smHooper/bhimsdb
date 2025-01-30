@@ -2737,7 +2737,11 @@ var BHIMSEntryForm = (function() {
 		const cardIndex = $actionBySelect.attr('id').match(/\d+$/);
 		const reactionSelectID = `input-reaction-${cardIndex}`;
 		const $reactionSelect = $('#' + reactionSelectID).empty();
-
+		const reactionOptions = this.reactionCodes[actionBy] || [];
+		
+		if (reactionOptions.length === 0) {
+			return $.Deferred().resolve();
+		}
 
 		const $label = $reactionSelect.siblings('.field-label');
 		var labelText = '',
@@ -2768,7 +2772,7 @@ var BHIMSEntryForm = (function() {
 		
 		// Return the deferred object so other functions can be triggered 
 		//	after the select is filled
-		return fillSelectOptions(reactionSelectID, this.reactionCodes[actionBy]);
+		return fillSelectOptions(reactionSelectID, reactionOptions);
 	}
 
 
@@ -3026,6 +3030,11 @@ var BHIMSEntryForm = (function() {
 		// Set all selects to their first option, which should be the default
 		for (const el of $('select')) {
 			const $select = $(el);
+			
+			// skip selects from cloneable parents
+			if ($select.closest('.cloneable').length) continue;
+
+			// set the value of the select to the first option
 			$select.val(
 				$select.find('option')[0].value
 			).change();

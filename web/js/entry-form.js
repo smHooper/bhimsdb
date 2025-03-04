@@ -116,6 +116,12 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.showInstallationReadyMessage = function() {
+		const message = 'The app is ready to install on your device. <strong>Add some instructions per browser</strong>'
+		showModal(message, 'App Ready to Install')
+	}
+
+
 	Constructor.prototype.showFetchProgress = function({resourceName, loaded, total}) {
 		const $list = $('#alert-modal .modal-download-progress-list');
 		let $li = $list.find(`li[data-resource="${resourceName}"]`);
@@ -126,7 +132,7 @@ var BHIMSEntryForm = (function() {
 			const htmlID = 'progress-item-' + removeSpecialCharacters(resourceName);
 			$li = $(`
 				<li class="modal-download-progress-item" data-resource="${resourceName}">
-					<label class="modal-download-progress-label" for="${htmlID}">${resourceName}</label>
+					<label class="modal-download-progress-label" for="${htmlID}">${cacheTiming.name || resourceName}</label>
 					<div class="attachment-progress-bar-container">
 						<div class="attachment-progress-bar">
 							<div class="attachment-progress-indicator"></div>
@@ -159,8 +165,8 @@ var BHIMSEntryForm = (function() {
 
 		if (remainingTimes.every(t => t === 0)) {
 			// show new message telling the user to install
-			showModal('The BHIMS app is ready to install. ', 'Installation Ready')
-
+			//showModal('The BHIMS app is ready to install. ', 'Installation Ready')
+			this.showInstallationReadyMessage();
 		}
 
 		const maxRemaining = Math.max(...remainingTimes);
@@ -180,7 +186,31 @@ var BHIMSEntryForm = (function() {
 
 	}
 
+	/*
+	Show the file
+	*/
+	Constructor.prototype.showCacheProgressModal = function() {
+		const modalBody = `
+			<div class="mb-3">
+			There are a few resources that will take a while to download.
+			Please leave your device on and this tab open while the downloads 
+			finish.
+			</div>
+			<h6 class="w-100 mb-2">Download Progress</h6>
+			<ul class="modal-download-progress-list"></ul>
+			<div class="d-inline w-100">
+				<label class="modal-download-time-label mr-2 me-2">Estimated time remaining:</label>
+				<span class="modal-download-time-value blink">Calculating...</span>
+			</div>
+		`;
+		showModal(modalBody, 'Preparing BHIMS App Installation', {footerButtons: '<!--empty-->'});
+	}
 
+
+	/*
+	When registering the service worker, track progress of large resources and 
+	show the user the progress so they know when it's safe to install
+	*/
 	Constructor.prototype.preparePWAInstall = function() {
 		const eventHandler = () => {
 			$('#alert-modal .confirm-button').click(() => {
@@ -188,43 +218,59 @@ var BHIMSEntryForm = (function() {
 				registerServiceWorker();
 				// and show them the download progress
 				navigator.serviceWorker.ready.then(registration => {
-					const modalBody = `
-						<div class="mb-3">
-						There are a few resources that will take a while to download.
-						Please leave your device on and this tab open while the downloads 
-						finish.
-						</div>
-						<h6 class="w-100 mb-2">Download Progress</h6>
-						<ul class="modal-download-progress-list"></ul>
-						<div class="d-inline w-100">
-							<label class="modal-download-time-label mr-2 me-2">Estimated time remaining:</label>
-							<span class="modal-download-time-value blink">Calculating...</span>
-						</div>
-					`;
-					showModal(modalBody, 'Preparing BHIMS App Installation', {footerButtons: '<!--empty-->'});
+
+					navigator.serviceWorker.controller.postMessage({message: 'get large resources' });
 
 					// listen for progress communication from service worker
 					navigator.serviceWorker.onmessage = e => {
 						const messageType = e.data.type;
-						if (messageType === 'cache progress') {
-							_this.showFetchProgress(e.data);
-						} else if (messageType === 'large cache resources') {
-							for (const url of e.data.largeResources) {
-								fetch(url).then(response => {
-									// add the file to the cache timing property so that showFetchProgress
-									//	knows how many files to expect
-									const resourceName = response.url.split('/').pop();
-									_this.fileCacheTiming[resourceName] = {}; 	
-								})
-							}
-						}
-					// // *** TODO: get this from service work message event
-					// const largeResources = [
-					// 	'/resources/topo.mbtiles'
-					// ]
-					}
+						if (messageType === 'large resources response') {
+							var cachedResources = [];
+							var cacheMatchPromises = [];
+							for (const url of e.data.resources) {
+								// check if the resource is already cached
+								cacheMatchPromises.push(
+									caches.match(url).then(response => {
+										if (response) {
+											print(url + ' already cached')
+											cachedResources.push(url);
+										} else {
+											print(url + ' not cached')
+											// add the file to the cache timing property so that showFetchProgress
+											//	knows how many files to expect
+											const resourceName = url.split('/').pop();
+											_this.fileCacheTiming[url] = {name: resourceName};
 
-					// Send a message to the service worker requesting the large resource list
+											// tell the service worker to fetch it so it can be cached
+											// **** this pattern doesn't work because the service worker thinks the
+											//	resource is already cached by the time it receives the fetch request 
+											//	to respondWithProgress()
+											$.get(url);
+										}
+									})
+								);
+							}
+							// once all promises have resolved (or failed), show progress or a message saying the app is ready to install (if all resources are already cached)
+							Promise.all(cacheMatchPromises)
+								.then( () => {
+									if (cacheMatchPromises.length === cachedResources.length) {
+										this.showInstallationReadyMessage();
+									} else {	
+										// There's at least one resource that needs to be cached
+										_this.showCacheProgressModal();
+									}
+								})
+								// if any failed, just show progress modal anyway
+								.catch( () => {_this.showCacheProgressModal()})
+						} 
+						// handle progress updates
+						if (messageType === 'cache progress') {
+							_this.showCacheProgressModal();
+							_this.showFetchProgress(e.data);
+						} else if (messageType === 'cache error') {
+							// TODO: handle errors (maybe try forcing reloading resource)
+						}
+					}
 				});
 			})
 		}
@@ -255,7 +301,7 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
 
 		// Register the service worker to make the app run as a PWA
-		if (isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
+		if (true){//(isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
 			this.preparePWAInstall();
 		}
 

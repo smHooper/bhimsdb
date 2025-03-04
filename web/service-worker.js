@@ -89,7 +89,7 @@ function respondWithProgressMonitor(clientId, requestURL, response) {
 	debugReadIterations = 0; // direct correlation to server's response buffer size
 	const total = parseInt(contentLength, 10);
 	const reader = response.body.getReader();
-	const resourceName = requestURL.split('/').pop();
+	const resourceName = requestURL;//.split('/').pop();
 
 	return new Response(
 		new ReadableStream({
@@ -119,7 +119,7 @@ function respondWithProgressMonitor(clientId, requestURL, response) {
 					})
 					.catch(error => {
 						// error only typically occurs if network fails mid-download
-						console.error('error in read()', error);
+						client.postMessage({type: 'cache error', resource: resourceName, error: error});
 						controller.error(error)
 					});
 				}
@@ -161,13 +161,9 @@ function fetchWithProgressMonitor(e) {
 
 // listen for the app to indicate the user wants to download/install
 self.addEventListener('message', (e) => {
-  if (e.data && e.data.message === 'fetch large resources') {
-    for (const url of LARGE_RESOURCES) {
-    	// don't need to do anything with the promise because the fetch event 
-    	//	listener will handle it
-    	fetch(url);
-    }
-  }
+	if (e.data && e.data.message === 'get large resources') {
+		e.source.postMessage({type: 'large resources response', resources: LARGE_RESOURCES});
+	}
 });
 
 
@@ -182,8 +178,14 @@ self.addEventListener('install', e => {
 			.then( cache => {
 				//cache.addAll(PRECACHE_RESOURCES)
 				for (const url of [...PRECACHE_RESOURCES, ...LARGE_RESOURCES]) {
-					cache.add(url) 
-						.catch(() => console.log(`can't load ${url} to cache`));
+					// cache.add(url) 
+					// 	.catch(() => console.log(`can't load ${url} to cache`));
+					fetch(url).then((response) => {
+					  if (!response.ok) {
+					    throw new TypeError("bad response status");
+					  }
+					  return cache.put(url, response);
+					});
 					
 				}
 				// TODO: figure out if progress monitoring caching could happen here
@@ -212,11 +214,12 @@ self.addEventListener('fetch', e => {
 	const requestURL = e.request.url.replace(self.location.origin, '');
 	e.respondWith(
 		caches.match(e.request).then( cachedResponse => {
-			
+			console.log('[Service Worker] Fetching ' + requestURL);
 			if (cachedResponse) {
 				// console.log('[Service Worker] Fetched cached data for : ' + e.request.url);
 				return cachedResponse;
 			} else if (LARGE_RESOURCES.includes(requestURL)) {
+				console.log('[Service Worker] Fetching large resource with progress: ' + e.request.url);
 				fetchWithProgressMonitor(e)
 			}
 			else {

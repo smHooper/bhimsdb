@@ -213,7 +213,13 @@ var BHIMSEntryForm = (function() {
 				<span class="modal-download-time-value blink">Calculating...</span>
 			</div>
 		`;
-		showModal(modalBody, 'Preparing BHIMS App Installation', {footerButtons: '<!--empty-->'});
+		showModal(modalBody, 
+			'Preparing BHIMS App Installation', 
+			{
+				footerButtons: '<!--empty-->', 
+				dismissable: false
+			}
+		);
 	}
 
 

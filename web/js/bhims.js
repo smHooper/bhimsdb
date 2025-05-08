@@ -165,14 +165,17 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 		}
 	}
 
+	const upperRightCloseButton = dismissable ? 
+		`<button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
+	          <span aria-hidden="true">&times;</span>
+	        </button>` :
+	    '';
 	const innerHTML = `
 	  <div class="modal-dialog" role="document">
 	    <div class="modal-content">
 	      <div class="modal-header">
 	        <h5 class="modal-title">${title}</h5>
-	        <button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
-	          <span aria-hidden="true">&times;</span>
-	        </button>
+			${upperRightCloseButton}
 	      </div>
 	      <div class="modal-body">
 	        <p>${message}</p>

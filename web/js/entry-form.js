@@ -78,6 +78,10 @@ var BHIMSEntryForm = (function() {
 		this.dataEntryConfig = {};
 		this.fileCacheTiming = {}; // for estimating download times for large files when installing PWA
 		this.dbSchema = 'public';
+		this.customEvents = {
+			sericeWorkerReady: 'service-worker-ready',
+			fieldsFull: 'fields-full'
+		}
 		this.reactionCodes = {};
 		this.formConfiguration = {
 			pages: {},
@@ -122,7 +126,7 @@ var BHIMSEntryForm = (function() {
 	}
 
 
-	Constructor.prototype.showFetchProgress = function({resourceName, loaded, total}) {
+	Constructor.prototype.showCacheProgress = function({resourceName, loaded, total}) {
 		const $list = $('#alert-modal .modal-download-progress-list');
 		let $li = $list.find(`li[data-resource="${resourceName}"]`);
 		let cacheTiming = (_this.fileCacheTiming[resourceName] = _this.fileCacheTiming[resourceName] || {});
@@ -146,18 +150,24 @@ var BHIMSEntryForm = (function() {
 		}
 
 		// Set progress bar width and progress text
-		const progress = (cacheTiming.progress = loaded / total);
-		const $barContainer = $li.find('.attachment-progress-bar');
-		$li.find('.attachment-progress-indicator')
-			.css('width', `${$barContainer.width() * progress}px`);
-		$li.find('.modal-download-progress-ratio')
-			.text(progressText);
+		const previousBytesLoaded = parseInt($li.data('loaded') || 0)
+		const newProgress = (cacheTiming.progress = loaded / total);
+
+		if (previousBytesLoaded < loaded) {
+			const $barContainer = $li.find('.attachment-progress-bar');
+			$li.find('.attachment-progress-indicator')
+				.css('width', `${Math.ceil($barContainer.width() * newProgress)}px`);
+			$li.find('.modal-download-progress-ratio')
+				.text(progressText);
+			$li.data('loaded', loaded)
+		}
+
 
 		// calculate remaining time for this file
 		const elapsedTime = new Date() - cacheTiming.startTime;
 		if (elapsedTime === 0) return;
 
-		cacheTiming.totalTime = elapsedTime * (1 / progress);
+		cacheTiming.totalTime = elapsedTime * (1 / newProgress);
 		cacheTiming.remainingTime = cacheTiming.totalTime - elapsedTime;
 
 		// find the file with the most time remaining and set the estimated timer with that
@@ -180,7 +190,7 @@ var BHIMSEntryForm = (function() {
 			if (remainingTimeText) {
 				$('#alert-modal .modal-download-time-value')
 					.removeClass('blink')
-					.text();
+					.text(remainingTimeText);
 			}
 		}
 
@@ -212,61 +222,32 @@ var BHIMSEntryForm = (function() {
 	show the user the progress so they know when it's safe to install
 	*/
 	Constructor.prototype.preparePWAInstall = function() {
+
 		const eventHandler = () => {
 			$('#alert-modal .confirm-button').click(() => {
 				// When the user clicks the confirm button, register the service worker
 				registerServiceWorker();
 				// and show them the download progress
 				navigator.serviceWorker.ready.then(registration => {
+					// Let the cachePWAUserInfo() method know the service worker
+					//	(and therefore the cache) is ready
+					window.dispatchEvent(new CustomEvent(_this.customEvents.serviceWorkerReady));
 
-					navigator.serviceWorker.controller.postMessage({message: 'get large resources' });
+					registration.active.postMessage({message: 'get large resources' });
 
 					// listen for progress communication from service worker
 					navigator.serviceWorker.onmessage = e => {
 						const messageType = e.data.type;
 						if (messageType === 'large resources response') {
-							var cachedResources = [];
-							var cacheMatchPromises = [];
-							for (const url of e.data.resources) {
-								// check if the resource is already cached
-								cacheMatchPromises.push(
-									caches.match(url).then(response => {
-										if (response) {
-											print(url + ' already cached')
-											cachedResources.push(url);
-										} else {
-											print(url + ' not cached')
-											// add the file to the cache timing property so that showFetchProgress
-											//	knows how many files to expect
-											const resourceName = url.split('/').pop();
-											_this.fileCacheTiming[url] = {name: resourceName};
-
-											// tell the service worker to fetch it so it can be cached
-											// **** this pattern doesn't work because the service worker thinks the
-											//	resource is already cached by the time it receives the fetch request 
-											//	to respondWithProgress()
-											$.get(url);
-										}
-									})
-								);
+							_this.onLargeResourceMessage(e.data);
+						}// handle progress updates
+						else if (messageType === 'cache progress') {
+							if (!$('#alert-modal .modal-download-progress-list').length) {
+								_this.showCacheProgressModal();
 							}
-							// once all promises have resolved (or failed), show progress or a message saying the app is ready to install (if all resources are already cached)
-							Promise.all(cacheMatchPromises)
-								.then( () => {
-									if (cacheMatchPromises.length === cachedResources.length) {
-										this.showInstallationReadyMessage();
-									} else {	
-										// There's at least one resource that needs to be cached
-										_this.showCacheProgressModal();
-									}
-								})
-								// if any failed, just show progress modal anyway
-								.catch( () => {_this.showCacheProgressModal()})
-						} 
-						// handle progress updates
-						if (messageType === 'cache progress') {
-							_this.showCacheProgressModal();
-							_this.showFetchProgress(e.data);
+							if (e.data.resourceName in _this.fileCacheTiming) {
+								_this.showCacheProgress(e.data);
+							}
 						} else if (messageType === 'cache error') {
 							// TODO: handle errors (maybe try forcing reloading resource)
 						}
@@ -295,17 +276,82 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	/*
+	If a user installs the app as a PWA, it needs to have the flask/userInfo 
+	request cached. To cache it, the service worker needs to be registered first.
+	Add an event listener that will wait until 
+	*/
+	Constructor.prototype.cachePWAUserInfo = function(pwaRequestID) {
+		// The mobile request has expired or is invalid. Redirect the user back to the mobile request page
+		if (pwaRequestID) {
+			window.addEventListener(_this.customEvents.serviceWorkerReady, ()=> {
+				// if the userInfo response is valid, add it to the cache as 
+				//	flask/user_info so that when the PWA is offline, that endpoint
+				//	will return the cached response. Although this duplicates the 
+				//	request, it's necessary since there's no way to wait for both
+				//	the custom event and the user info query
+				getUserInfo({pwaRequestID: pwaRequestID})
+					.done(response => {
+						if (pythonReturnedError(response) || !response) {
+							const message = 'Your mobile request has expired or is invalid. Return to the' +
+							` <a href="${this.dataEntryConfig.mobile_request_url}">mobile request page</a>` + 
+							' and create a new request.';
+							const footerButton = ` <a class="generic-button" href="${this.dataEntryConfig.mobile_request_url}">OK</a>`
+							showModal(
+								message, 
+								'Invalid Mobile Request', 
+								{
+									footerButtons: footerButton, 
+									dismissable: false
+								}
+							);
+							$('#main-form-container').remove();
+						} else {
+							const putResponse = new Response(
+								JSON.stringify(response),
+								{
+									headers: {'Content-Type': 'application/json'}
+								}
+							);
+							putResponse.text().then(text => console.log('Response Body:', text));
+							const cloneResponse = putResponse.clone();
+							window.caches.keys()
+								// Get the first key (via destructuring with a 1-element array)
+								//	because we only have one cache
+								.then(([cacheName]) => {return window.caches.open(cacheName)})
+								.then(cache => {
+									cache.put('/flask/user_info', cloneResponse)
+									.catch(
+										// TODO handle errors
+									)
+								})
+						}
+					})
+			})
+		}
+	}
+
+
+
 	/* 
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
 
+		const queryParams = parseURLQueryString();
+		const pwaRequestID = queryParams.mobile
+
+		// Add the an listener to wait for the service worker, 
+		//	then put the user info into the cache. Add the event before
+		//	doing anything else so the app is listening before the service
+		//	worker could be activated
+		_this.cachePWAUserInfo(pwaRequestID);
+
 		// Register the service worker to make the app run as a PWA
-		if (true){//(isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
+		if (isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
 			this.preparePWAInstall();
 		}
 
-		const queryParams = parseURLQueryString();
 		this.presentMode = queryParams.present === 'true'
 
 		// ajax

@@ -62,7 +62,14 @@ const LARGE_RESOURCES = [
 
 
 function dispatchProgress({client, resourceName, loaded, total}) {
-	client.postMessage({type: 'cache progress', resourceName, loaded, total})
+	// TODO: move messages to broadcast channel
+	if (client) {
+		client.postMessage({type: 'cache progress', resourceName, loaded, total})
+	} else {
+		self.clients.matchAll().then(clients => {
+		    clients.forEach(client => client.postMessage({type: 'cache progress', resourceName, loaded, total}));
+		})
+	}
 }
 
 
@@ -89,7 +96,7 @@ function respondWithProgressMonitor(clientId, requestURL, response) {
 	debugReadIterations = 0; // direct correlation to server's response buffer size
 	const total = parseInt(contentLength, 10);
 	const reader = response.body.getReader();
-	const resourceName = requestURL;//.split('/').pop();
+	const resourceName = requestURL.split('/').pop();
 
 	return new Response(
 		new ReadableStream({
@@ -217,6 +224,7 @@ self.addEventListener('fetch', e => {
 			console.log('[Service Worker] Fetching ' + requestURL);
 			if (cachedResponse) {
 				// console.log('[Service Worker] Fetched cached data for : ' + e.request.url);
+				dispatchProgress({resourceName: requestURL, loaded: 1, total: 1})
 				return cachedResponse;
 			} else if (LARGE_RESOURCES.includes(requestURL)) {
 				console.log('[Service Worker] Fetching large resource with progress: ' + e.request.url);

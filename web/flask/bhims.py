@@ -2,6 +2,7 @@ from argparse import Namespace
 import base64
 import bcrypt
 import datetime
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from flask import Flask, json, jsonify, render_template, request, url_for
 from flask_mail import Mail, Message
@@ -173,8 +174,7 @@ def query_user_info(username: str='', offline_id:str=''):
 	statement = select(
 		User.id,
 		User.ad_username,
-		User.role,
-		User.offline_id
+		User.role
 	).where(
 		(User.ad_username == username) 
 		if username 
@@ -223,12 +223,90 @@ def get_user_info():
 	return query_user_info(username=username)
 
 
-@app.route('/flask/user_info/<offline_id>', methods=['GET', 'POST'])
-def get_user_info_offline(offline_id):
-	if not offline_id:
-		raise ValueError('offline_id cannot be null')
+@app.route('/flask/user_info/<pwa_request_id>', methods=['GET', 'POST'])
+def get_user_info_for_pwa(pwa_request_id):
+	if not pwa_request_id:
+		raise ValueError('pwa_request_id cannot be null')
 
-	return query_user_info(offline_id=offline_id)
+	if not re.match('[0-9a-zA-Z]{8}', pwa_request_id):
+		raise ValueError(f'pwa_request_id "{pwa_request_id}" is not valid')
+	
+	session = ReadSession()
+	result = (
+		session.query(PWAUserView)
+			.where(PWAUserView.request_id == pwa_request_id)
+	)
+
+	if result.count() == 0:
+		return jsonify(False)
+	else:
+		return jsonify(
+			orm_to_dict(result.first())
+		)
+
+@app.route('/flask/pwa/send_link', methods=['POST'])
+def send_pwa_link():
+
+	data = dict(request.form)
+	email = data.get('email')
+	username = data.get('username')
+
+	if not email:
+		raise ValueError('No email given')
+
+	# Save the request to the DB
+	pwa_request_id = str(uuid4())[:8]
+	creation_time = datetime.datetime.now() #set default value to now
+	with WriteSession() as write_session:
+		result = (
+			write_session.query(User)
+				.where(
+					User.ad_username == username
+				)
+		).first()
+		
+		if not result:
+			raise ValueError(f'Username "{username}" not found')
+
+		# INSERT new request
+		user_id = result.id
+		pwa_request = PWARequest(
+			user_id =  user_id,
+			request_id = pwa_request_id,
+			creation_time = creation_time
+		)
+		write_session.add(pwa_request)
+		write_session.commit()
+
+	# Calculate expiration date
+	expiration_interval = app.config['pwa_request_expiration_minutes']
+	expiration = (creation_time + relativedelta(minutes=expiration_interval)).strftime('%#H:%M')
+
+	# Send the email
+	data['logo_base64_string'] = 'data:image/jpg;base64,' + get_email_logo_base64()	
+	data['button_url'] = f'''{app.config['PWA_INSTALL_URL'][db_schema]}?mobile={pwa_request_id}&user={user_id}'''
+	data['button_text'] = 'Install App'
+	data['heading_title'] = 'Your mobile app install link'
+	data['db_admin_email'] = app.config['DB_ADMIN_EMAIL'][1] # Message() requires name, addres pair for some stupid reason
+
+	data['username'] = username
+	data['expiration'] = expiration
+
+	html = render_template('email_notification_mobile_request.html', **data)
+	mailer = Mail(app)
+	msg = Message(
+		subject=data['heading_title'],
+		recipients=[email],
+		html=html,
+		reply_to=app.config['DB_ADMIN_EMAIL']
+	)
+	mailer.send(msg)
+
+	# return the request ID
+	return jsonify({'expiration': expiration})
+
+
+
 # -------------- User Management ---------------- #
 
 

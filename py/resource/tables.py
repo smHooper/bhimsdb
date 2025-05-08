@@ -1,7 +1,7 @@
 """
 Database Models for SQLAlchemy ORM mapping
 """
-
+import datetime
 from sqlalchemy import Column, ForeignKey, INTEGER, VARCHAR, CHAR, NUMERIC
 from sqlalchemy.dialects.postgresql import TEXT, DATE, TIME, TIMESTAMP
 from sqlalchemy.ext.declarative import as_declarative
@@ -546,3 +546,25 @@ class User(Base):
     role = Column(INTEGER, ForeignKey(UserRoleCode.code))
     offline_id = Column(VARCHAR(50))
     last_submission_attempt = Column(TIMESTAMP)
+
+
+class PWARequest(Base):
+    __tablename__ = 'pwa_requests'
+
+    user_id = Column(INTEGER, ForeignKey(User.id))
+    request_id = Column(VARCHAR(50))
+    creation_time = Column(TIMESTAMP)
+
+    user = relationship(User)
+
+
+# Create views
+class PWAUserView(Base):
+
+    __tablename__ = 'pwa_users_view'
+
+    username = Column(VARCHAR(50))
+    role = Column(INTEGER, ForeignKey(UserRoleCode.code))
+    offline_id = Column(VARCHAR(50))
+    last_submission_attempt = Column(TIMESTAMP)
+    request_id = Column(VARCHAR(50))

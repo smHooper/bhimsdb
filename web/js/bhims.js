@@ -203,21 +203,21 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 }
 
 
-function getUserInfo(offlineID=null) {
-	const offlineIDString = offlineID ? '/' + offlineID : ''
+function getUserInfo({pwaRequestID=null, fillUsername=false}) {
+	const pwaRequestIDString = pwaRequestID ? '/' + pwaRequestID : ''
 	return $.get({
-		url: 'flask/user_info' + offlineIDString,
-	}).done(function(resultString) {
-		if (pythonReturnedError(resultString)) {
+		url: 'flask/user_info' + pwaRequestIDString,
+	}).done(function(result) {
+		if (pythonReturnedError(result)) {
 			const message = 'An error occurred while retrieving user information. Try reloading the page. If this problem persists, contact your system administrator.'
 			const footerButton = '<a class="generic-button" href="bhims-index.html">OK</a>';
 			hideLoadingIndicator();
 			showModal(message, 'Error Retrieving User Info', 'alert', footerButton, {dismissable: false});
-			console.log(resultString);
+			console.log(result);
 
 		} else {
-
-		}
+			if (fillUsername) $('#username').text(result.ad_username);
+		}	
 	});
 }
 

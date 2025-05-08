@@ -402,6 +402,51 @@ CREATE TABLE users (
     offline_id varchar(50) DEFAULT gen_random_uuid(),
     last_submission_attempt TIMESTAMP
 );
+CREATE TABLE pwa_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    request_id varchar(50) DEFAULT substring(gen_random_uuid()::text, '^\w+'),
+    creation_time TIMESTAMP DEFAULT now()
+);
+
+-- add trigger to delete pwa_request records from today or earlier
+CREATE OR REPLACE FUNCTION delete_old_pwa_requests() 
+RETURNS TRIGGER AS $$
+DECLARE
+    schema_name TEXT;
+BEGIN
+    -- Identify the schema dynamically
+    schema_name := TG_TABLE_SCHEMA;
+
+    -- Use EXECUTE for dynamic SQL
+    EXECUTE format('DELETE FROM %I.pwa_requests WHERE creation_time < NOW() - INTERVAL ''10 minutes''', schema_name);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_delete_old_pwa_requests
+AFTER INSERT ON pwa_requests
+EXECUTE FUNCTION delete_old_pwa_requests();
+
+
+CREATE OR REPLACE VIEW pwa_users_view AS 
+    WITH expiration AS (
+        SELECT value::integer FROM config WHERE property = 'pwa_request_expiration_minutes'
+    )
+    SELECT 
+        users.*,
+        users.ad_username AS username, -- web app expects 'userrname', not 'ad_username'
+        request_id 
+    FROM users JOIN (
+        SELECT DISTINCT ON (user_id)
+            user_id,
+            request_id
+        FROM pwa_requests
+        JOIN expiration ON expiration.value <> pwa_requests.id
+        WHERE creation_time > now() - format('%s minutes', expiration.value)::interval -- in case trigger didn't work or hasn't run
+        ORDER BY user_id, creation_time DESC
+    ) requests ON users.id=requests.user_id;
+
 
 -- create a view to get meta table information 
 --  for creating exports from the query page
@@ -651,6 +696,7 @@ DECLARE
   src_oid          oid;
   tbl_oid          oid;
   func_oid         oid;
+  trg_rec          record;
   object           text;
   buffer           text;
   srctbl           text;
@@ -659,10 +705,11 @@ DECLARE
   record_          record;
   qry              text;
   dest_qry         text;
+  final_qry        TEXT;
   v_def            text;
   seqval           bigint;
   sq_last_value    bigint;
-  sq_maximum_value     bigint;
+  sq_maximum_value bigint;
   sq_start_value   bigint;
   sq_increment_by  bigint;
   sq_min_value     bigint;
@@ -859,6 +906,37 @@ BEGIN
     EXECUTE dest_qry;
 
   END LOOP;
+
+
+  -- Copy triggers
+  FOR trg_rec IN
+      SELECT 
+        event_object_table AS table_name, 
+        action_timing || ' ' || event_manipulation AS trigger_event,
+        trigger_name, 
+        action_statement
+      FROM information_schema.triggers
+      WHERE event_object_schema = source_schema
+  LOOP
+      -- Modify trigger statement to reference the new schema
+      SELECT regexp_replace(
+        action_statement, 
+        'EXECUTE FUNCTION (' || source_schema || '.)?', 
+        'EXECUTE FUNCTION ' || dest_schema || '.'
+      ) INTO dest_qry;
+      
+      -- Format CREATE TRIGGER statement
+      SELECT format('CREATE TRIGGER %2$I %3$s ON %1$I.%4$I %5$s',
+          dest_schema,
+          trg_rec.trigger_name,
+          trg_rec.trigger_event,
+          trg_rec.table_name,
+          dest_qry
+      ) INTO final_qry;
+
+      -- Execute the trigger creation query
+      EXECUTE final_qry;
+  END LOOP;
   
   RETURN; 
  
@@ -868,8 +946,34 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
+
+-- create a convenience function for granting permissions after re-creating 
+--    schemas or views
+CREATE OR REPLACE FUNCTION grant_permissions() 
+RETURNS void AS
+$BODY$
+BEGIN
+    GRANT USAGE ON SCHEMA public TO bhims_read;
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO bhims_read;
+    GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO bhims_read;
+    GRANT USAGE ON SCHEMA public TO bhims_admin;
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO bhims_admin;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO bhims_admin;
+
+    GRANT USAGE ON SCHEMA dev TO bhims_read;
+    GRANT SELECT ON ALL TABLES IN SCHEMA dev TO bhims_read;
+    GRANT SELECT ON ALL SEQUENCES IN SCHEMA dev TO bhims_read;
+    GRANT USAGE ON SCHEMA dev TO bhims_admin;
+    GRANT ALL ON ALL TABLES IN SCHEMA dev TO bhims_admin;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA dev TO bhims_admin;
+END;
+$BODY$
+LANGUAGE plpgsql VOLATILE
+COST 100;
+
+
 ALTER FUNCTION clone_schema(text, text, boolean)
   OWNER TO postgres;
 
 
-select clone_schema('public', 'dev', true);
+select clone_schema('public', 'dev', true), grant_permissions();

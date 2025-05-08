@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
+	<title>DENA BHIMS - mobile request</title>
+	<link rel="icon" type="image/x-icon" href="/imgs/favicon.ico">
+	
+	<!--jquery -->
+	<script src="packages/jquery/jquery-3.7.1.min.js"></script>
+	<link href="packages/jquery/jquery-ui.1.12.1.css" rel="stylesheet" >
+	<script src="packages/jquery/jquery-ui.1.12.1.min.js"></script>
+	
+	<!-- bootstrap -->
+	<link href="packages/bootstrap/bootstrap.4.0.0.min.css" rel="stylesheet"/>
+	<script src="packages/bootstrap/bootstrap.4.0.0.min.js"></script>
+
+	<!--fonts -->
+	<link rel="preconnect" href="https://fonts.gstatic.com">
+	<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+
+	<!-- custom css -->
+	<link rel="stylesheet" href="css/bhims.css">
+	<link rel="stylesheet" href="css/mobile-request.css">
+	
+</head>
+
+<body>
+	 <!-- loading indicator should be hidden and will only be shown when loading data -->
+	<div class="modal-background modal-background-light hidden" id="loading-indicator-background"></div>
+	<div class="hidden" id="loading-indicator"></div>
+
+	<main class="main-container-with-sidebar">
+		<div class="screenshot-container">
+			<img class="screenshot-img" src="imgs/mobile_request_screenshot.jpg" alt="Screenshot of app running on an iPad"/>
+			<div class="installation-description">
+				<h2>Install the mobile app</h2>
+				<p class="mb-5">
+					Enter and confirm your email address below. Once you click the <strong>Install app</strong>
+					 button, you'll receive an email with a link to install the app. Open the link from your
+					 mobile device and follow the prompts to install the app.
+					<br><br>
+					The link will be valid for <span id="expiration-interval"></span> minutes after it's created. You must install the app on your device
+					 within that time. If the link expires, you will have to generate a new one. 
+				</p>
+				<div class="col field-container">
+					<input id="email" class="input-field email-field" type="email" placeholder="Enter your email address" required>
+					<label class="field-label" for="email">Email</label>
+				</div>
+				<div class="col field-container">
+					<input id="confirm-email" class="input-field email-field" type="email" placeholder="Cofirm your email address" required>
+					<label class="field-label" for="confirm-email">Confirm your email</label>
+				</div>
+				<div class="button-row">
+					<button class="generic-button get-app-button">Install app</button>
+					<!-- <a class="generic-button" href="index.html">Return home</a> -->
+				</div>
+			</div>
+		</div>
+	</main>
+
+	<!--alert/message modal -->
+	<div class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-hidden="true"></div>
+
+	<script src="js/bhims.js"></script>
+	<script type="text/javascript">
+		let expirationInterval = 10; // privde default value
+		const updateExpirationInterval = () => {
+			// don't use jQuery since this should happen immediately
+			document.getElementById('expiration-interval').innerText = expirationInterval;
+		}
+		updateExpirationInterval();
+
+		$(document).ready(() => {
+			addSidebarMenu();
+			getUserInfo({fillUsername: true});
+
+			// Get the config value and update it in case it's different from the default
+			$.get('flask/db_config').done(response => {
+				if (!pythonReturnedError(response)) {
+					expirationInterval = response.pwa_request_expiration_minutes;
+					updateExpirationInterval();
+				}
+			});
+
+			// When user types anything in a .error field, remove the error class
+			$('.email-field').keyup(e => {
+				$(e.target).removeClass('error');
+			})
+
+			// Handle input checks when the user clicks the install button
+			$('.get-app-button').click(() => {
+				const emailInput = $('#email')[0];
+				const confirmInput = $('#confirm-email')[0];
+				
+				if (!emailInput.checkValidity()) {
+					$(emailInput).addClass('error');
+					showModal('You must enter a valid email address', 'Invalid Email');
+					return;
+				}
+				if (!confirmInput.checkValidity()) {
+					$(confirmInput).addClass('error')
+					showModal('You must enter a valid email address', 'Invalid Email');
+					return;
+				}
+
+				const email = emailInput.value;
+				const confirmEmail = confirmInput.value;
+				if (email !== confirmEmail) {
+					showModal('The email addresses you entered do match. Make sure you enter your NPS email address in both email fields.', 'Invalid Email');
+					$(confirmInput).addClass('error');
+					return;
+				}
+
+				showLoadingIndicator('get-app');
+
+				// Inputs are good so send the email
+				$.post({
+					url: 'flask//pwa/send_link',
+					data: {
+						email: email,
+						username: $('#username').text()
+					}
+				}).done(response => {
+					if (pythonReturnedError(response)) {
+						showModal('An unexpected error occurred:<br><br>' + response, 'Unexpected Error')
+					} else {
+						const expiration = response.expiration;
+						const message = `An email was sent to <strong>${email}</strong> with your` +
+							` mobile app link. Open the email on your mobile device and follow` +
+							` the instructions. <strong>Your link will remain valid until ${expiration}` +
+							`</strong>. If you don't see an email within a few minutes, contact` + 
+							` the database administrator.`;
+						showModal(message, 'Check Your Email!');
+					}
+				}).always(() => {hideLoadingIndicator()})
+
+			})
+		});
+
+	</script>
+
+</body>

@@ -1,0 +1,17 @@
+{% extends "email_notification.html" %}
+
+{% block message %}
+	A new BHIMS mobile app installation request was recently created for you.
+	 To install the app, connect to ArrowheadWiFi on your mobile device and
+	 open this message. Tap the button below and follow the prompts to install
+	 the app. <strong>This link will expire today at {{expiration}}</strong>.
+	<br><br>
+	<strong>Do not share this link with anyone. </strong> It is for you and you 
+	 only to install the mobile app. If you did not submit this request, 
+	 <a href="mailto:{{ db_admin_email }}">contact your database administrator</a>.
+	<br><br>
+	<h3 style="width: 100%; text-align: center">Username: {{username}}</h3>
+{% endblock %}
+{% block link_block %}
+	{{ super() }}
+{% endblock %}

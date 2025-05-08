@@ -316,17 +316,16 @@ var BHIMSEntryForm = (function() {
 			})
 
 		// ajax
-		var deferred = $.Deferred();
-		const offlineID = queryParams.offlineid
-		const userInfoDeferred = getUserInfo(offlineID)
-			.then(result => {
+		var deferred = $.Deferred();		
+		const userInfoDeferred = getUserInfo({pwaRequestID: pwaRequestID})
+			.done(result => {
 				if (pythonReturnedError(result)) {
-
+					console.log(result)
 				} else {
 					const userInfo = result;
 					_this.username = userInfo.username;
 					_this.userRole = userInfo.role;
-					
+
 					if (!isNewEntry) {
 						// If this is the query page, check if the user has permission to access it
 						const canAccessData = _this.dataAccessUserRoles.includes(parseInt(userInfo.role))
@@ -334,6 +333,8 @@ var BHIMSEntryForm = (function() {
 							showPermissionDeniedAlert();
 						}
 					}
+
+					
 				}
 			});
 		
@@ -344,7 +345,13 @@ var BHIMSEntryForm = (function() {
 				userInfoDeferred,
 				loadConfigValues(this.dataEntryConfig),
 				this.getFormConfiguration()
-			).then(() => {
+			).then((userInfoResponse, loadConfigResponse, _) => {
+				if (pythonReturnedError(userInfoResponse)) {
+					// TODO: update 500 error response to return an 
+					//	object with the error type and full traceback as separate properties
+					//showModal('An unexpected error occurred while retrieving user information:\n' + userInfoResponse, 'Unexpected Error');
+					return;
+				}
 				const pages = this.formConfiguration.pages;
 				if (isNewEntry) {
 					if (Object.keys(_this.dataEntryConfig).length) {

@@ -1,0 +1,28 @@
+main {
+	width: 100%;
+	height: 100%;
+}
+.screenshot-container {
+	padding: 2rem;
+	max-height: 100%;
+	display: flex;
+	justify-content: center;
+}
+.screenshot-container > * {
+	height: 100%;
+}
+.installation-description {
+	min-width: 200px;
+	max-width: 20%;
+}
+.installation-description > p {
+	font-size: 1.3rem;
+}
+.button-row {
+	width: 100%;
+	display: flex;
+	justify-content: center;
+}
+.button-row .generic-button {
+	margin: 2rem;
+}

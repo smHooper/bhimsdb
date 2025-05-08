@@ -379,9 +379,12 @@ function trueRound(x, precision=0) {
 
 */
 function addSidebarMenu() {
+	const mainWithSidebar = $('.main-container-with-sidebar');
+	const mainWithSidebarExists = mainWithSidebar.length;
 	$(`
-		<!-- nav sidebar -->
-		<div class="main-container-with-sidebar">
+		
+		${mainWithSidebarExists ? '' : '<div class="main-container-with-sidebar">'} 
+			<!-- nav sidebar -->
 			<nav class="sidebar" role="navigation">
 				<div class="sidebar-sticky">
 					<div class="sidebar-background"></div>
@@ -426,7 +429,8 @@ function addSidebarMenu() {
 
 				</div>
 			</nav>
-	`).prependTo('main');
+		${mainWithSidebarExists ? '' : '</div>'} 
+	`).prependTo(mainWithSidebarExists ? '.main-container-with-sidebar' : 'main');
 
 	$(`
 		<nav class="bhims-header-menu">

@@ -405,63 +405,6 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
-		/*
-		Apparently safari either clears the cache once the PWA is installed or creates a separate storage partition. 
-		Either way, the cache is totally empty once installed. This means I need to move all of my install logic to the post-PWA-install. 
-
-		Apparently the service worker isn't automatically registered either! So I guess my prompt to install the service worker
-		won't work. I will somehow have to pass the PWA request ID to PWA. I could possibly modify the response to the '/' URL?
-		ChatGPT seems to think that if I store something in localStorage, it will persist after PWA isntallation
-		*/
-		// TEST THIS
-		// function storeParamsIndexedDB() {
-		//     const params = new URLSearchParams(window.location.search);
-		//     if (params.toString()) {
-		//         const request = indexedDB.open('pwaDB', 2);
-		//         request.onupgradeneeded = function (event) {
-		//             const db = event.target.result;
-		//             db.createObjectStore('params', { keyPath: 'id' });
-		//         };
-		//         request.onsuccess = function (event) {
-		//             const db = event.target.result;
-		//             const transaction = db.transaction(['params'], 'readwrite');
-		//             const store = transaction.objectStore('params');
-		//             store.put({ id: 1, query: params.toString() });
-		//         };
-		//         request.onerror = e => {
-		//         	console.error(`indexedDB error: ${event.target.error?.message}`);
-		//         }
-		//     }
-		// }
-
-		// function getParamsFromIndexedDB(callback) {
-		//     const request = indexedDB.open('pwaDB', 2);
-		//     request.onsuccess = function (event) {
-		//         const db = event.target.result;
-		//         const transaction = db.transaction(['params'], 'readonly');
-		//         const store = transaction.objectStore('params');
-		//         const getRequest = store.get(1);
-		//         getRequest.onsuccess = function () {
-		//             if (getRequest.result) {
-		//                 callback(getRequest.result.query);
-		//             }
-		//         };
-		//     };
-		//     request.onerror = e => {
-		//     	console.log(`error from indexedDB.open('pwaDB', 1): ${e.target.error?.message}`)
-		//     }
-		// }
-		// storeParamsIndexedDB();
-
-		// isInPWAMode = isPWA();
-		// if (isInPWAMode) {
-		// 	getParamsFromIndexedDB((savedParams) => {
-		// 	    if (savedParams) {
-		// 	        console.log('Restored Query Params:', savedParams);
-		// 	        window.history.replaceState({}, '', window.location.pathname + '?' + savedParams);
-		// 	    }
-		// 	});
-		// }
 
 		const queryParams = parseURLQueryString();
 		const pwaRequestID = queryParams.mobile

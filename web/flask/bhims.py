@@ -324,22 +324,6 @@ def get_pwa_html():
 	"""
 
 	mobile_id = request.args.get('mobile', '')
-	
-	# html_path = 'entry-form.html'
-	# with open(html_path, 'r', encoding='utf-8') as f:
-	#     html = f.read()
-
-	# # Replace existing manifest tag or insert one if missing
-	# manifest_tag = f'<link rel="manifest" href="/flask/pwa/manifest?mobile={mobile_id}" crossorigin="use-credentials">'
-
-	# # Replace existing <link rel="manifest"> if it exists
-	# if '<link rel="manifest' in html:
-	#     html = re.sub(r'<link rel="manifest".*?>', manifest_tag, html, flags=re.IGNORECASE)
-	# else:
-	#     # Insert into <head> if not present
-	#     html = html.replace('<head>', f'<head>\n  {manifest_tag}', 1)
-
-	# return Response(html, mimetype='text/html')
 	return render_template('pwa_install.html', mobile_id=mobile_id)
 
 

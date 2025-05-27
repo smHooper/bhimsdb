@@ -49,14 +49,14 @@ const PRECACHE_RESOURCES = [
 	'/packages/leaflet/leaflet.tilelayer.mbtiles.js',
 	'/packages/select2/select2.min.css',
 	'/packages/select2/select2.min.js',
-	'/resources/management_units.json',
 	'/resources/mileposts.json',
-	'/resources/roads.json'
+	'/resources/roads.json',
 ];
 // These also get added to pre-cached resources, but they're large files
 //	so we want to show the user their download progress so they know when 
 //	it's safe to navigate away from the page
 const LARGE_RESOURCES = [
+	'/resources/management_units.json',
 	'/resources/topo.mbtiles'
 ];
 

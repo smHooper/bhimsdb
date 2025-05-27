@@ -121,8 +121,14 @@ var BHIMSEntryForm = (function() {
 
 
 	Constructor.prototype.showInstallationReadyMessage = function() {
-		const message = 'The app is ready to install on your device. <strong>Add some instructions per browser</strong>'
-		showModal(message, 'App Ready to Install')
+		const message = '<span class="install-ready-message">' +
+			'The app is ready to use offline on your device. If you collect' +
+			' a BHIMS report while offline, be sure to press the <strong>' +
+			'Upload offline data</strong> button when reconnect to Arrowhead' +
+			' WiFi. If you delete the app from this device\'s home screen,' +
+			' you will lose any reports you did not upload.' +
+		'</span>'
+		showModal(message, 'App Ready for Offline Use')
 	}
 
 
@@ -223,42 +229,98 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.onLargeResourceMessage = function(data) {
+		var cachedResources = [];
+		var cacheMatchPromises = [];
+		for (const url of data.resources) {
+			// check if the resource is already cached
+			cacheMatchPromises.push(
+				caches.match(url).then(response => {
+					if (response) {
+						print(url + ' already cached')
+						cachedResources.push(url);
+					} else {
+						print(url + ' not cached')
+						// add the file to the cache timing property so that showFetchProgress
+						//	knows how many files to expect
+						const resourceName = url.split('/').pop();
+						_this.fileCacheTiming[resourceName] = {name: resourceName};
+
+						// tell the service worker to fetch it so it can be cached
+						// **** this pattern doesn't work because the service worker thinks the
+						//	resource is already cached by the time it receives the fetch request 
+						//	to respondWithProgress()
+						$.get(url);
+					}
+				})
+			);
+		}
+		// once all promises have resolved (or failed), show progress or a message saying the app is ready to install (if all resources are already cached)
+		Promise.all(cacheMatchPromises)
+			.then( () => {
+				if (cacheMatchPromises.length === cachedResources.length) {
+					this.showInstallationReadyMessage();
+				} else {	
+					// There's at least one resource that needs to be cached
+					_this.showCacheProgressModal();
+				}
+			})
+			// if any failed, just show progress modal anyway
+			.catch( () => {_this.showCacheProgressModal()})
+	}
+
+
 	/*
 	When registering the service worker, track progress of large resources and 
 	show the user the progress so they know when it's safe to install
 	*/
 	Constructor.prototype.preparePWAInstall = function() {
+		// New registration will only occur if registration doens't already exists.
+		//	Technically if there's an update to the servcice worker, a new registration
+		//	would occur, but the pre-cache strategy for offline use includes the service
+		//	worker, so the user would have to clear their cache to see the update
+		registerServiceWorker();
+
+		// and show them the download progress
+		navigator.serviceWorker.ready.then(registration => {
+			// Let the cachePWAUserInfo() method know the service worker
+			//	(and therefore the cache) is ready
+			window.dispatchEvent(new CustomEvent(_this.customEvents.serviceWorkerReady));
+
+			registration.active.postMessage({message: 'get large resources' });
+
+			// listen for progress communication from service worker
+			navigator.serviceWorker.onmessage = e => {
+				const messageType = e.data.type;
+				const $modal = $('#alert-modal');
+				if (messageType === 'large resources response') {
+					_this.onLargeResourceMessage(e.data);
+				}// handle progress updates
+				else if (messageType === 'cache progress') {
+					if (!$modal.find('.install-ready-message').length &&
+						!$modal.find('.modal-download-progress-list').length
+						) {
+						_this.showCacheProgressModal();
+					}
+					if (e.data.resourceName in _this.fileCacheTiming) {
+						_this.showCacheProgress(e.data);
+					}
+				} else if (messageType === 'cache error') {
+					// TODO: handle errors (maybe try forcing reloading resource)
+				}
+			}
+		});
+	}
+
+
+	/*
+	Prompt user to install PWA
+	*/
+	Constructor.prototype.confirmPWAInstall = function() {
 
 		const eventHandler = () => {
 			$('#alert-modal .confirm-button').click(() => {
-				// When the user clicks the confirm button, register the service worker
-				registerServiceWorker();
-				// and show them the download progress
-				navigator.serviceWorker.ready.then(registration => {
-					// Let the cachePWAUserInfo() method know the service worker
-					//	(and therefore the cache) is ready
-					window.dispatchEvent(new CustomEvent(_this.customEvents.serviceWorkerReady));
-
-					registration.active.postMessage({message: 'get large resources' });
-
-					// listen for progress communication from service worker
-					navigator.serviceWorker.onmessage = e => {
-						const messageType = e.data.type;
-						if (messageType === 'large resources response') {
-							_this.onLargeResourceMessage(e.data);
-						}// handle progress updates
-						else if (messageType === 'cache progress') {
-							if (!$('#alert-modal .modal-download-progress-list').length) {
-								_this.showCacheProgressModal();
-							}
-							if (e.data.resourceName in _this.fileCacheTiming) {
-								_this.showCacheProgress(e.data);
-							}
-						} else if (messageType === 'cache error') {
-							// TODO: handle errors (maybe try forcing reloading resource)
-						}
-					}
-				});
+				_this.preparePWAInstall();
 			})
 		}
 		const message = 
@@ -319,8 +381,8 @@ var BHIMSEntryForm = (function() {
 									headers: {'Content-Type': 'application/json'}
 								}
 							);
-							putResponse.text().then(text => console.log('Response Body:', text));
 							const cloneResponse = putResponse.clone();
+							putResponse.text().then(text => console.log('Response Body:', text));
 							window.caches.keys()
 								// Get the first key (via destructuring with a 1-element array)
 								//	because we only have one cache
@@ -343,6 +405,63 @@ var BHIMSEntryForm = (function() {
 	Configure the form using meta tables in the database
 	*/
 	Constructor.prototype.configureForm = function(mainParentID=null, isNewEntry=true) {
+		/*
+		Apparently safari either clears the cache once the PWA is installed or creates a separate storage partition. 
+		Either way, the cache is totally empty once installed. This means I need to move all of my install logic to the post-PWA-install. 
+
+		Apparently the service worker isn't automatically registered either! So I guess my prompt to install the service worker
+		won't work. I will somehow have to pass the PWA request ID to PWA. I could possibly modify the response to the '/' URL?
+		ChatGPT seems to think that if I store something in localStorage, it will persist after PWA isntallation
+		*/
+		// TEST THIS
+		// function storeParamsIndexedDB() {
+		//     const params = new URLSearchParams(window.location.search);
+		//     if (params.toString()) {
+		//         const request = indexedDB.open('pwaDB', 2);
+		//         request.onupgradeneeded = function (event) {
+		//             const db = event.target.result;
+		//             db.createObjectStore('params', { keyPath: 'id' });
+		//         };
+		//         request.onsuccess = function (event) {
+		//             const db = event.target.result;
+		//             const transaction = db.transaction(['params'], 'readwrite');
+		//             const store = transaction.objectStore('params');
+		//             store.put({ id: 1, query: params.toString() });
+		//         };
+		//         request.onerror = e => {
+		//         	console.error(`indexedDB error: ${event.target.error?.message}`);
+		//         }
+		//     }
+		// }
+
+		// function getParamsFromIndexedDB(callback) {
+		//     const request = indexedDB.open('pwaDB', 2);
+		//     request.onsuccess = function (event) {
+		//         const db = event.target.result;
+		//         const transaction = db.transaction(['params'], 'readonly');
+		//         const store = transaction.objectStore('params');
+		//         const getRequest = store.get(1);
+		//         getRequest.onsuccess = function () {
+		//             if (getRequest.result) {
+		//                 callback(getRequest.result.query);
+		//             }
+		//         };
+		//     };
+		//     request.onerror = e => {
+		//     	console.log(`error from indexedDB.open('pwaDB', 1): ${e.target.error?.message}`)
+		//     }
+		// }
+		// storeParamsIndexedDB();
+
+		// isInPWAMode = isPWA();
+		// if (isInPWAMode) {
+		// 	getParamsFromIndexedDB((savedParams) => {
+		// 	    if (savedParams) {
+		// 	        console.log('Restored Query Params:', savedParams);
+		// 	        window.history.replaceState({}, '', window.location.pathname + '?' + savedParams);
+		// 	    }
+		// 	});
+		// }
 
 		const queryParams = parseURLQueryString();
 		const pwaRequestID = queryParams.mobile
@@ -354,7 +473,7 @@ var BHIMSEntryForm = (function() {
 		_this.cachePWAUserInfo(pwaRequestID);
 
 		// Register the service worker to make the app run as a PWA
-		if (isMobile() && !isPWA()) { //***TODO: figure out how to detect if resources have already been cached
+		if (isMobile()) { 
 			this.preparePWAInstall();
 		}
 

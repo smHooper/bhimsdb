@@ -4,7 +4,7 @@ import bcrypt
 import datetime
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
-from flask import Flask, json, jsonify, render_template, request, url_for
+from flask import Flask, json, jsonify, make_response, render_template, request, Response, url_for
 from flask_mail import Mail, Message
 import os
 import re
@@ -308,6 +308,64 @@ def send_pwa_link():
 
 
 # -------------- User Management ---------------- #
+
+
+# --------------- PWA Management ---------------- #
+@app.route('/flask/pwa/install')
+def get_pwa_html():
+	"""
+	Render the PWA install landing page dynamically. Safari wipes the client storage 
+		as soon as you install a PWA, which has 3 related implications:
+			1. storing user info client-side before installation doesn't work
+			2. the start URL for the PWA (as specified in the web app manifest) needs 
+				to include the mobile request ID to get user info after installation
+			3. the web app manifest needs to be dynamically served in order to include 
+				a dynamic start_url
+	"""
+
+	mobile_id = request.args.get('mobile', '')
+	
+	# html_path = 'entry-form.html'
+	# with open(html_path, 'r', encoding='utf-8') as f:
+	#     html = f.read()
+
+	# # Replace existing manifest tag or insert one if missing
+	# manifest_tag = f'<link rel="manifest" href="/flask/pwa/manifest?mobile={mobile_id}" crossorigin="use-credentials">'
+
+	# # Replace existing <link rel="manifest"> if it exists
+	# if '<link rel="manifest' in html:
+	#     html = re.sub(r'<link rel="manifest".*?>', manifest_tag, html, flags=re.IGNORECASE)
+	# else:
+	#     # Insert into <head> if not present
+	#     html = html.replace('<head>', f'<head>\n  {manifest_tag}', 1)
+
+	# return Response(html, mimetype='text/html')
+	return render_template('pwa_install.html', mobile_id=mobile_id)
+
+
+
+
+@app.route('/flask/pwa/manifest')
+def get_pwa_manifest():
+	"""
+	Return a web app manifest JSON with a dynamic start_url that includes 
+	the mobile request ID
+	"""
+
+	with open('flask/static/pwa-manifest.json') as f:
+		manifest = json.load(f)
+
+	mobile_request_id = request.args.get('mobile', '')
+	if mobile_request_id:
+		manifest['start_url'] = f'''{manifest['start_url']}?mobile={mobile_request_id}'''
+
+	response = make_response(jsonify(manifest))
+	response.headers['Content-Type'] = 'application/json'
+	response.headers['Cache-Control'] = 'no-store'
+
+	return response
+
+# --------------- PWA Management ---------------- #
 
 
 # -------------- Entry Form Config ---------------- #

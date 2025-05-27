@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
 	<title>DENA BHIMS - new encounter</title>
 	<link rel="icon" type="image/x-icon" href="/imgs/favicon.ico">
-	<link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+	<link rel="manifest" href="/flask/pwa/manifest" crossorigin="use-credentials">
 	
 	<!--jquery -->
 	<script src="packages/jquery/jquery-3.7.1.min.js"></script>
@@ -43,6 +43,28 @@
 	<link rel="stylesheet" href="css/entry-form.css">
 	<link rel="stylesheet" href="css/entry-form-dena.css">
 	
+<!-- 	<script>
+	  (function() {
+	    // Get mobile ID from query string (e.g., ?mobile=abc123)
+	    const params = new URLSearchParams(window.location.search);
+	    const mobileId = params.get('mobile');
+
+	    if (!mobileId) return; // Exit if no ID provided
+
+	    // Remove existing manifest tag if present
+	    const existing = document.querySelector('link[rel="manifest"]');
+	    if (existing) existing.remove();
+
+	    // Create a new manifest link with the mobile param
+	    const link = document.createElement('link');
+	    link.rel = 'manifest';
+	    link.href = `/flask/manifest?mobile=${encodeURIComponent(mobileId)}`;
+	    link.crossOrigin = 'use-credentials';
+
+	    document.head.appendChild(link);
+	  })();
+	</script> -->
+
 </head>
 
 <body>

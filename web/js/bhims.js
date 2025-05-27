@@ -209,7 +209,7 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 function getUserInfo({pwaRequestID=null, fillUsername=false}) {
 	const pwaRequestIDString = pwaRequestID ? '/' + pwaRequestID : ''
 	return $.get({
-		url: 'flask/user_info' + pwaRequestIDString,
+		url: '/flask/user_info' + pwaRequestIDString,
 	}).done(function(result) {
 		if (pythonReturnedError(result)) {
 			const message = 'An error occurred while retrieving user information. Try reloading the page. If this problem persists, contact your system administrator.'

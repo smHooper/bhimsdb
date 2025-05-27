@@ -155,15 +155,13 @@ function fetchWithProgressMonitor(e) {
 	// 	mode: 'cors',
 	// 	credentials: 'omit'
 	// });
-	return fetch(newRequest).then(response => {
-		caches.add(
+	return fetch(newRequest).then(response => 
 			respondWithProgressMonitor(
 				e.clientId, 
 				e.request.url, 
 				response
 			)
-		)
-	});
+		);
 }
 
 // listen for the app to indicate the user wants to download/install

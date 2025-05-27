@@ -128,7 +128,9 @@ var BHIMSEntryForm = (function() {
 			' WiFi. If you delete the app from this device\'s home screen,' +
 			' you will lose any reports you did not upload.' +
 		'</span>'
-		showModal(message, 'App Ready for Offline Use')
+		showModal(message, 'App Ready for Offline Use');
+
+		window.localStorage.installReady = true;
 	}
 
 
@@ -416,7 +418,7 @@ var BHIMSEntryForm = (function() {
 		_this.cachePWAUserInfo(pwaRequestID);
 
 		// Register the service worker to make the app run as a PWA
-		if (isMobile()) { 
+		if (isMobile() && !window.localStorage.installReady) { 
 			this.preparePWAInstall();
 		}
 

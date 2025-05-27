@@ -211,7 +211,7 @@ var BHIMSEntryForm = (function() {
 		const modalBody = `
 			<div class="mb-3">
 			There are a few resources that will take a while to download.
-			Please leave your device on and this tab open while the downloads 
+			Please leave your device on and the app open while the downloads 
 			finish.
 			</div>
 			<h6 class="w-100 mb-2">Download Progress</h6>

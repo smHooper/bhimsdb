@@ -1464,7 +1464,24 @@ var BHIMSEntryForm = (function() {
 			//	use back button to go directly to a section, presumably by accident)
 			window.history.replaceState(null, document.title, document.URL.split('#')[0])
 		} else {
-			document.getElementById(nextElementID.replace('#', '')).scrollIntoView();
+			// safari's implementation of scroll-snap is breaks smooth scroll so temporarily
+			//	disabled it, then reenable it
+			const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+			const form = document.querySelector('.form-body');
+			const snapType = form.style.scrollSnapType;
+			if (isSafari) {
+				form.style.scrollSnapType = 'none';
+				setTimeout(() => {
+					form.style.scrollSnapType = snapType; // or reset to original value
+				}, 500);
+			}
+			document.getElementById(
+					nextElementID.replace('#', '')
+				).scrollIntoView({
+					behavior: 'smooth',
+					block: 'nearest',
+					inline: 'start'
+				});
 			//window.location.hash = nextElementID;
 		}
 		

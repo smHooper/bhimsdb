@@ -17,6 +17,7 @@ var BHIMSQuery = (function(){
 		this.tableSortColumns = {};
 		this.encounterIDs = [];
 		this.fieldsFull = false;
+		this.enounterList = {};
 		this.anonymizedDefaults = {
 			//first_name: 'Anonymous',
 			//last_name: 'Person',
@@ -193,53 +194,40 @@ var BHIMSQuery = (function(){
 				if (queryReturnedError(queryResultString)) { 
 					console.log(`error query encounters table: ${queryResultString}`);
 				} else {
-					var liElements = [];
+					
 					encounterResult = $.parseJSON(queryResultString);
 
 					// Unload any previous data since we know the query returned something
-					this.queryResult = {}; 
+					
 					$('#query-result-list').empty();
 					// for some reason accordions also occasionally get cleared before being reloaded with new data, so do that manually
 					$('.accordion.form-item-list .card:not(.cloneable)').remove();
 
 					// For each encounter, create an object that mirrors the FIELD_VALUES object of bhims-entry.js
+					let listItems = [];
 					for (const encounter of encounterResult) {
-						
-						
-						this.queryResult[encounter.id] = {...encounter};
-
-						//this.queryResult.encounters[encounter.id] = {...encounter};
-
-						// Configure the list item element for this encounter
-						const bearGroupType = encounter.bear_cohort_code ? this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 'unknown'
-						liElements.push(
-							$(`
-								<li id="query-result-item-${encounter.id}" class="query-result-list-item" data-encounter-id="${encounter.id}" title="Form number: ${encounter.park_form_id}, Bear group: ${bearGroupType}">
-									<label>
-										<strong>Form number:</strong> ${encounter.park_form_id}, <strong>Bear group:</strong> ${bearGroupType}
-									</label>
-									<div class="query-result-edit-button-container">
-										<button id="delete-button-${encounter.id}" class="query-result-edit-button icon-button delete-encounter-button" type="button" aria-label="Delete selected encounter" title="Delete encounter">
-											<i class="fas fa-trash fa-lg"></i>
-										</button>
-										<button id="edit-button-${encounter.id}" class="query-result-edit-button icon-button toggle-editing-button" type="button" aria-label="Edit selected encounter" title="Edit encounter">
-											<i class="fas fa-edit fa-lg"></i>
-										</button>
-										<button id="save-button-${encounter.id}" class="query-result-edit-button icon-button save-edits-button hidden" type="button" aria-label="Save edits" title="Save edits">
-											<i class="fas fa-save fa-lg"></i>
-										</button>
-										<button id="permalink-button-${encounter.id}" class="query-result-edit-button icon-button encounter-permalink-button" type="button" aria-label="Copy permalink" title="Copy permalink" data-encounter-id="${encounter.id}">
-											<i class="fas fa-link fa-lg"></i>
-										</button>
-									</div>
-								</li>
-							`).appendTo('#query-result-list')
-								.click(this.onResultItemClick)
+						const bearGroupType = 
+							encounter.bear_cohort_code ? 
+							this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 
+							'unknown';
+						listItems.push(
+							this.encounterList.addEncounter(
+								encounter.id, 
+								encounter.park_form_id, 
+								bearGroupType, 
+								{
+									data: encounter,
+									onClick: this.onResultItemClick
+								}
+							)
 						);
 					}
 
+					// figure out if this.encounterList.encounters or queryResult will be the repository
+					this.queryResult = deepCopy(this.encounterList.encounters); 
+
 					// Make the first one selected
-					const $firstEl = liElements[0];
+					const $firstEl = listItems[0];
 					if ($firstEl) {
 						$firstEl.addClass('selected');
 						this.selectedID = $firstEl.data('encounter-id');
@@ -967,7 +955,7 @@ var BHIMSQuery = (function(){
 			if (queryReturnedError(deleteResultString)) {
 				showModal('A problem occurred that prevented the server from deleting the encounter. Please try again later. \n\n Error details: ' + deleteResultString, 'Database Error');
 			} else {
-				const $deletedEncounterElement = $('#query-result-item-' + encounterID)
+				const $deletedEncounterElement = $('#encounter-list-item-' + encounterID)
 					.fadeOut(500, (_, el) => {
 						$(el).remove();
 					})
@@ -2586,7 +2574,10 @@ var BHIMSQuery = (function(){
 			}
 		});
 
-
+		this.encounterList = new BHIMSEncounterList(
+			$('#query-result-list'), 
+			$('#row-details-pane')
+		);
 
 		// Data export modal: when the field selection tabs are shown, expand the modal
 		$('#input-select_fields').change(e => {

@@ -1715,7 +1715,7 @@ var BHIMSEntryForm = (function() {
 			const tableRows = _this.fieldValues[tableName];
 			
 			// Get the index of this card within the accordion
-			const index = $input.attr('id').match(/\d+$/)[0];
+			const index = ($input.attr('id').match(/\d+$/) || [])[0];
 			if (!tableRows[index]) tableRows[index] = {};
 			tableRows[index][fieldName] = value;
 		} else {

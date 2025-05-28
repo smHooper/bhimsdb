@@ -85,8 +85,8 @@
 								</label>
 							</div>
 						</div>
-						<div id="query-result-count" class="invisible">
-							returns <span id="query-encounters-count" class="query-result-count-text count-up"></span> of <span id="total-encounters-count" class="query-result-count-text"></span> encounters
+						<div id="encounter-list-count" class="invisible">
+							returns <span id="query-encounters-count" class="encounter-list-count-text count-up"></span> of <span id="total-encounters-count" class="encounter-list-count-text"></span> encounters
 						</div>
 						<button id="run-query-button" class="generic-button run-query-button" aria-label="Run query">run query</button>
 						<button id="copy-query-link-button" class="generic-button icon-button invisible">
@@ -156,9 +156,9 @@
 			<!--main dashboard content -->
 			<div class="main-content-wrapper">
 				<div class="main-content-body">
-					<div id="result-summary-pane" class="query-result-pane col-4">
-						<div id="query-result-list-container" class="result-summary-container">
-							<ul id="query-result-list">
+					<div id="result-summary-pane" class="encounter-list-pane col-4">
+						<div id="query-result-list-container" class="encounter-list-container">
+							<ul id="query-result-list" class="encounter-list">
 								<!-- list built dynamically -->
 							</ul>
 						</div>
@@ -167,7 +167,7 @@
 						</div>
 					</div>
 
-					<div id="row-details-pane" class="query-result-pane accordion col-8">
+					<div id="row-details-pane" class="encounter-list-pane accordion col-8">
 						<!-- fields added dynamically-->
 					</div>
 				</div>
@@ -290,6 +290,7 @@
 
 	<script src="js/bhims.js"></script>
 	<script src="js/entry-form.js"></script>
+	<script src="js/encounter-list.js"></script>
 	<script src="js/query.js"></script>
 	<script src="js/bhims-custom.js"></script>
 

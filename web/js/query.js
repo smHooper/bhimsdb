@@ -127,7 +127,7 @@ var BHIMSQuery = (function(){
 				for (row of $.parseJSON(queryResultString)) {
 					this.encounterIDs.push(row.id);
 				}
-				$('#query-result-count > .query-result-count-text').text(this.encounterIDs.length);
+				$('#encounter-list-count > .encounter-list-count-text').text(this.encounterIDs.length);
 			}
 		})
 	}
@@ -1717,7 +1717,7 @@ var BHIMSQuery = (function(){
 					const count = parseInt(result[0].count);
 					const isSameAsTotal = count === this.encounterIDs.length;
 					const $countText = $('#query-encounters-count')
-					$('#query-result-count').toggleClass('invisible', isSameAsTotal)
+					$('#encounter-list-count').toggleClass('invisible', isSameAsTotal)
 					$countText.text(count);
 					if (!isSameAsTotal) runCountUpAnimations();
 				}

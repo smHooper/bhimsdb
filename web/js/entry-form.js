@@ -1224,7 +1224,9 @@ var BHIMSEntryForm = (function() {
 						//$('#input-assessed_by').val(this.username);
 						
 						if (isNewEntry) {
-							addSidebarMenu();
+							if (!isPWA()) {
+								addSidebarMenu();
+							}
 							$('#disable-required-slider-container').removeClass('hidden');
 							$('.main-content-wrapper').appendTo('.main-container-with-sidebar');
 							$('#username').text(this.username);

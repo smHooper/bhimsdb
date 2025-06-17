@@ -132,7 +132,7 @@ def get_next_park_form_id(year):
 	engine = get_engine()
 	sql = f'''
 		SELECT 
-			count(*) + 1 AS form_count, 
+			coalesce(max(substring(park_form_id, '\\d+$')::INTEGER), 0) + 1 AS form_count, 
 			max(extract(year FROM start_date)) AS "%%Y" 
 		FROM encounters 
 		WHERE extract(year FROM start_date)={year}

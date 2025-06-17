@@ -25,6 +25,9 @@
 	<link href="packages/leaflet/leaflet.1.7.1.css" rel="stylesheet" />
 	<script src="packages/leaflet/leaflet.1.7.1.js"></script>
 
+	<!--font auexome -->
+	<link href="packages/fontawesome/css/all.min.css" rel="stylesheet">
+
 	<!-- mbtiles -->
 	<script src="https://unpkg.com/sql.js@0.3.2/js/sql.js"></script>
 	<script src="packages/leaflet/leaflet.tilelayer.mbtiles.js"></script>
@@ -117,18 +120,30 @@
 							<section class="form-section">
 								<h4 class="section-title"></h4>
 								<div class="form-section-content">
-									<p class="form-description" id="pre-submit-message"></p>
-									<div class="submit-button-container">
+									<p id="pre-submit-message" class="form-description submit-page-toggle show-on-form-reset"></p>
+									<div class="submit-button-container submit-page-toggle show-on-form-reset">
 										<button class="generic-button form-navigation" type="button" id="submit-button">Submit encounter</button>
 									</div>
-									<div class="submition-confirmation-container hidden">
+									<div class="submission-confirmation-container hidden submit-page-toggle">
 										<h4>Submission successful</h4>
-										<p class="form-description" id="post-submit-message"></p>
+										<p id="post-submit-message" class="form-description " ></p>
 										<div class="submit-success-button-container">
 											<a class="generic-button submit-success-button" href="bhims-index.html">return to the home</a>
-											<button id="new-submission-button" class="generic-button submit-success-button">new submission</button>
+											<button id="new-submission-button" class="generic-button submit-success-button new-submission-button">new submission</button>
 										</div>
 										<a class="success-query-link mt-3 hidden" href="#" target="blank_">View your entry</a>
+									</div>
+									<div class="submission-confirmation-container offline-submission submit-page-toggle hidden" aria-hidden="true">
+										<h4>Offline data saved!</h4>
+										<p class="form-description" id="post-offline-submit-message">
+											Your submission has been saved to this device because you are not currently 
+											connected to the NPS network. It will need to be uploaded once you have network 
+											access again. <strong> Do not delete the app from your device's 
+											home screen or any data you have not uploaded will be lost!</strong> 
+										</p>
+										<div class="submit-success-button-container">
+											<button id="new-offline-submission-button" class="generic-button submit-success-button new-submission-button offline-reset-form-button mx-0">new submission</button>
+										</div>
 									</div>
 								</div>
 							</section>	
@@ -178,19 +193,23 @@
 	<!-- encounter list modal -->
 	<div class="modal fade lightbox-modal entry-form-modal" id="encounter-list-modal" tabindex="-1" role="dailog" aria-hidden="true">
 		<div class="modal-dialog" role="document">
-			<div class="modal-content">
+			<div class="modal-content col-md-8 col-lg-6">
+				<div class="modal-header w-100 justify-content-between">
+					<div></div>
+					<h3>BHIMS Reports Cached Offline</h3>
+					<button type="button" class="close ml-0" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
 				<div class="modal-body modal-img-body">
-					<div class="modal-header-container">
-						<div class="modal-img-body-header">
-							<button type="button" class="close" data-dismiss="modal" aria-label="Close">
-								<span aria-hidden="true">&times;</span>
-							</button>
-						</div>
-					</div>
 					<div id="offline-encounter-list-container" class="encounter-list-container">
-						<ul id="offline-encounter-list">
+						<ul id="offline-encounter-list" class="encounter-list">
 						</ul>
 					</div>
+				</div>
+				<div class="d-flex justify-content-center py-3">
+					<button id="upload-offline-reports-button" class="generic-button mr-5 px-3" role="button">Upload offline reports</button>
+					<button id="close-encounter-list-modal-button" class="generic-button modal-button">Close</button>
 				</div>
 			</div>
 		</div>

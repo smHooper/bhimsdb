@@ -165,6 +165,11 @@ def hello():
 	return 'hello'
 
 
+@app.route('/flask/check_network', methods=['GET'])
+def check_network():
+	return jsonify(True)
+	
+
 # -------------- User Management ---------------- #
 def query_user_info(username: str='', offline_id:str=''):
 	"""
@@ -488,8 +493,12 @@ def create_park_form_id(encounter_id):
 			raise ValueError(f'Encounter ID {encounter_id} does not exist in the database')
 
 
-@app.route('/flask/next_form_id/<year>', methods=['GET', 'POST'])
-def get_next_park_form_id(year):
+def get_form_ids(year, n=1):
+	"""
+	Get n form IDs. The ID is a combo of alphanumeric characters that ends 
+	in a 3-digit sequential number e.g., 2025DENA001. The sequential number
+	is unique for a given year
+	"""
 	id_format = app.config['park_form_id_format']
 	# set any Python date formatting substrings to be surrounded by braces so .format() will replace them 
 	pattern = re.compile(r'(%[a-zA-Z])')
@@ -498,7 +507,7 @@ def get_next_park_form_id(year):
 	engine = get_engine()
 	sql = f'''
 		SELECT 
-			count(*) + 1 AS form_count, 
+			coalesce(max(substring(park_form_id, '\\d+$')::INTEGER), 0) AS form_count, 
 			max(extract(year FROM start_date)) AS "%%Y" 
 		FROM {db_schema}.encounters 
 		WHERE extract(year FROM start_date)={year}
@@ -507,11 +516,27 @@ def get_next_park_form_id(year):
 		cursor = conn.execute(sql)
 		row = cursor.first()
 		if row:
-			# format dateime, then substitue encounter data and configuration values
-			return id_format.format(**{**row, **app.config})
+			# for each ID of n, make a new form ID
+			ids = []
+			row_dict = {**row}
+			for i in range(int(n)):
+				row_dict['form_count'] += 1
+				ids.append(id_format.format(**{**row_dict, **app.config}))
+
+			return ids
+		
 		else:
 			raise ValueError(f'Encounter ID {encounter_id} does not exist in the database')
+
+
+@app.route('/flask/next_form_id/<year>', methods=['GET', 'POST'])
+def get_next_park_form_id(year):
+	return get_form_ids(year)[0]
 	
+
+@app.route('/flask/next_form_id/<year>/<n>', methods=['GET', 'POST'])
+def get_next_park_form_id_series(year, n):
+	return jsonify(get_form_ids(year, n))
 
 
 @app.route('/flask/export_data', methods=['POST'])

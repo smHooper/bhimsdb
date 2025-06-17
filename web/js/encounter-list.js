@@ -5,24 +5,29 @@ var BHIMSEncounterList = (function(){
 	Main constructor
 	*/
 	var _this;
-	var Constructor = function($parent, $form) {
+	var Constructor = function($ul, $form) {
 
-		this.$parent = $parent;
+		this.$ul = $ul;
 		this.$form = $form;
-		this.encounters = {};
+		this.data = {};
 		this.selectedID = 0;
 		_this = this;
 	}
 
 	Constructor.prototype.addEncounter = function(id, displayID, bearGroupType, {onClick=()=>{}, data={}}={}) {
-		this.encounters[id] = {...data};
+		this.data[id] = {...data};
 
 		return $(`
 			<li id="encounter-list-item-${id}" class="encounter-list-item" data-encounter-id="${id}" title="Form number: ${displayID}, Bear group: ${bearGroupType}">
 				<label>
 					<strong>Form number:</strong> ${displayID}, <strong>Bear group:</strong> ${bearGroupType}
 				</label>
-				<div class="encounter-list-edit-button-container">
+				<div class="offline-encounter-list-button-container">
+					<i class="fas fa-check fa-2x processing-icon processing-icon-succeeded"></i>
+					<i class="fas fa-spinner fa-2x processing-icon processing-icon-processing spin"></i>
+					<i class="fas fa-times fa-2x processing-icon processing-icon-failed"></i>
+				</div>
+				<div class="encounter-list-edit-button-container hidden">
 					<button id="delete-button-${id}" class="encounter-list-edit-button icon-button delete-encounter-button" type="button" aria-label="Delete selected encounter" title="Delete encounter">
 						<i class="fas fa-trash fa-lg"></i>
 					</button>
@@ -37,7 +42,7 @@ var BHIMSEncounterList = (function(){
 					</button>
 				</div>
 			</li>
-		`).appendTo(this.$parent)
+		`).appendTo(this.$ul)
 			.click(onClick)//.click(this.onResultItemClick)
 	}
 

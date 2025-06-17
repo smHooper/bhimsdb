@@ -23,6 +23,17 @@ let UNIT_PER_METER_MAP = new Map([
 	["m", 1],
 ]);
 var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
+const OFFLINE_LIST_SELECTORS = {
+	list: 		'#offline-encounter-list',
+	listItem: 	'.encounter-list-item',
+	selected: 	'.selected',
+	modal: 		'#encounter-list-modal'
+}
+const OFFLINE_PROCESSING_CLASSES = {
+	processing: 'submission-processing',
+	success: 	'submission-succeeded',
+	failed: 	'submission-failed'
+}
 
 var BHIMSEntryForm = (function() {
 	
@@ -82,6 +93,8 @@ var BHIMSEntryForm = (function() {
 			sericeWorkerReady: 'service-worker-ready',
 			fieldsFull: 'fields-full'
 		}
+		this.userMadeEdits = false;
+		this.shouldShowReconnectMessage = true;
 		this.reactionCodes = {};
 		this.formConfiguration = {
 			pages: {},
@@ -417,8 +430,9 @@ var BHIMSEntryForm = (function() {
 		//	worker could be activated
 		_this.cachePWAUserInfo(pwaRequestID);
 
+		const isOnMobileDevice = isMobile();
 		// Register the service worker to make the app run as a PWA
-		if (isMobile() && !window.localStorage.installReady) { 
+		if (isOnMobileDevice && !window.localStorage.installReady) { 
 			this.preparePWAInstall();
 		}
 
@@ -431,6 +445,14 @@ var BHIMSEntryForm = (function() {
 				this.dbSchema = this.serverEnvironment === 'prod' ? 'public' : 'dev';
 			})
 
+
+		this.encounterList = new BHIMSEncounterList(
+			$(OFFLINE_LIST_SELECTORS.list),
+			$('.form-body')
+		);
+		// activate modal
+		//$('#encounter-list-modal').modal();
+
 		// ajax
 		var deferred = $.Deferred();		
 		const userInfoDeferred = getUserInfo({pwaRequestID: pwaRequestID})
@@ -439,7 +461,7 @@ var BHIMSEntryForm = (function() {
 					console.log(result)
 				} else {
 					const userInfo = result;
-					_this.username = userInfo.username;
+					_this.username = userInfo.ad_username;
 					_this.userRole = userInfo.role;
 
 					if (!isNewEntry) {
@@ -934,18 +956,27 @@ var BHIMSEntryForm = (function() {
 					$('#next-button').click(e => {
 						_this.onPreviousNextButtonClick(e, 1);
 					});
-					$('#submit-button').click(_this.onSubmitButtonClick);
+					$('#submit-button').click(e => {_this.onSubmitButtonClick(e)});
+					$('#upload-offline-reports-button').click(() => {_this.onUploadOfflineReportsButtonClick()});
 					$('.indicator-dot').click(_this.onIndicatorDotClick);
 					$('#reset-form-button').click(_this.onResetFormClick);
-					$('#new-submission-button').click(e => {
-						e.preventDefault();
-						_this.resetForm();
+					$('.new-submission-button').click(e => {
+						this.onNewSubmissionButtonClick(e);
 					});
 					$('#disable-required-slider-container input[type=checkbox]').change(e => {
 						const $checkbox = $(e.target);
 						$('.field-container .required-indicator').toggleClass('hidden', $checkbox.is(':checked'));
 						$('.input-field.error').removeClass('error');
 					});
+
+					if (isOnMobileDevice) {
+						$(document).on('click', '#show-offline-encounter-list-button', () => $('#encounter-list-modal').modal());
+						$(document).on('click', `${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`, e => {
+							this.onOfflineEncounterListItemClick(e);
+						})
+						window.addEventListener('online', () => {_this.onInternetReconnect()});
+					}
+					$('#close-encounter-list-modal-button').click(() => {_this.onCloseEncounterListButtonClick()});
 
 					// query.js will hide the loading indicator on its own
 					hideLoadingIndicator();
@@ -1178,13 +1209,13 @@ var BHIMSEntryForm = (function() {
 
 				});
 
-
 				// Save user input when the user leaves the page
 				$(window).on('beforeunload', e => {
 					if (isNewEntry) {
+						const offlineEncounters = this.encounterList.data;
 						if (Object.keys(_this.fieldValues).length) {//this.fieldValues is cleared on submit
-							const pageName = window.location.pathname.split('/').pop();
-							var currentStorage = $.parseJSON(window.localStorage[pageName] || '{}');
+							
+							var {pageName, currentStorage} = _this.getCurrentLocalStorage();
 
 							// Get the page the user is currently on
 							const formPageIndex = parseInt($('.form-page.selected').data('page-index'));
@@ -1198,7 +1229,19 @@ var BHIMSEntryForm = (function() {
 
 							// Record field values
 							currentStorage.fieldValues = {..._this.fieldValues};
+
+							currentStorage.userMadeEdits = _this.userMadeEdits;
 							
+							// Record the encounter ID of the currently selected encounter. When the page reloads, 
+							//	if the ecnounter ID isn't an empty string, the PWA will know the user was editing 
+							//	a previously saved encounter. In that case, the form should be blank so that the 
+							//	user can enter a new record.
+							currentStorage.selectedOfflineID = 
+								$(OFFLINE_LIST_SELECTORS.listItem + OFFLINE_LIST_SELECTORS.selected)
+									.data('encounter-id');
+							
+							currentStorage.encounters = {data: offlineEncounters};
+
 							// Save
 							window.localStorage[pageName] = JSON.stringify(currentStorage);
 						}
@@ -1212,6 +1255,14 @@ var BHIMSEntryForm = (function() {
 
 					if (isNewEntry) $('#input-entered_by').val(_this.username).change();	
 
+					const isPWADisplayMode = isPWA();
+					if (isPWADisplayMode) {
+						const $header = addPageHeaderBar();
+						$header.find('.sidebar-collapse-button').addClass('hidden');
+						// Make room for the header
+						$('#main-container').addClass('main-container-with-header');
+					}
+
 					// Set the view of the form according to user role
 					if (this.userRole < 2) { // >2 === assessment or admin
 						// Remove the asseessment section bcecause this user doesn't have 
@@ -1223,16 +1274,14 @@ var BHIMSEntryForm = (function() {
 						$('.form-section.admin-section, .form-section.requires-assessment-role').removeClass('locked');
 						//$('#input-assessed_by').val(this.username);
 						
-						if (isNewEntry) {
-							if (!isPWA()) {
-								addSidebarMenu();
-							}
+						if (isNewEntry && !isPWADisplayMode) {
+							addSidebarMenu();
+							addPageHeaderBar();
 							$('#disable-required-slider-container').removeClass('hidden');
-							$('.main-content-wrapper').appendTo('.main-container-with-sidebar');
-							$('#username').text(this.username);
-							
+							$('.main-content-wrapper').appendTo('.main-container-with-header');
 						}
 					}
+					$('#username').text(this.username);
 				});
 
 				// Fill datetime_entered field
@@ -1243,14 +1292,33 @@ var BHIMSEntryForm = (function() {
 
 				_this.getLocationCoordinates();
 
-				window.addEventListener('fields-full', e => {
-					customizeEntryForm();//setTimeout(() => {customizeEntryForm()}, 5000);
-				});
+				window.addEventListener(
+					'fields-full', 
+					e => {this.onFieldsFull()}, 
+					{once: true} // only need to customize the form once
+				);
 
 			})
 		})
 		
 		return deferred;
+	}
+
+
+	Constructor.prototype.onFieldsFull = function() {
+		
+		customizeEntryForm()
+
+		// Add encounters to encounter list modal. Do this after fields have been 
+		//	filled because getting human-readable text from select options needs 
+		//	to happen after lookup options have been set
+		const {currentStorage} = this.getCurrentLocalStorage();
+		for (const id of Object.keys(currentStorage?.encounters?.data || {}).sort()) {
+			this.addOfflineEncounter(id, currentStorage.encounters.data[id]);
+		}
+
+		// onInputFieldChange will set this to true set unset it
+		this.userMadeEdits = currentStorage.userMadeEdits;
 	}
 
 
@@ -1265,6 +1333,22 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.clearAccordionCard = function($card) {
+		for (const el of $card.find()) {
+			const $input = $(el);
+			if ($input.is('.input-checkbox')) {
+				$input.prop('checked', false);
+			} else if ($input.is('select')) {
+				// find the first option at select it
+				$input.val($input.find('option').first().attr('value'));
+			} else {
+				$input.val('');
+			}
+		}
+
+	}
+
+
 	/* 
 	Fill data entry fields from saved (window.storage) or loaded (from the DB) data 
 	*/
@@ -1273,6 +1357,19 @@ var BHIMSEntryForm = (function() {
 		var key, index, fieldName;//initialize vars instantiated in for statements
 
 		const fieldsFullEvent = new CustomEvent('fields-full', {detail: Date()});
+
+		// helper function to either select an existing card or make one 
+		//	if one doesn't already exist for a given index
+		const getAccordionCard = ($accordion, index) => {
+			let $card = $accordion.find('.card:not(.cloneable)').eq(index);
+			if (!$card.length) {
+				$card = this.addNewCard($accordion, index);
+			} else {
+				this.clearAccordionCard($card);
+			}
+
+			return $card;
+		}
 
 		for (const key in fieldValues) {
 			const value = fieldValues[key];
@@ -1295,8 +1392,10 @@ var BHIMSEntryForm = (function() {
 					($accordion.is('.hidden') && !$accordion.is('.collapse'))
 				) continue;
 				
+				const accordionLength = value.length;
 				for (const index in value) {
-					const $card = this.addNewCard($accordion, index);
+					$accordion.find('.card:not(.cloneable)').length;
+					const $card = getAccordionCard($accordion, index);
 					const inputValues = value[index];
 					for (const fieldName in inputValues) {
 						const thisVal = inputValues[fieldName];
@@ -1308,7 +1407,7 @@ var BHIMSEntryForm = (function() {
 								.find('.input-field')
 								.filter((_, el) => {return ($(el).attr('name') || '').startsWith(fieldName)});
 						} catch {
-							console.log($card)
+							continue;
 						}
 						
 						// If this is a checkbox, set the checked property. Otherwise,
@@ -1319,7 +1418,7 @@ var BHIMSEntryForm = (function() {
 							$input.val(thisVal);
 						}
 						//This will unnecessarily call onInputFieldChange() but this is probably
-						//	the best way to ensure that all change event callbacks are get called
+						//	the best way to ensure that all change event callbacks get called
 						$input.change();
 					}
 				}
@@ -1354,7 +1453,7 @@ var BHIMSEntryForm = (function() {
 			const reactions = fieldValues.reactions;
 			const reactionDeferreds = []; // collect deferreds to dispatch fields-full event
 			for (index in reactions) {
-				const $card = this.addNewCard($reactionsAccordion, index);
+				const $card = getAccordionCard($reactionsAccordion, index);
 				const $reaction = $('#input-reaction-' + index);
 				const reactionByValue = reactions[index].reaction_by;
 				const $reactionBy = $('#input-reaction_by-' + index)
@@ -1384,14 +1483,132 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.fillTestValues = function(customValues) {
+		
+		this.confirmLocationSelectChange = false;
+
+		const testValues = JSON.parse(`{"datetime_entered":"2025-06-04T08:14","entered_by":"sam","location_type":"Place name","coordinate_format":"ddd","datum_code":"1","was_property_damaged":"0","structures_were_involved":"0","management_action_code":"0","bear_species_code":"1","bear_color_code":"1","bear_cohort_code":"1","reactions":[{"reaction_by":"1","reaction_code":"1"},{"reaction_by":"2","reaction_code":"100"}],"people":[{"country_code":"236","zip_code":"99755"}],"human_group_type_code":"1","general_human_activity_code":"1","group_size_total":"1","start_date":"2025-06-04","start_time":"08:14","latitude":63.67039,"longitude":-149.58094,"location_accuracy_code":"4","place_name_code":"7","bears":[{"bear_age_code":-1,"bear_sex_code":-1,"bear_species_code":"1","bear_color_code":"1","bear_number":1}],"habitat_type_code":"1","visibility_code":"1","initial_distance_m":"1","closest_distance_m":"1","was_making_noise":"1","initial_human_action_code":"1","initial_bear_action_code":"1","reported_probable_cause_code":"1","bear_did_charge":"0","bear_spray_was_used":"0","food_present_code":"3","narrative":"deffdgrgerg","has_attachments":"0","management_classification_code":"1","did_react_properly":"1","assessed_by":"sam"}`)
+		const fieldValues = {...testValues, ...customValues}
+		
+		this.resetForm({clearStorage: false});
+
+		this.fillFieldValues(fieldValues);
+		this.fieldValues = fieldValues;
+
+		this.confirmLocationSelectChange = true;
+	}
+
+
+	Constructor.prototype.addOfflineEncounter = function(offlineID, fieldValues) {
+
+		const bearGroupTypeCode = fieldValues.bear_cohort_code;
+		const bearGroupType = bearGroupTypeCode ? 
+			$(`.input-field[name=bear_cohort_code] option[value=${bearGroupTypeCode}]`)
+				.text() || 'unknown' : 
+			'unknown';
+		return this.encounterList.addEncounter(
+			offlineID,
+			offlineID,
+			bearGroupType,
+			{
+				data: {...fieldValues}
+			}
+		);
+
+	}
+
+
+	Constructor.prototype.selectOfflineEncounter = function($encounterItem) {
+
+		const encounterData = this.encounterList?.data;
+		const offlineID = $encounterItem.data('encounter-id');
+		
+		this.confirmLocationSelectChange = false;
+		this.fillFieldValues(encounterData[offlineID]);
+		this.confirmLocationSelectChange = true;
+
+		const selectedClass = OFFLINE_LIST_SELECTORS.selected.replace('.', '');
+		const $encounters = $(`${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`)
+		$encounters.removeClass(selectedClass);
+		$encounterItem.addClass(selectedClass);
+
+		$(OFFLINE_LIST_SELECTORS.modal).modal('hide');
+
+	}
+
+
+	Constructor.prototype.onOfflineEncounterListItemClick = function(e) {
+		
+		const hideEncounterListModal = () => {$(OFFLINE_LIST_SELECTORS.modal).modal('hide');}
+
+		// validate fields of current encounter
+		if (this.userMadeEdits && !this.validateFormPerPage()) {
+			hideEncounterListModal();
+			return;
+		}
+		// update currently selected encounter
+		const $target = $(e.target).closest('.encounter-list-item');
+		const encounterData = this.encounterList?.data;
+		const $encounters = $(`${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`);
+		const $selected = $encounters.filter(OFFLINE_LIST_SELECTORS.selected)
+		const currentID = $selected.data('encounter-id');
+		// If userMadeEdits and there isn't a currently selected encounter, this is a new record 
+		//	that needs to be saved before switching
+		if (this.userMadeEdits && (currentID !== '' || currentID === undefined)) {
+			// ask the user if they want to save any edits to the current unsaved encounter
+			const message = 'You have unsaved edits. Would you like to save these edits to' +
+				' this device to edit or upload them later or would you like to discard' +
+				' these edits? To continue editing the current encounter, click Cancel. To' +
+				' discard these edits and edit the encounter you just selected, click discard.'
+			const footerButtons = 
+				'<button class="generic-button modal-button danger-button close-modal discard-button" data-dismiss="modal">Discard</button>' +
+				'<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">Cancel</button>' +
+				'<button class="generic-button modal-button close-modal confirm-button" data-dismiss="modal">Save</button>'
+			const eventHandler = () => {
+				$('#alert-modal .discard-button').click(() => {
+					this.selectOfflineEncounter($target);
+				});
+				$('#alert-modal .confirmg-button').click(() => {
+					this.saveOfflineEncounter();
+					this.selectOfflineEncounter($target);
+				});
+				// if the user cancels, close the encounter list
+				$('#alert-modal .close-modal').click(() => {
+					hideEncounterListModal();
+				})
+			}
+			showModal(
+				message, 
+				'Save Edits?', 
+				{
+					footerButtons: footerButtons,
+					eventHandlerCallable: eventHandler
+				}
+			)
+		} else {
+			this.selectOfflineEncounter($target);
+		}
+	}
+
+
 	/* 
 	Get info from the database about each field 
 	*/
 	Constructor.prototype.getFieldInfo = function(entryFieldConfig) {
-		const pageName = window.location.pathname.split('/').pop();
-		const fieldValueString = window.localStorage[pageName] ? window.localStorage[pageName] : null;
-		if (fieldValueString) this.fieldValues = $.parseJSON(fieldValueString).fieldValues;
+		const {currentStorage} = this.getCurrentLocalStorage();
+		if (Object.keys(currentStorage).length) {
+			
+			// Get field values from localStorage only if selectedOfflineID is 
+			//	blank. If it isn't, that means a user was last editing an existing 
+			//	encounter record and we don't want to reload it
+			const selectedID = currentStorage.selectedOfflineID;
+			if (selectedID === '' || selectedID === undefined) {
+				this.fieldValues = currentStorage.fieldValues || {};
+			} 
+			// this.fieldValues = ((currentStorage.encounters || {})[selectedID] || {}).fieldValues || {};
+		}
 
+		// Get field info
 		for (const row of Object.values(entryFieldConfig)) {
 			const columnName = row.field_name;
 			this.fieldInfo[columnName] = {};
@@ -1399,6 +1616,8 @@ var BHIMSEntryForm = (function() {
 				this.fieldInfo[columnName][property] = row[property];
 			}
 		}
+
+		this.userMadeEdits = currentStorage.userMadeEdits;
 	}
 
 
@@ -1721,13 +1940,20 @@ var BHIMSEntryForm = (function() {
 		} else {
 			_this.fieldValues[fieldName] = value;
 		}
+
+		const selectedID = $(OFFLINE_LIST_SELECTORS.listItem + OFFLINE_LIST_SELECTORS.selected).data('encounter-id');
+		if (selectedID !== '' && selectedID !== undefined && _this.encounterList) _this.encounterList.data[selectedID] = {..._this.fieldValues};
+
+		// update flag so that when a new encounter is selected, we can tell if there are any edits to save. This flag is necessary because when loading a blank form or resetting the form, there are a few fields that will trigger updates to this.fieldValues
+		if (e.originalEvent?.isTrusted) _this.userMadeEdits = true;
+
 	}
 
 
 	/*
 	Validate all fields currently in view
 	*/
-	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
+	Constructor.prototype.validateFields = function($parent, {focusOnField=true}={}) {
 
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		const validationDisabled = $('#disable-required-slider-container input[type=checkbox]').is(':checked');
@@ -1776,6 +2002,52 @@ var BHIMSEntryForm = (function() {
 		} else {
 			return true;
 		}
+	}
+
+
+	/*
+	Validate all fields on a page, returning true if valid
+	*/
+	Constructor.prototype.validatePage = function(page) {
+		const $page = $(page);
+		const allFieldsValid = $page.find('.validate-field-parent')
+			.filter((_, el) => !_this.isAdminSectionUserCanIgnore(el))
+			.map((_, parent) => {
+				return _this.validateFields($(parent), {focusOnField: false});
+			}).get()
+			.every((isValid) => isValid);
+
+		return allFieldsValid;
+	}
+
+	Constructor.prototype.validateFormPerPage = function() {
+		var allValid = true;
+		for (const page of $('.form-page:not(.title-page)')) {
+			if (!this.validatePage(page)) {
+				hideLoadingIndicator();
+				const onClick = () => {			
+					$('#alert-modal .close-modal').click(() => {
+						const pageIndex = this.goToPage($(page).data('page-index') - $('.form-page.selected').data('page-index'));
+						this.setPreviousNextButtonState(pageIndex);
+					})
+				}
+				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
+				const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal">OK</button>`
+				showModal(
+					modalMessage, 
+					'Missing or invalid information', 
+					{
+						modalType: 'alert', 
+						footerButtons: buttonHTML,
+						eventHandlerCallable: onClick
+					}
+				);
+				allValid = false;
+				break;
+			}
+		}
+
+		return allValid;	
 	}
 
 
@@ -2124,7 +2396,7 @@ var BHIMSEntryForm = (function() {
 		//	don't match the natural order of the card-label-component elements
 		var sortedComponents = [];
 		Object.keys(labelComponents).sort().forEach((k, i) => {
-		    sortedComponents[i] = labelComponents[k];
+			sortedComponents[i] = labelComponents[k];
 		});
 
 		$cardLabel = $card.find('.card-link-label');
@@ -2155,7 +2427,7 @@ var BHIMSEntryForm = (function() {
 		
 		var names = $card.find('.card-label-field')
 			.map(function(_, el) {
-	    		return $(el).attr('name');
+				return $(el).attr('name');
 			})
 			.get(); // get returns the underlying array
 
@@ -3032,7 +3304,7 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.readAttachment = function(sourceInput, $destinationImg, $progressBar) {
 
 		const $barContainer = $progressBar.closest('.attachment-progress-bar-container');
-	 	const file = sourceInput.files[0];
+		const file = sourceInput.files[0];
 		if (sourceInput.files && file) {
 			var reader = new FileReader();
 			const fileName = file.name;
@@ -3197,7 +3469,7 @@ var BHIMSEntryForm = (function() {
 	/*
 	Reset form back to blank state
 	*/
-	Constructor.prototype.resetForm = function() {
+	Constructor.prototype.resetForm = function({clearStorage=true, resetPage=true}={}) {
 
 		// Remove all but one (not .cloneable) card from each accordion
 		$('.accordion .card:not(.cloneable)').remove();
@@ -3243,32 +3515,46 @@ var BHIMSEntryForm = (function() {
 		// If the user has any errors, remove them
 		$('.input-field.error').removeClass('error');
 
-		// Clear localStorage
+		// Clear localStorage 
 		_this.fieldValues = {};
-		window.localStorage.clear();
-
-		const pageIndex = parseInt($('.form-page.selected').data('page-index'));
-		if (pageIndex !== 0) _this.goToPage(-pageIndex);
 		
-		// Reset submission page
-		const $confirmationContainer = $('.submition-confirmation-container')
-			.addClass('hidden').attr('aria-hidden', true);
-		const $postSubmitMessage = $('#post-submit-message');
-		$postSubmitMessage.find('.post-submit-append-message')
-			.addClass('hidden').attr('aria-hidden', true);
-		$postSubmitMessage.find('.encounter-id-text')
-			.text('');
-		// hide the link to the new submission
-		$('.success-query-link')
-			.attr('href', '#')
-			.addClass('hidden').attr('aria-hidden', true);
-		$confirmationContainer.siblings()
-			.removeClass('hidden')
-			.attr('aria-hidden', false);
+		if (clearStorage) {
+			window.localStorage.clear();
+			// remove any encounters stored while offline
+			$(`${OFFLINE_LIST_SELECTORS.list}`).empty();
+		} else {
+			// De-select the current selected offline encounter 
+			$(`${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`)
+				.removeClass(OFFLINE_LIST_SELECTORS.selected.replace('.', ''));
+			const {pageName, currentStorage} = _this.getCurrentLocalStorage();
+			delete currentStorage.encounters?.selectedID;
+		}
+		
+		if (resetPage) {
+			// Reset submission page
+			$('.submit-page-toggle.show-on-form-reset')
+				.removeClass('hidden').attr('aria-hidden', false);
+			$('.submit-page-toggle:not(.show-on-form-reset)')
+				.addClass('hidden').attr('aria-hidden', true);
+			const $postSubmitMessage = $('#post-submit-message');
+			$postSubmitMessage.find('.post-submit-append-message')
+				.addClass('hidden').attr('aria-hidden', true);
+			$postSubmitMessage.find('.encounter-id-text')
+				.text('');
+			// hide the link to the new submission
+			$('.success-query-link')
+				.attr('href', '#')
+				.addClass('hidden').attr('aria-hidden', true);
 
-		$('.form-footer').removeClass('transparent');
+			$('.form-footer').removeClass('transparent');
+
+			const pageIndex = parseInt($('.form-page.selected').data('page-index'));
+			if (pageIndex !== 0) _this.goToPage(-pageIndex);
+		}
 
 		customizeEntryForm();
+
+		_this.userMadeEdits = false;
 	}
 
 
@@ -3278,14 +3564,124 @@ var BHIMSEntryForm = (function() {
 	Constructor.prototype.onResetFormClick = function(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		const message = 'Are you sure you want to reset the form? Any data you have entered will be deleted.'
-		const footerButtons = `
-			<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
-			<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" onclick="entryForm.resetForm()">Yes</button>
-		`;
-		showModal(message, 'Reset Form?', {modalType: 'confirm', footerButtons: footerButtons});
+		const $selectedEncounter = $(OFFLINE_LIST_SELECTORS.listItem + OFFLINE_LIST_SELECTORS.selected);
+		if (_this.userMadeEdits) {
+			const message = 'Are you sure you want to reset the form?' +
+				($selectedEncounter.length ? 
+					' Your changes to the currently selected encounter report will not be saved.':
+					' Any data you have entered will be deleted.');
+			const footerButtons = `
+				<button class="generic-button modal-button secondary-button close-modal" data-dismiss="modal">No</button>
+				<button class="generic-button modal-button danger-button close-modal" data-dismiss="modal" ">Yes</button>
+			`;
+			const eventHandler = () => {
+				$('#alert-modal .danger-button').click(
+					() => _this.resetForm({clearStorage: false})
+				)
+			}
+			showModal(
+				message, 
+				'Reset Form?', 
+				{
+					modalType: 'confirm', 
+					footerButtons: footerButtons,
+					eventHandlerCallable: eventHandler
+				}
+			);
+		} else {
+			_this.resetForm({clearStorage: false});
+		}
 	}
 
+
+	Constructor.prototype.getCurrentLocalStorage = function() {
+		const pageName = window.location.pathname.split('/').pop();
+		return {
+			pageName: pageName, 
+			currentStorage: $.parseJSON(window.localStorage[pageName] || '{}')
+		};
+	}
+
+
+	/*
+	Helper function to assign an ID to an encounter saved locally when offline
+	*/
+	Constructor.prototype.getNextOfflineID = function($encounters) {
+
+		return Math.max(
+			...$encounters.map((_, el) => $(el).data('encounter-id')).get(), 
+			-1 // if there aren't any yet, default to 0 (when 1 is added)
+		) + 1;
+	}
+
+
+	Constructor.prototype.getCurrentOfflineID = function($encounters) {
+		
+		const nextID = _this.getNextOfflineID($encounters);
+		return $encounters.filter(OFFLINE_LIST_SELECTORS.selected)
+			.attr('encounter-id') || nextID;
+	}
+
+
+	Constructor.prototype.showSubmissionSuccessMessage = function({offline=false}={}) {
+		// hide all
+		$('.submit-page-toggle').addClass('hidden');
+
+		const $submissionContainer = $(
+			'.submission-confirmation-container' + 
+			(offline ? '.offline-submission' : ':not(.offline-submission)')
+		);
+		// show just this conainer
+		$submissionContainer.removeClass('hidden');
+		
+		// Hide the footer so the user has to click the 
+		//	new submission button to reset the form
+		$('.form-footer').addClass('transparent');
+	}
+
+
+	Constructor.prototype.saveEncounterToStorage = function(storedData, pageName, $encounter) {
+		const encounterID = $encounter.data('encounter-id');
+		if (!storedData.encounters) storedData.encounters = {data: {[encounterID]: {}}};
+		if (!storedData.encounters.data[encounterID]) storedData.encounters.data[encounterID] = {};
+		storedData.encounters.data[encounterID] = {...this.fieldValues};
+		storedData.encounters.selectedID = encounterID;
+
+		window.localStorage.setItem(pageName, JSON.stringify(storedData));
+	}
+
+
+	/*
+	save encounter report client-side when offline
+	*/
+	Constructor.prototype.saveOfflineEncounter = function() {
+		
+		const $encounters = $(`${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`);
+		const offlineID = _this.getCurrentOfflineID($encounters);
+		const $encounter = this.addOfflineEncounter(offlineID, _this.fieldValues);
+
+		const {pageName, currentStorage} = this.getCurrentLocalStorage();
+		this.saveEncounterToStorage(currentStorage, pageName, $encounter);
+
+		hideLoadingIndicator();
+
+		//set post submit message
+		this.showSubmissionSuccessMessage({offline: true});
+		this.resetForm({clearStorage: false, resetPage: false});
+
+	}
+
+
+	Constructor.prototype.onNewSubmissionButtonClick = function(e) {
+		e.preventDefault();
+		this.resetForm({
+			// only clear storage if the user is connected to the network, meaning the
+			//	encounter was saved to the DB
+			clearStorage: $(e.target).closest('button').is(':not(.offline-reset-form-button)')
+		});
+		$('.form-footer').removeClass('transparent');
+
+	}
 
 	/*
 	Helper function to convert unordered parameters 
@@ -3367,40 +3763,189 @@ var BHIMSEntryForm = (function() {
 	}
 
 
-	Constructor.prototype.onSubmitButtonClick = function(e) {
+	/*
+	Get form ID, which requires querying the DB and therefore needs to be 
+	handled by the server. It also needs happen before a submission is saved
+	*/
+	Constructor.prototype.getParkFormID = function(encounterDate, {fillField=true, n=1}) {
+		const year = (encounterDate ? 
+			new Date(encounterDate) : 
+			new Date() // default to current year
+		).getFullYear();
 
-		e.preventDefault();
-
-		showLoadingIndicator('onSubmitButtonClick');
-
-		// Validate all fields. This shouldn't be necessary since the user can't move 
-		//	to a new section with invalid fields, but better safe than sorry
-		for (const page of $('.form-page:not(.title-page)')) {
-			const $page = $(page);
-			const allFieldsValid = $page.find('.validate-field-parent')
-				.filter((_, el) => {
-					if (_this.isAdminSectionUserCanIgnore(el)) return false; 
-					else return true;
+		return $.get({url: `flask/next_form_id/${year}/${n}`})
+				.done(response => {
+					const pythonError = pythonReturnedError(response);
+					if (pythonError) {
+						print('Failed to create park_form_id with error: ' + pythonError)
+					} else if (fillField) {
+						const parkFormID = response.trim();
+						$('#input-park_form_id').val(parkFormID).change();
+					}
+				}).fail((xhr, status, error) => {
+					print('Failed to create park_form_id with error: ' + error)
 				})
-				.map((_, parent) => {
-					return _this.validateFields($(parent), focusOnField=false);
-				}).get()
-				.every((isValid) => isValid);
-			if (!allFieldsValid) {
-				hideLoadingIndicator();
-				const onClick = `			
-					const pageIndex = entryForm.goToPage(${$page.data('page-index') - $('.form-page.selected').data('page-index')});
-					entryForm.setPreviousNextButtonState(pageIndex);
-				`;
-				const modalMessage = `The information you entered in one or more fields isn't valid or you forgot to fill it in. Click OK to view the invalid field(s).`;
-				const buttonHTML = `<button class="generic-button modal-button close-modal" data-dismiss="modal" onclick="${onClick}">OK</button>`
-				showModal(modalMessage, 'Missing or invalid information', {modalType: 'alert', footerButtons: buttonHTML});
-				return;
-			}
-		}	
+	}
 
-		// Record that the user clicked the submission button to log 
-		//	any potential silent faliures
+
+	/*
+	Get SQL statements and params for all tables for a single encounter
+	*/
+	Constructor.prototype.getSubmissionSQL = function(fieldValues, {fromOffline=false}={}) {
+
+		// Insert data
+		var sqlStatements = [];
+		var sqlParameters = [];
+		const timestamp = getFormattedTimestamp();
+
+		// Handle all fields in tables with 1:1 relationship to 
+		var unorderedParameters = {};
+		const inputsWithData = $('.input-field:not(.ignore-on-insert, .bhims-select2)')
+			.filter((_, el) => {
+				return $(el).data('table-name') != null && $(el).data('table-name') != ''
+			});
+		for (const input of inputsWithData) {
+			
+			const fieldName = input.name;
+
+			//if this field isn't stored in the DB or then skip it 
+			if (!(fieldName in _this.fieldInfo)) continue;
+
+			const fieldInfo = _this.fieldInfo[fieldName];
+			const tableName = fieldInfo.table_name;
+
+			//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
+			var value = fieldValues[fieldName] || '';
+			if (!(fieldName in fieldValues) || typeof(fieldValues[tableName]) === 'object') continue;
+
+			if (!(tableName in unorderedParameters)) {
+				unorderedParameters[tableName] = {}
+			}
+			
+
+			// Convert short distance fields units if necessary
+			const $input = $(input);
+			if ($input.is('.short-distance-field')) {
+				const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
+				value = Math.round(value / UNIT_PER_METER_MAP.get($unitsSelect.val()));
+			}
+
+			unorderedParameters[tableName][fieldName] = value;
+		}
+
+
+		// Make sure that encounters is the first insert since everything references it
+		const [encountersSQL, encountersParams] = _this.valuesToSQL(unorderedParameters.encounters, 'encounters', {timestamp: timestamp});
+		sqlStatements.push(encountersSQL);
+		sqlParameters.push(encountersParams);
+
+		// loop through each table and add statements and params
+		for (tableName in unorderedParameters) {
+			if (tableName !== 'encounters' && tableName != null) {
+				const [statement, params] = _this.valuesToSQL(unorderedParameters[tableName], tableName)
+				sqlStatements.push(statement);
+				sqlParameters.push(params);
+			} 
+		}
+
+		// Handle multiple choice selects
+		for (const input of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
+			const [statements, params] = _this.getMultipleSelectSQL(input);
+			sqlStatements = [...sqlStatements, ...statements];
+			sqlParameters = [...sqlParameters, ...params];
+		}
+
+		// Handle accordions with 1-to-many relationships to encounters
+		//	Select only accordions that are visible (all accordions that aren't 
+		//	collapsed .collapse-s). Because this has to be compatible with Denali's
+		//	paper form for the time being, also include hidden accordions that are 
+		//	implicitly filled by fields like bear info
+		const $accordions = $(
+			'.accordion.form-item-list' + 
+			(
+				fromOffline ? 
+				'' : // if this is from an offline report, don't use the UI to determine what's in play
+				':not(.collapse:not(.show))' //includes .accordion.hidden
+			)
+		)
+		const orderFields = Object.fromEntries(
+			$accordions.map((_, el) => [[
+				$(el).data('table-name'), 
+				$(el).find('.card:not(.cloneable) .card-link-label.label-with-index')
+					.first()
+						.data('order-column')
+			]])
+		);
+		for (const el of $accordions) {
+			const $accordion = $(el);
+			const tableName = $accordion.data('table-name');
+			const fieldValueObjects = fieldValues[tableName]; // TDOO: fix for attachments
+			// const fieldValueObjects = tableName === 'attachments' ?
+			// 	uploadedFiles :
+			// 	fieldValues[tableName];
+
+			if (!fieldValueObjects) {
+				console.log(`No _this.fieldValues for ${tableName} (${$accordion.attr('id')})`);
+				continue;
+			}
+
+			// For some accordions, the order of the items matters (i.e., reactions and bears). 
+			//	Look for the class .label-with-index and get the index from the id of each card
+			const indexCardLinks = $accordion.find('.card:not(.cloneable) .card-link-label.label-with-index');
+			let cardIndices;
+			if (fromOffline) {
+				cardIndices = fieldValueObjects.map((_, i) => i)
+			} else {
+				cardIndices = indexCardLinks
+				.map((i, el) => parseInt(
+					$(el).closest('.card')
+						.attr('id')
+						.match(/\d+$/)
+				)).get(); // returns array like [0, 2, 3] where array items are keys of fieldValueObjects
+			}
+			for (const i in fieldValueObjects) {
+				let tableFieldValues = {...fieldValueObjects[i]};
+				
+				// Remove any fields aren't stored in the DB
+				if (tableName !== 'attachments') { //except attachments has several file attribute fields that aren't data entry fields
+					for (const fieldName in tableFieldValues) {
+						if (!(fieldName in _this.fieldInfo)) { 
+							// If it's not in fieldInfo, it doesn't belong in the DB
+							delete tableFieldValues[fieldName];
+						} else {
+							// If it's in fieldInfo but the table_name is blank or otherwise doesn't 
+							//	match the accordion's table-name attribute, it doesn't belong either
+							if (_this.fieldInfo[fieldName].table_name != tableName) delete tableFieldValues[fieldName];
+						}
+					}
+				}
+
+				// i is the persistent key of this card whereas cardIndices.indexOf(i) 
+				//	gives the sequential order
+				const order = fromOffline ? cardIndices[i] : cardIndices.indexOf(parseInt(i));
+				const orderField = fromOffline ? orderFields[tableName] : $(indexCardLinks[order]).data('order-column');
+
+				// Record the order of the items if necessary
+				if (orderField && order > -1) {
+					tableFieldValues[orderField] = order + 1;
+				}
+
+				const [statement, params] = _this.valuesToSQL(tableFieldValues, tableName);
+				sqlStatements.push(statement);
+				sqlParameters.push(params);
+			}
+		}
+
+		return [sqlStatements, sqlParameters];
+	}
+
+	
+	/*
+	Record that the user clicked the submission button to log 
+	any potential silent faliures
+	*/
+	Constructor.prototype.saveSubmissionTime = function() {
+
 		$.post({
 			url: 'flask/save_submission_time',
 			data: {
@@ -3413,9 +3958,73 @@ var BHIMSEntryForm = (function() {
 		}).fail(() => {
 			console.log('save_submission_time failed')
 		});
+	}
 
-		// Save attachments
-		const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
+
+	Constructor.prototype.saveOnlineSubmission = function(parkFormID) {
+
+		const fieldValues = _this.fieldValues;
+		const [sqlStatements, sqlParameters] = this.getSubmissionSQL(fieldValues);
+
+		return $.post({
+			url: 'bhims.php',
+			data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters}
+		}).done(queryResultString => {
+			if (queryReturnedError(queryResultString)) {
+				showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.<br><br>Try reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+				return;
+			}
+
+			hideLoadingIndicator();
+
+			// Show success message and nav buttons
+			_this.showSubmissionSuccessMessage({offline: false});
+
+			// Clear localStorage
+			_this.fieldValues = {};
+			window.localStorage.clear();
+
+			// Send email notification only if this
+			const result = $.parseJSON(queryResultString)[0];
+			const queryURL = window.encodeURI(`query.html?{"encounters": {"id": {"value": ${result.id}, "operator": "="}}}`)
+			const userRole = parseInt(_this.userRole);
+			if (_this.userRolesForNotification.includes(userRole)) {
+				$.post({
+					url: 'flask/notifications/submission', 
+					data: {query_url: queryURL}
+				}).done(response => {
+					if (response !== 'true') {
+						console.log('Email notification failed to send. Reponse: ' + response)
+					}
+				})
+				.fail((xhr, status, error) => {console.log('Email notification failed with')})
+			}
+			// If this is an rating or admin user, show them a link to the data via the query page
+			if (_this.dataAccessUserRoles.includes(userRole)) {
+				// Show encounter ID
+				if (parkFormID) {
+					const $postSubmitMessage = $('#post-submit-message');
+					$postSubmitMessage.find('.post-submit-append-message')
+						.removeClass('hidden');
+					$postSubmitMessage.find('.encounter-id-text')
+						.text(parkFormID);
+				}
+				// show link
+				$('.success-query-link')
+					.attr('href', queryURL)
+					.removeClass('hidden').attr('aria-hidden', false);
+			}
+
+		}).fail((xhr, status, error) => {
+			showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
+		}).always(() => {
+			hideLoadingIndicator();
+		})
+	}
+
+
+	Constructor.prototype.saveOnlineSubmissionWithAttachments = function() {
+		
 		var deferreds = [],
 			uploadedFiles = {},
 			failedFiles = [],
@@ -3424,26 +4033,55 @@ var BHIMSEntryForm = (function() {
 		
 		// Only create a new park_form_id if the user didn't enter one
 		if (!parkFormID) {
-			const encounterDate = $('#input-start_date').val();
-			const year = (encounterDate ? 
-				new Date(encounterDate) : 
-				new Date() // default to current year
-			).getFullYear();
-			deferreds.push(
-				$.get({url: `flask/next_form_id/${year}`})
-					.done(response => {
-						const pythonError = pythonReturnedError(response);
-						if (pythonError) {
-							print('Failed to create park_form_id with error: ' + pythonError)
-						} else {
-							parkFormID = response.trim();
-							$('#input-park_form_id').val(parkFormID).change();
-						}
-					}).fail((xhr, status, error) => {
-						print('Failed to create park_form_id with error: ' + error)
-					})
-			)
+			deferreds.push(_this.getParkFormID($('#input-start_date').val()))
 		}
+
+
+		const processAttachmentResult = (resultString) => {
+			if (resultString.trim().startsWith('ERROR')) {
+				failedFiles.push(fileName);
+				console.log(fileName + ' failed with result: ' + resultString);
+				return false;
+			} else {
+				var result = {};
+				try {
+					result = $.parseJSON(resultString);
+				} catch {
+					failedFiles.push(fileName);
+					console.log(fileName + ' failed with result: ' + resultString);
+					return false;
+				}
+				const filePath = result.filePath.replace(/\//g, '\\');//replace forward slashes with backslash
+				const filename = filePath.split('/').pop();
+				const fileExtension = filename.split('.').pop();
+				const fileInfo = {
+					client_filename: fileName,
+					file_path: result.filePath,//should be the saved filepath (with UUID)
+					file_size_kb: Math.floor(thisFile.size / 1000),
+					mime_type: thisFile.type,
+					attached_by: _this.username,//retrieved in window.onload()
+					datetime_attached: timestamp,
+					last_changed_by: _this.username,
+					datetime_last_changed: timestamp,
+					thumbnail_filename: result.thumbnailFilename || null
+				};
+
+				// Get input values for all input fields except file input (which has 
+				//	the name "uploadedFile" used by php script)
+				const $card = $(fileInput).closest('.card');
+				for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
+					const fieldName = inputField.name;
+					if (fieldName in _this.fieldInfo) {
+						fileInfo[fieldName] = inputField.value; 
+					}
+				}
+				const uploadedFileIndex = Object.keys(uploadedFiles).length;
+				uploadedFiles[uploadedFileIndex] = {...fileInfo};
+			}
+		}
+
+		// Save attachments
+		const $attachmentInputs = $('.card:not(.cloneable) .attachment-input');
 		for (const fileInput of $attachmentInputs) {
 			if (fileInput.files.length) {
 				const thisFile = fileInput.files[0];
@@ -3452,50 +4090,8 @@ var BHIMSEntryForm = (function() {
 				const fileTypeCode = $(fileInput).closest('.card').find('select').val();
 				deferreds.push(
 					saveAttachment(fileInput)
-						.done(resultString => {
-								if (resultString.trim().startsWith('ERROR')) {
-									failedFiles.push(fileName);
-									console.log(fileName + ' failed with result: ' + resultString);
-									return false;
-								} else {
-									var result = {};
-									try {
-										result = $.parseJSON(resultString);
-									} catch {
-										failedFiles.push(fileName);
-										console.log(fileName + ' failed with result: ' + resultString);
-										return false;
-									}
-									const filePath = result.filePath.replace(/\//g, '\\');//replace forward slashes with backslash
-									const filename = filePath.split('/').pop();
-									const fileExtension = filename.split('.').pop();
-									const fileInfo = {
-										client_filename: fileName,
-										file_path: result.filePath,//should be the saved filepath (with UUID)
-										file_size_kb: Math.floor(thisFile.size / 1000),
-										mime_type: thisFile.type,
-										attached_by: _this.username,//retrieved in window.onload()
-										datetime_attached: timestamp,
-										last_changed_by: _this.username,
-										datetime_last_changed: timestamp,
-										thumbnail_filename: result.thumbnailFilename || null
-									};
-
-									// Get input values for all input fields except file input (which has 
-									//	the name "uploadedFile" used by php script)
-									const $card = $(fileInput).closest('.card');
-									for (const inputField of $card.find('.input-field:not(.ignore-on-insert)')) {
-										const fieldName = inputField.name;
-										if (fieldName in _this.fieldInfo) {
-											fileInfo[fieldName] = inputField.value; 
-										}
-									}
-									const uploadedFileIndex = Object.keys(uploadedFiles).length;
-									uploadedFiles[uploadedFileIndex] = {...fileInfo};
-								}
-							
-							}
-						).fail((xhr, status, error) => {
+						.done(processAttachmentResult)
+						.fail((xhr, status, error) => {
 								console.log(`File upload for ${fileName} failed with status ${status} because ${error}`);
 								failedFiles.push(fileName);
 						})
@@ -3524,202 +4120,7 @@ var BHIMSEntryForm = (function() {
 				showFailedFilesMessage(failedFiles);
 				return;
 			} else {
-				
-				
-				// for (const el of $('.short-distance-field')) {
-				// 	const $input = $(el);
-				// 	const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${el.id}"]`);
-					
-				// 	if ($unitsSelect.val() === 'ft') {
-				// 		const dbValue = $input.val() / FEET_PER_METER;
-				// 		_this.setInMemorydValue($input, dbValue);
-				// 	}
-				// }
-
-				// Insert data
-				var sqlStatements = [];
-				var sqlParameters = [];
-
-				// Handle all fields in tables with 1:1 relationship to 
-				var unorderedParameters = {};
-				const inputsWithData = $('.input-field:not(.ignore-on-insert, .bhims-select2)')
-					.filter((_, el) => {
-						return $(el).data('table-name') != null && $(el).data('table-name') != ''
-					});
-				for (const input of inputsWithData) {
-					
-					const fieldName = input.name;
-
-					//if this field isn't stored in the DB or then skip it 
-					if (!(fieldName in _this.fieldInfo)) continue;
-
-					const fieldInfo = _this.fieldInfo[fieldName];
-					const tableName = fieldInfo.table_name;
-
-					//if fieldName is actually a table name for a table with a 1:many relationship to encounters, skip it
-					var value = _this.fieldValues[fieldName] || '';
-					if (!(fieldName in _this.fieldValues) || typeof(_this.fieldValues[tableName]) === 'object') continue;
-
-					if (!(tableName in unorderedParameters)) {
-						unorderedParameters[tableName] = {}
-					}
-					
-
-					// Convert short distance fields units if necessary
-					const $input = $(input);
-					if ($input.is('.short-distance-field')) {
-						const $unitsSelect = $(`.short-distance-select[data-calculation-target="#${input.id}"]`);
-						value = Math.round(value / UNIT_PER_METER_MAP.get($unitsSelect.val()));
-					}
-
-					unorderedParameters[tableName][fieldName] = value;
-				}
-
-
-				// Make sure that encounters is the first insert since everything references it
-				const [encountersSQL, encountersParams] = _this.valuesToSQL(unorderedParameters.encounters, 'encounters', {timestamp: timestamp});
-				sqlStatements.push(encountersSQL);
-				sqlParameters.push(encountersParams);
-
-				// loop through each table and add statements and params
-				for (tableName in unorderedParameters) {
-					if (tableName !== 'encounters' && tableName != null) {
-						const [statement, params] = _this.valuesToSQL(unorderedParameters[tableName], tableName)
-						sqlStatements.push(statement);
-						sqlParameters.push(params);
-					} 
-				}
-
-				// Handle multiple choice selects
-				for (const input of $(`.${MULTIPLE_SELECT_ENTRY_CLASS}`)) {
-					const [statements, params] = _this.getMultipleSelectSQL(input);
-					sqlStatements = [...sqlStatements, ...statements];
-					sqlParameters = [...sqlParameters, ...params];
-				}
-
-				// Handle accordions with 1-to-many relationships to encounters
-				//	Select only accordions that are visible (all accordions that aren't 
-				//	collapsed .collapse-s). Because this has to be compatible with Denali's
-				//	paper form for the time being, also include hidden accordions that are 
-				//	implicitly filled by fields like bear info
-				const $accordions = $('.accordion.form-item-list:not(.collapse:not(.show))')//includes .accordion.hidden
-				for (const el of $accordions) {
-					const $accordion = $(el);
-					const tableName = $accordion.data('table-name');
-					const fieldValueObjects = tableName === 'attachments' ?
-						uploadedFiles :
-						_this.fieldValues[tableName];
-
-					if (!fieldValueObjects) {
-						console.log(`No _this.fieldValues for ${tableName} (${$accordion.attr('id')})`);
-						continue;
-					}
-
-					// For some accordions, the order of the items matters (i.e., reactions and bears). 
-					//	Look for the class .label-with-index and get the index from the id of each card
-					const indexCardLinks = $accordion.find('.card:not(.cloneable) .card-link-label.label-with-index');
-					let cardIndices = indexCardLinks
-						.map((i, el) => {
-							return parseInt(
-								$(el).closest('.card')
-									.attr('id')
-									.match(/\d+$/)
-								);
-						}).get(); // returns array like [0, 2, 3] where array items are keys of fieldValueObjects
-
-					for (const i in fieldValueObjects) {
-						let fieldValues = {...fieldValueObjects[i]};
-						
-						// Remove any fields aren't stored in the DB
-						if (tableName != 'attachments') { //except attachments has several file attribute fields that aren't data entry fields
-							for (const fieldName in fieldValues) {
-								if (!(fieldName in _this.fieldInfo)) { 
-									// If it's not in fieldInfo, it doesn't belong in the DB
-									delete fieldValues[fieldName];
-								} else {
-									// If it's in fieldInfo but the table_name is blank or otherwise doesn't 
-									//	match the accordion's table-name attribute, it doesn't belong either
-									if (_this.fieldInfo[fieldName].table_name != tableName) delete fieldValues[fieldName];
-								}
-							}
-						}
-
-						// Record the order of the items if necessary
-						if (indexCardLinks.length) {
-							// i is the persistent key of this card whereas cardIndices.indexOf(i) 
-							//	gives the sequential order
-							const order = cardIndices.indexOf(parseInt(i));
-							const orderField = $(indexCardLinks[order]).data('order-column');
-							fieldValues[orderField] = order + 1;
-						}
-
-						const [statement, params] = _this.valuesToSQL(fieldValues, tableName);
-						sqlStatements.push(statement);
-						sqlParameters.push(params);
-					}
-				}
-
-				$.ajax({
-					url: 'bhims.php',
-					method: 'POST',
-					data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters},
-					cache: false
-				}).done(queryResultString => {
-					if (queryReturnedError(queryResultString)) {
-						showModal(`An unexpected error occurred while saving data to the database: ${queryResultString.trim()}.<br><br>Try reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
-						return;
-					}
-
-					hideLoadingIndicator();
-
-					// Show success message and nav buttons
-					const $submissionContainer = $('.submition-confirmation-container');
-					$submissionContainer
-						.removeClass('hidden')
-						.siblings()
-							.addClass('hidden');
-					$('.form-footer').addClass('transparent');
-
-					// Clear localStorage
-					_this.fieldValues = {};
-					window.localStorage.clear();
-
-					// Send email notification only if this
-					const result = $.parseJSON(queryResultString)[0];
-					const queryURL = window.encodeURI(`query.html?{"encounters": {"id": {"value": ${result.id}, "operator": "="}}}`)
-					const userRole = parseInt(_this.userRole);
-					if (_this.userRolesForNotification.includes(userRole)) {
-						$.post({
-							url: 'flask/notifications/submission', 
-							data: {query_url: queryURL}
-						}).done(response => {
-							if (response !== 'true') {
-								console.log('Email notification failed to send. Reponse: ' + response)
-							}
-						})
-						.fail((xhr, status, error) => {console.log('Email notification failed with')})
-					}
-					// If this is an rating or admin user, show them a link to the data via the query page
-					if (_this.dataAccessUserRoles.includes(userRole)) {
-						// Show encounter ID
-						if (parkFormID) {
-							const $postSubmitMessage = $('#post-submit-message');
-							$postSubmitMessage.find('.post-submit-append-message')
-								.removeClass('hidden');
-							$postSubmitMessage.find('.encounter-id-text')
-								.text(parkFormID);
-						}
-						// show link
-						$('.success-query-link')
-							.attr('href', queryURL)
-							.removeClass('hidden').attr('aria-hidden', false);
-					}
-
-				}).fail((xhr, status, error) => {
-					showModal(`An unexpected error occurred while saving data to the database: ${error}.\n\nTry reloading the page. The data you entered will be automatically reloaded (except for attachments).`, 'Unexpected error')
-				}).always(() => {
-					hideLoadingIndicator();
-				})
+				_this.saveOnlineSubmission(parkFormID);
 			}
 		}).fail((failedXHR, status, error) => {
 			if (failedFiles.length) {
@@ -3734,8 +4135,428 @@ var BHIMSEntryForm = (function() {
 				);
 				hideLoadingIndicator();
 			}
-			return; 
+			throw new Error('Online submission '); 
 		});
+	}
+
+
+	Constructor.prototype.saveOfflineSubmission = function($encounterItem, failedResponses, {parkFormID=''}={}) {
+		
+		$encounterItem = $($encounterItem);//in case it's not a jQuery object
+
+		const offlineID = $encounterItem.data('encounter-id');
+		const fieldValues = this.encounterList.data[offlineID];
+		if (offlineID === '' || Object.keys(fieldValues).length === 0) {
+			console.log('Invalid encounter item', $li);
+			throw new Error('Encounter list item does not have encounter-id') ;
+		}
+
+		fieldValues.park_form_id = parkFormID;
+		const [sqlStatements, sqlParameters] = this.getSubmissionSQL(fieldValues, {fromOffline: true});
+
+		// let the user know the response is being processed 
+		$encounterItem.addClass(OFFLINE_PROCESSING_CLASSES.processing);
+
+		// helper function to handle errors from the response
+		const setErrorState = (error) => {
+			// let the user know this one failed
+			$encounterItem.addClass(OFFLINE_PROCESSING_CLASSES.failed);
+			// add to this of failed
+			failedResponses.push({error: error, item: $encounterItem})
+			
+			throw new Error(error);
+		}
+					
+		return $.post({
+			url: 'bhims.php',
+			data: {action: 'paramQuery', queryString: sqlStatements, params: sqlParameters}
+		}).then(queryResultString => {
+			$encounterItem.removeClass(OFFLINE_PROCESSING_CLASSES.processing)
+			
+			if (queryReturnedError(queryResultString)) {
+				setErrorState(queryResultString);
+			} else {
+				// let the user know this one succeded
+				$encounterItem.addClass(OFFLINE_PROCESSING_CLASSES.success);
+				let data;
+				try {
+					data = $.parseJSON(queryResultString)
+				} catch {
+					setErrorState('response was not valid JSON: ' + queryResultString);
+				}
+				if (!data.length || !data[0].id) {
+					setErrorState('response was not valid: ' + queryResultString);
+				}
+				return data[0].id;
+			}
+		})
+	}
+	
+
+	Constructor.prototype.onProcessOfflinePoolComplete = function(encounterIDs, failedResponses, {showSuccessModal=true}={}) {
+		
+		const $encounters = $(OFFLINE_LIST_SELECTORS.listItem);
+		const nSuccessful = encounterIDs.length;
+		const nFailed = failedResponses.length;
+		const nTotal = $encounters.length;
+		const queryParams = {
+			encounters: {
+				id: {
+					value: encounterIDs.join(','), 
+					operator: 'IN'
+				}
+			}
+		}
+		const queryURL = `query.html?${window.encodeURIComponent(JSON.stringify(queryParams))}`;
+
+		let message = '',
+			title = '',
+			footerButtons = '<button class="generic-button modal-button close-modal" data-dismiss="modal">OK</button>',
+			eventHandler = () => {},
+			dismissable = true;
+		// Only show the all-success modal if the showModal flag is true
+		//	If it's not, then there's other online data to save. 
+		if (showSuccessModal && nFailed === 0 && nSuccessful >= 1) {
+			message = 
+				'All of the offline encounter reports were successfull uploaded' +
+				` to the database. You can <a href="${queryURL}" target="_blank">view the data here</a>.`;
+			title = 'All Reports Successfully Uploaded';
+			eventHandler = () => {
+				// TODO: need to figure out when to clear encounter. Maybe if the modal is dismissable, the user will have to here. I will have to add some a button or something
+				//	I should clear the localStorage beforehand though
+				$('#alert-modal button').click(() => {
+					$(OFFLINE_LIST_SELECTORS.modal).modal('hide');
+					$(OFFLINE_LIST_SELECTORS.list).empty();
+					this.encounterList.data = {};
+				});
+			}
+		} else if (nFailed >= 1 && nSuccessful >= 1) {
+			message = 
+				`${nSuccessful} of ${nTotal} uploads were successfull, but ${nFailed} failed.` +
+				` You can <a href="${queryURL}" target="_blank">view the successfully` +
+				` uploaded encounter${nSuccessful > 1 ? 's' : ''} here</a>. Would you like` +
+				` to try to upload the failed encounter report${nFailed > 1 ? 's' : ''} again?`;
+			title = 'Upload Failed';
+			footerButtons = `
+				<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">No</button>
+				<button class="generic-button modal-button confirm-button">Yes</button>
+			`;
+			eventHandler = () => {
+				$('#alert-modal .confirm-button').click(() => {
+					$(OFFLINE_LIST_SELECTORS.modal).modal('show');
+					// Use onSubmit handler instead of processOfflinePool because
+					//	if there is an online record to be saved, it needs to do it
+					this.onSubmitButtonClick();
+				})
+				// when any button is clicked
+				$('#alert-modal button').click(() => {
+					// Remove successful encounters regardless
+					$(OFFLINE_LIST_SELECTORS.listItem + '.submission-succceeded').remove();
+				})
+			}
+		} else {
+			message = 'All uploads failed to save to the database.' +
+				` Make sure you're still connected to the NPS network and try again.`;
+			title = 'Upload Failed';
+		}
+		
+		showModal(
+			message, 
+			title,
+			{
+				footerButtons: footerButtons,
+				eventHandlerCallable: eventHandler,
+				dismissable: false
+			}
+		)
+
+		if (nSuccessful) {
+			$.post({
+				url: 'flask/notifications/submission', 
+				data: {query_url: queryURL}
+			}).done(response => {
+				if (response !== 'true') {
+					console.log('Email notification failed to send. Response: ' + response)
+				}
+			})
+			.fail((xhr, status, error) => {console.log('Email notification failed with')})
+		}
+
+	}
+
+
+	Constructor.prototype.processOfflinePool = function({poolSize=4, showModal=true}={}) {
+
+		this.saveSubmissionTime();
+
+		// Show the list
+		$(OFFLINE_LIST_SELECTORS.modal).modal('show');
+
+		const $encounters = $(`${OFFLINE_LIST_SELECTORS.list} ${OFFLINE_LIST_SELECTORS.listItem}`);
+		var failedResponses = []; // define in this scope and pass reference to processing function
+		
+		const results = [];    // Array to collect all result Promises
+		const executing = [];  // Array to track currently running Promises
+
+		var formIDs = [];
+			dateString = getFormattedTimestamp(new Date(), {format: 'date'});
+		return this.getParkFormID(dateString, {fillField: false, n: $encounters.length})
+			.then(formIDResponse => {
+				if (pythonReturnedError(formIDResponse)) {
+					const message = 'There was an error when generating Form IDs. Check your network connection and try again. If the problem persists, contact your database administrator.'
+					showModal(message, 'Unexpected Error');
+					throw new Error(formIDResponse);
+				}
+				formIDs = formIDResponse;
+				return new Promise(() => {
+					let i = 0; // Index of the next item to process
+
+					function removeFromQueue(p) {
+						const i = executing.indexOf(p);
+						if (i === -1) {
+							console.error('Queue desync: tried to remove a promise not in the queue', p);
+							throw new Error('Desynced queue state');
+						}
+						executing.splice(i, 1);
+					}
+
+					// Helper function to add the next task to the queue
+					const addToQueue = () => {
+						// If we've started all tasks, wait for the rest to finish
+						if (i === $encounters.length) {
+							// Wait for all results to finish and resolve the outer Promise
+							return Promise.allSettled(results) 
+								// handle the promise here because of the recursive calls complicate things
+								.then(settled => {
+									// Filter out encounter IDs from successful responses
+									const successfulIDs = settled
+										.filter(result => result.status === 'fulfilled')
+										.map(result => result.value);
+
+									this.onProcessOfflinePoolComplete(successfulIDs, failedResponses, {showModal: showModal});
+								})
+								.catch(error => {
+
+									throw new Error('At least some offline encounters failed to upload. Error: ' + error);
+								})
+						}
+
+						// Get the next item and increment the index
+						const index = i++;
+						const item = $encounters[index];
+
+						// Start processing this item by calling the processing method
+						const p = Promise.resolve()
+							.then(() => _this.saveOfflineSubmission(item, failedResponses, {parkFormID: formIDs[index]}))
+							.catch(error => { failedResponses.push( {error, item} ) })
+							// When this task finishes, remove it from executing list
+							.finally(() => removeFromQueue(p));
+						results.push(p); 	// Add to result list
+						executing.push(p); 	// and the executing list
+
+
+						let r = Promise.resolve(); // Default: don't wait to add to queue next
+
+						// If we've hit the concurrency limit, wait for the earliest to finish
+						if (executing.length >= poolSize) {
+							r = Promise.race(executing); // Wait for any one to complete
+						}
+
+						// When a slot opens up, add the next task to the queue
+						return r.then(addToQueue)
+							.catch(error => console.log('Error caught at adding to executing: ' + error));
+					}
+
+					// Start the first batch
+					return addToQueue();
+				})
+			}
+		)
+	}
+
+
+	/*
+	Check that the user is not only online, but also connected to the NPS network
+	*/
+	Constructor.prototype.checkNetworkConnection = function({showMessage=false}={}) {
+		if (window.navigator.onLine) {
+			// send request to server
+			return $.get('/flask/check_network')
+		} else {
+			if (showMessage) {
+				const message = 'You do not currently have an internet connection.';
+				showModal(message, 'No Internet Connection');
+			}
+
+			// Create a fake xhr-like object for consistency
+			const fakeXhr = {
+				status: 0,
+				statusText: 'Offline'
+			};
+			return $.Deferred().reject(fakeXhr, 'offline', 'no network connection');
+		}
+	}
+
+
+	/*
+	Submit button click event handler
+	*/
+	Constructor.prototype.onSubmitButtonClick = function(e) {
+
+		e.preventDefault();
+
+		const $offlineEncounters = $(OFFLINE_LIST_SELECTORS.listItem);
+		const nOfflineEncounters = $offlineEncounters.length;
+
+		// check for an internet connection. If none, add to localStorage
+		if (!window.navigator.onLine) {
+			// Validate all fields. This shouldn't be necessary since the user can't move 
+			//	to a new section with invalid fields, but better safe than sorry
+			this.validateFormPerPage();
+			this.saveOfflineEncounter();
+			return;
+		} else if (nOfflineEncounters) {
+			message = 
+				`You have ${nOfflineEncounters} offline report${nOfflineEncounters > 1 ? 's' : ''}` +
+				' to upload to the database. You must upload these first before you can save any' + 
+				' encounter information you may have recently entered. Would you like to upload' + 
+				` ${nOfflineEncounters > 1 ? 'them' : 'it'} now?`
+			eventHandler = () => {
+				$('#alert-modal .confirm-button').click(() => {
+					this.processOfflinePool();
+				});
+			}
+			showModal(
+				message, 
+				'Offline Data to Upload', 
+				{
+					modalType: 'yes-no',
+					eventHandlerCallable: eventHandler
+				}
+			)
+			return;
+		} else {
+			showLoadingIndicator('onSubmitButtonClick');
+
+			this.validateFormPerPage();
+
+			this.saveSubmissionTime();
+			this.saveOnlineSubmissionWithAttachments();
+		}
+
+		// if (nOfflineEncounters) {
+
+		// 	let message = '',
+		// 		title = '',
+		// 		eventHandler = () => {};
+		// 	// if an encounter is selected, that encounter report is loaded and 
+		// 	//	the user has not been filling out an unsaved report that needs
+		// 	//	to be saved in the DB
+		// 	if ($offlineEncounters.find(OFFLINE_LIST_SELECTORS.selected).length) {
+		// 		message = `You have ${nOfflineEncounters} offline report${nOfflineEncounters === 1 ? '' : 's'}` +
+		// 			' to upload to the database. Please make sure your device remains connected to the NPS network' +
+		// 			' while the uploads are processed and click the <strong>OK</strong> button to continue.'
+		// 		title = 'Upload Offline Encounters';
+		// 		eventHandler = () => {
+		// 			$('#alert-modal button').click(() => {
+		// 				this.processOfflinePool()
+		// 			});
+		// 		}
+
+		// 	} else {
+		// 		message = 
+		// 			'You have encounter reports that were saved offline to this device. These' + 
+		// 			' reports will be processed before the report you have most recently entered.' +
+		// 			' Click the <strong>OK</strong> button to upload these responses and save the' + 
+		// 			' encounter you most recently entered.'
+		// 		this.processOfflinePool({showModal: false})
+		// 			.then(() => {
+		// 				this.saveOnlineSubmissionWithAttachments();
+		// 			});
+		// 	}
+
+		// } else {
+		// 	this.saveOnlineSubmissionWithAttachments()
+		// }
+
+
+	}
+
+
+	/*
+	Handler for the upload button on the Offline Encounter list modal
+	*/
+	Constructor.prototype.onUploadOfflineReportsButtonClick = function() {
+
+		if (!$(OFFLINE_LIST_SELECTORS.listItem).length) {
+			showModal('You do not have any offline reports to upload', 'No Encounters Reported');
+			return;
+		}
+
+		showLoadingIndicator();
+		this.checkNetworkConnection()
+			.done(response => {
+				// whatever the response, it was valid so upload
+				this.processOfflinePool();
+			})
+			.fail((xhr, status, error) => {
+				if (status === 'offline') {
+					console.warn('Offline mode:', error);
+				} else {
+					const message = 'You are connected to the Internet but not the NPS network. Try connecting to Arrowhead WiFi if you are on a mobile device or the VPN if this is a laptop or desktop.'
+					showModal(message, 'No Network Connection');
+					return;
+				}
+			}).always(() => {hideLoadingIndicator()});
+	}
+
+
+	Constructor.prototype.onInternetReconnect = function() {
+
+		if ($(OFFLINE_LIST_SELECTORS.listItem).length && this.shouldShowReconnectMessage) {
+			this.checkNetworkConnection()
+				.done(() => {
+					// it succeeded so we're connected to the network
+					const message = 'You are now connected to the NPS network and you have encounter reports collected offline stored on this device. Would you like to upload them now? To silence this message, click the <strong>Ignore message</strong> button.'
+					const footerButtons = `
+						<button class="generic-button danger-button modal-button close-modal ignore-button" data-dismiss="modal">Ignore message</button>
+						<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">No</button>
+						<button class="generic-button modal-button close-modal confirm-button">Yes</button
+					`
+					const eventHandler = () => {
+						$('#alert-modal .ignore-button').click(() => {
+							this.shouldShowReconnectMessage = false;
+						});
+						$('#alert-modal .confirm-button').click(() => {
+							this.processOfflinePool();
+						})
+					}
+					showModal(
+						message, 
+						'Reconnected to NPS network', 
+						{
+							eventHandlerCallable: eventHandler,
+							footerButtons: footerButtons
+						}
+					);
+				})
+		}
+
+	}
+
+	/*
+	Prevent the user from closing the envounter-list-modal while data are being uploaded
+	*/
+	Constructor.prototype.onCloseEncounterListButtonClick = function() {
+
+		// If any list items have the processing class, warn the user and exit
+		if ($(`${OFFLINE_LIST_SELECTORS.listItem}.${OFFLINE_PROCESSING_CLASSES.processing}`)) {
+			showModal('There are still some offline reports being uploaded. You must wait to close this dialog until they have all completed.', 'Offline Data Uploading');
+			return;
+		}
+		
+		// Otherwise, dismiss the modal
+		$(OFFLINE_LIST_SELECTORS.modal).modal('hide');
 	}
 
 
@@ -3793,7 +4614,7 @@ function getVideoStill($thumbnail, blob) {
 			video.removeEventListener('timeupdate', timeupdate);
 			video.pause();
 		}
-  	};
+	};
 	video.addEventListener('loadeddata', function() {
 		if (snapImage()) {
 		  video.removeEventListener('timeupdate', timeupdate);
@@ -4022,13 +4843,17 @@ function onlockSectionButtonClick(e) {
 	$targetIcon.toggleClass('fa-unlock', isLocked);
 }
 
-function getFormattedTimestamp(date) {
+function getFormattedTimestamp(date, {format='timestamp'}={}) {
 
 	if (date === undefined) date = new Date();
 
 	// Get 0-padded minutes
-	const minutes = ('0' + date.getMinutes()).slice(-2)
-
-	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${minutes}`;
-
+	const minutes = ('0' + date.getMinutes()).slice(-2);
+	const dateString = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+	const timeString = `${date.getHours()}:${minutes}`;
+	return (
+		format === 'date' ? dateString : 
+		format === 'time' ? timeString :
+		`${dateString} ${timeString}` //timestamp 
+	);
 }

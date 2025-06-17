@@ -210,8 +210,7 @@ var BHIMSQuery = (function(){
 							encounter.bear_cohort_code ? 
 							this.lookupValues.bear_cohort_codes[encounter.bear_cohort_code].name : 
 							'unknown';
-						listItems.push(
-							this.encounterList.addEncounter(
+						const $encounter = this.encounterList.addEncounter(
 								encounter.id, 
 								encounter.park_form_id, 
 								bearGroupType, 
@@ -219,12 +218,13 @@ var BHIMSQuery = (function(){
 									data: encounter,
 									onClick: this.onResultItemClick
 								}
-							)
-						);
+							);
+						listItems.push($encounter);
+						$encounter.find('.encounter-list-edit-button-container').removeClass('hidden');
 					}
 
-					// figure out if this.encounterList.encounters or queryResult will be the repository
-					this.queryResult = deepCopy(this.encounterList.encounters); 
+					// figure out if this.encounterList.data or queryResult will be the repository
+					this.queryResult = deepCopy(this.encounterList.data); 
 
 					// Make the first one selected
 					const $firstEl = listItems[0];

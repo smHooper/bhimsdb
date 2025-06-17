@@ -669,12 +669,12 @@ textarea.narrative-field {
 	font-style: initial;
 }
 
-.submition-confirmation-container {
+.submission-confirmation-container {
 	display: flex;
     flex-wrap: wrap;
     justify-content: center;
 }
-.submition-confirmation-container > * {
+.submission-confirmation-container > * {
 	margin-bottom: 1rem;
 	width: 100%;
 	text-align: center;
@@ -686,3 +686,19 @@ textarea.narrative-field {
 .submit-success-button {
 	margin-right: 40px;
 }
+
+
+/*------------ offline encounter list -------------*/
+#encounter-list-modal .modal-content {
+	background: #ccc;
+	border-radius: 2rem;
+}
+#encounter-list-modal .modal-body {
+	padding: 0 2rem;
+	align-items: start;
+}
+.header-menu-item-group .icon-button i {
+	color: white;
+}
+/*^^^^^^^^^^^^ offline encounter list ^^^^^^^^^^^^^*/
+

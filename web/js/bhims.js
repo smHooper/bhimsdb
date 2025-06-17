@@ -153,9 +153,10 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 				break;
 			case 'confirm':
 				footerButtons = `
-					<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">Close</button>';
-					<button class="generic-button modal-button close-modal" data-dismiss="modal">OK</button>
+					<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">Close</button>'
+					<button class="generic-button modal-button close-modal confirm-button" data-dismiss="modal">OK</button>
 				`;
+				break;
 			case 'yes-no': 
 				footerButtons = `
 					<button class="generic-button secondary-button modal-button close-modal" data-dismiss="modal">No</button>
@@ -206,7 +207,7 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 }
 
 
-function getUserInfo({pwaRequestID=null, fillUsername=false}) {
+function getUserInfo({pwaRequestID=null, fillUsername=true}) {
 	const pwaRequestIDString = pwaRequestID ? '/' + pwaRequestID : ''
 	return $.get({
 		url: '/flask/user_info' + pwaRequestIDString,
@@ -382,11 +383,10 @@ function trueRound(x, precision=0) {
 
 */
 function addSidebarMenu() {
-	const mainWithSidebar = $('.main-container-with-sidebar');
+	const mainWithSidebar = $('.main-container-with-header');
 	const mainWithSidebarExists = mainWithSidebar.length;
 	$(`
-		
-		${mainWithSidebarExists ? '' : '<div class="main-container-with-sidebar">'} 
+		${mainWithSidebarExists ? '' : '<div class="main-container-with-header">'} 
 			<!-- nav sidebar -->
 			<nav class="sidebar" role="navigation">
 				<div class="sidebar-sticky">
@@ -433,9 +433,26 @@ function addSidebarMenu() {
 				</div>
 			</nav>
 		${mainWithSidebarExists ? '' : '</div>'} 
-	`).prependTo(mainWithSidebarExists ? '.main-container-with-sidebar' : 'main');
+	`).prependTo(mainWithSidebarExists ? '.main-container-with-header' : 'main');
+	
+	$('.sidebar-nav-group > .nav-item.selected').removeClass('selected');
+	$('.sidebar-nav-group .nav-item > a')
+		.filter((_, el) => el.href.endsWith(window.location.pathname.split('/').pop()))
+		.parent()
+			.addClass('selected');
+}
 
-	$(`
+
+function addPageHeaderBar({pageTitle=''}={}) {
+	if (!pageTitle) {
+		const pathName = window.location.pathname.toLowerCase();
+		pageTitle = 
+			pathName.match('entry') ? 'entry form' :
+			pathName.match('query') ? 'query' :
+			pathName.match('dashboard') ? 'dashboard' : 
+			pathanme.replace(/-/g);
+	}
+	const $header = $(`
 		<nav class="bhims-header-menu">
 			<div class="header-menu-item-group">
 				<button class="icon-button sidebar-collapse-button" title="Toggle sidebar menu">
@@ -446,7 +463,12 @@ function addSidebarMenu() {
 				<a class="home-button" role="button" href="bhims-index.html">
 					<img src="imgs/bhims_icon_50px.svg" alt="home icon">
 				</a>
-				<h4 class="page-title">BHIMS dashboard</h4>
+				<h4 class="page-title">BHIMS ${pageTitle}</h4>
+			</div>
+			<div id="offline-encounter-list-button-container" class="header-menu-item-group ${true || isPWA() ? '' : 'hidden'}">
+				<button id="show-offline-encounter-list-button" class="icon-button">
+					<i class="fas fa-2x fa-list"></i>
+				</button>
 			</div>
 			<div class="header-menu-item-group" id="username-container">
 				<img id="username-icon" src="imgs/user_icon_50px.svg" alt="username icon">
@@ -458,13 +480,9 @@ function addSidebarMenu() {
 	$('.sidebar-collapse-button').click((e) => {
 		$('.sidebar-collapse-button, nav.sidebar').toggleClass('collapsed');
 	});
-	
-	$('.sidebar-nav-group > .nav-item.selected').removeClass('selected');
-	$('.sidebar-nav-group .nav-item > a')
-		.filter((_, el) => el.href.endsWith(window.location.pathname.split('/').pop()))
-		.parent()
-			.addClass('selected');
-}
+
+	return $header;
+} 
 
 
 /*
@@ -482,7 +500,7 @@ function getEnvironment() {
 Check if the app is running as a PWA
 */
 function isPWA() {
-	return PWA_DISPLAY_MODES.some(
+	return true || PWA_DISPLAY_MODES.some(
 		(displayMode) => window.matchMedia(`(display-mode: ${displayMode})`).matches
 	);
 }

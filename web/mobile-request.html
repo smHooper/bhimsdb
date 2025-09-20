@@ -30,7 +30,7 @@
 	<div class="modal-background modal-background-light hidden" id="loading-indicator-background"></div>
 	<div class="hidden" id="loading-indicator"></div>
 
-	<main class="main-container-with-sidebar">
+	<main class="main-container-with-header">
 		<div class="screenshot-container">
 			<img class="screenshot-img" src="imgs/mobile_request_screenshot.jpg" alt="Screenshot of app running on an iPad"/>
 			<div class="installation-description">
@@ -72,8 +72,12 @@
 		updateExpirationInterval();
 
 		$(document).ready(() => {
-			addSidebarMenu();
-			getUserInfo({fillUsername: true});
+			addPageHeaderBar({pageTitle: 'mobile app install'});
+			getUserInfo().then(userInfo => {
+				if (userInfo.role >= 2) {
+					addSidebarMenu();
+				}
+			});
 
 			// Get the config value and update it in case it's different from the default
 			$.get('flask/db_config').done(response => {

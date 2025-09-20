@@ -207,7 +207,7 @@ function showModal(message, title, {modalType='alert', footerButtons='', dismiss
 }
 
 
-function getUserInfo({pwaRequestID=null, fillUsername=true}) {
+function getUserInfo({pwaRequestID=null, fillUsername=true}={}) {
 	const pwaRequestIDString = pwaRequestID ? '/' + pwaRequestID : ''
 	return $.get({
 		url: '/flask/user_info' + pwaRequestIDString,
@@ -450,7 +450,7 @@ function addPageHeaderBar({pageTitle=''}={}) {
 			pathName.match('entry') ? 'entry form' :
 			pathName.match('query') ? 'query' :
 			pathName.match('dashboard') ? 'dashboard' : 
-			pathanme.replace(/-/g);
+			pathName.replace(/-/g, ' ');
 	}
 	const $header = $(`
 		<nav class="bhims-header-menu">

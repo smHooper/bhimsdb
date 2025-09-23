@@ -1194,39 +1194,40 @@ var BHIMSQuery = (function(){
 			sqlParameters.push(parameters);
 		} 
 
+		const getSQL = (tableName, cardID, dbID, values) => {
+			if (dbID === undefined) {
+				// new row that needs to be INSERTed
+				// Add the encounter_id field, since all related records need this
+				values['encounter_id'] = _this.selectedID;
+				const [sql, parameters] = _this.getInsertSQL(tableName, values, 'id');
+				inserts.push({
+					sqlIndex: sqlStatements.length,
+					tableName: tableName,
+					fieldValues: {...values},
+					tableIndex: cardID
+				});
+				sqlStatements.push(sql);
+				sqlParameters.push(parameters);
+			} else {
+				// just a regular UPDATE
+				var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
+				sqlStatements.push(sql);
+				sqlParameters.push(parameters);			
+			}
+		}
 		// Create SQL statements for all other updates
 		for (const tableName in oneToManyEdits) {
+			// skip attachments for now
+			if (tableName === 'attachments') continue;
 
 			// Either UPDATE the proper row or INSERT if this is a new row
 			const updates = oneToManyEdits[tableName];
 			for (const cardID in updates) {
 				const dbID = updates[cardID].id;
-				var values = updates[cardID].values;
-				if (dbID === undefined) {
-					// new row that needs to be INSERTed
-					// Add the encounter_id field, since all related records need this
-					values['encounter_id'] = _this.selectedID;
-					const [sql, parameters] = _this.getInsertSQL(tableName, values, 'id');
-					inserts.push({
-						sqlIndex: sqlStatements.length,
-						tableName: tableName,
-						fieldValues: {...values},
-						tableIndex: cardID
-					});
-					sqlStatements.push(sql);
-					sqlParameters.push(parameters);
-				} else {
-					// just a regular UPDATE
-					var [sql, parameters] = _this.getUpdateSQL(tableName, values, 'id', dbID);
-					sqlStatements.push(sql);
-					sqlParameters.push(parameters);			
-				}
+				var values = {...updates[cardID].values};
+				getSQL(tableName, cardID, dbID, values);
 			}
 		}
-
-		// Add SQL statements for multiple selects last
-		sqlStatements = [...sqlStatements, ...multipleSelectStatements];
-		sqlParameters = [...sqlParameters, ...multipleSelectParameters];
 
 		// Gather info from any attachments where the actual attachment (not associated fields)
 		//	were updated
@@ -1252,20 +1253,17 @@ var BHIMSQuery = (function(){
 									const result = $.parseJSON(resultString);
 									const thisFile = fileInput.files[0];
 									delete uploadInfo.values.uploadedFile;
-									updates[attachmentIndex] = {
-										id: uploadInfo.id,
-										values: {
-											client_filename: fileName,
-											file_path: result.filePath,//should be the saved filepath (with UUID)
-											file_size_kb: Math.floor(thisFile.size / 1000),
-											mime_type: thisFile.type,
-											attached_by: entryForm.username,//retrieved in window.onload()
-											datetime_attached: timestamp,
-											last_changed_by: entryForm.username,
-											datetime_last_changed: timestamp,
-											thumbnail_filename: result.thumbnailFilename || null,
-											...uploadInfo.values
-										}
+									attachmentValues = {
+										client_filename: fileName,
+										file_path: result.filePath,//should be the saved filepath (with UUID)
+										file_size_kb: Math.floor(thisFile.size / 1000),
+										mime_type: thisFile.type,
+										attached_by: entryForm.username,//retrieved in window.onload()
+										datetime_attached: timestamp,
+										last_changed_by: entryForm.username,
+										datetime_last_changed: timestamp,
+										thumbnail_filename: result.thumbnailFilename || null,
+										...uploadInfo.values
 									}
 									
 									const $thumbnail = $fileInput.parent()
@@ -1274,10 +1272,12 @@ var BHIMSQuery = (function(){
 									if (result.thumbnailFilename) $thumbnail.attr('src', 'attachments/' + result.thumbnailFilename);
 									$thumbnail.data('file-path', result.filePath);
 
-									// delete old file 
+									// delete old file if this is an update
 									if (filePath) {
 										//$.ajax({...})
 									}
+
+									getSQL('attachments', attachmentIndex, uploadInfo.id, attachmentValues);
 								}
 							})
 							.fail((xhr, status, error) => {
@@ -1289,6 +1289,10 @@ var BHIMSQuery = (function(){
 			}
 		}
 
+
+		// Add SQL statements for multiple selects last
+		sqlStatements = [...sqlStatements, ...multipleSelectStatements];
+		sqlParameters = [...sqlParameters, ...multipleSelectParameters];
 		
 		return $.when(
 			...fileUploadDeferreds

@@ -2878,8 +2878,6 @@ var BHIMSEntryForm = (function() {
 		// Reset all input values except the ones filled with the username
 		$('.input-field:not(#input-entered_by):not(select)')
 			.val(null);
-		
-		_this.setDatetimeEntered();
 
 		// Remove text from the .recorded-text-container. The narrative field 
 		//	is actually a textarea, which records the value of the text entered 
@@ -2894,9 +2892,6 @@ var BHIMSEntryForm = (function() {
 			).change();
 		}
 
-		// reset default values
-		_this.setDefaultInputValues();
-
 		if (_this.markerIsOnMap()) {
 			_this.encounterMarker.remove();
 			$('#encounter-marker-container').slideDown(0);
@@ -2905,6 +2900,12 @@ var BHIMSEntryForm = (function() {
 		// Clear localStorage
 		_this.fieldValues = {};
 		window.localStorage.clear();
+
+		// reset default values
+		_this.setDefaultInputValues();
+
+		_this.setDatetimeEntered();
+		$('#input-entered_by').val(_this.username).change();
 
 		const pageIndex = parseInt($('.form-page.selected').data('page-index'));
 		if (pageIndex !== 0) _this.goToPage(-pageIndex);

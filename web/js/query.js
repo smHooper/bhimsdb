@@ -647,7 +647,10 @@ var BHIMSQuery = (function(){
 		$card.find('select') // file type select is the only one
 			.val(fileType)
 			.change();
-		const fileName = attachmentInfo.thumbnail_filename || attachmentInfo.file_path.split('\\').pop();
+		const fileName = attachmentInfo.thumbnail_filename || 
+			attachmentInfo.file_path
+				.split('\\').pop() //for windows-style paths
+				.split('/').pop(); //for universal paths
 		
 		$card.find('.file-thumbnail')
 			.attr('src', `attachments/${fileName}`) //set the image source

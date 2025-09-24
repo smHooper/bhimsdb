@@ -1242,6 +1242,7 @@ var BHIMSQuery = (function(){
 		if ('attachments' in oneToManyEdits) {
 			updates = oneToManyEdits.attachments;
 			for (const attachmentIndex in updates) {
+				// only update the attachment file if the user changed it
 				if ('uploadedFile' in updates[attachmentIndex].values) {
 					const uploadInfo = updates[attachmentIndex];
 					const $fileInput = $('#attachment-upload-' + attachmentIndex);
@@ -1251,12 +1252,11 @@ var BHIMSQuery = (function(){
 					const timestamp = getFormattedTimestamp();
 					fileUploadDeferreds.push(
 						saveAttachment(fileInput)
-							.done(resultString => {
-								if (resultString.trim().startsWith('ERROR')) {
+							.done(result => {
+								if (pythonReturnedError(result)) {
 									failedFiles.push(fileName);
-									return false;
+									return Deferred.resolve(false);
 								} else {
-									const result = $.parseJSON(resultString);
 									const thisFile = fileInput.files[0];
 									delete uploadInfo.values.uploadedFile;
 									attachmentValues = {

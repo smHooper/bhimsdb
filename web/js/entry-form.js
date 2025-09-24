@@ -3660,13 +3660,11 @@ function saveAttachment(fileInput) {
 	var formData = new FormData();
 	formData.append('uploadedFile', fileInput.files[0], fileInput.files[0].name);
 	
-	return $.ajax({
-		url: 'bhims.php',
-		type: 'POST',
-		cache: false,
+	return $.post({
+		url: '/flask/save/attachments',
+		data: formData,
 		contentType: false,
-		processData: false,
-		data: formData
+		processData: false
 	});
 }
 

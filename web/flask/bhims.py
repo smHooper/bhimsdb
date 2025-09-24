@@ -13,8 +13,12 @@ import base64
 from datetime import datetime
 from argparse import Namespace
 
-from flask import Flask, render_template, request, json, url_for
+from flask import Flask, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
+
+from subprocess import check_output as subprocess_check_output
+from uuid import uuid4
+from werkzeug.datastructures import FileStorage
 
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../py/scripts'))
 from export_data import export_data
@@ -261,6 +265,75 @@ def save_submission_time():
 		session.commit()
 
 	return 'true'
+
+
+def save_attachment_to_file(client_filename: str, uploaded_file: FileStorage):
+	"""
+	Save a file passed to the server
+	"""
+	client_basename, extension = os.path.splitext(client_filename)
+	server_filename = str(uuid4()) + extension	
+	file_path = os.path.join(get_content_dir('attachments'), server_filename)
+	request.files[client_filename].save(file_path)
+
+	return os.path.abspath(file_path)
+
+@app.route('/flask/save/attachments', methods=['POST'])
+def save_attachment():
+
+	response = []
+	for client_filename, uploaded_file in request.files.items():
+		
+		client_basename, extension = os.path.splitext(client_filename)
+		server_filename = str(uuid4()) + extension
+		attachment_dir = get_content_dir('attachments')	
+		file_path = os.path.join(attachment_dir, server_filename)
+		request.files[client_filename].save(file_path)
+
+		mimetype = uploaded_file.mimetype.lower()
+		
+		# Get general file type (i.e.,image, video, or audio) and specific (e.g., png, mp4, etc)
+		general_file_type, specific_file_type = mimetype.split('/')
+		
+		# Make a thumbnail
+		# 	If it's a GIF, the image-magick command will need an index of a frame to extract
+		gif_frame_index = '[0]' if specific_file_type == 'gif' else ''
+		thumbnail_filename = re.sub(f'\\{extension}$', f'_thumbnail.jpg', server_filename)
+		thumbnail_path = os.path.join(attachment_dir, thumbnail_filename)
+		# for images, use image-magick to create a resize jpg
+		thumbnail_exe_dir = app.config['IMAGE_MAGICK_DIR']
+		thumbnail_command = []
+		if general_file_type == 'image':
+			thumbnail_command = [
+				os.path.join(thumbnail_exe_dir, 'magick'), 
+				file_path + gif_frame_index, 
+				'-resize 200x200',
+				thumbnail_path
+			]
+		# for videos, extract the frame at the 1 second timestamp
+		if general_file_type == 'video' or mimetype == 'application/octet-stream':
+			thumbnail_command = [
+				os.path.join(thumbnail_exe_dir, 'ffmpeg'), 
+				'-ss 00:00:01.00', 
+				'-i $uploadFilePath', 
+				'-vf scale=200:200:force_original_aspect_ratio=decrease',
+				 '-vframes 1',
+				 thumbnail_path
+			]
+		thumbnail_success = True
+		if thumbnail_command:
+			try:
+				subprocess_check_output(*thumbnail_command)
+			except:
+				thumbnail_success = False
+
+		response.append({
+			'file_path': file_path,
+			'thumbnail_filename': thumbnail_filename,
+			'thumbnail_success': thumbnail_success,
+		})
+
+	return jsonify(response)
 
 
 if __name__ == '__main__':

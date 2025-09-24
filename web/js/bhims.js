@@ -489,9 +489,48 @@ function parseURLQueryString(queryString=window.location.search) {
 	}
 }
 
-function pythonReturnedError(resultString) {
 
-	return resultString.startsWith('ERROR: Internal Server Error') ?
-	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
-	   false;
+
+
+function pythonReturnedError(resultString, {errorExplanation=''}={}) {
+	resultString = String(resultString); // force as string in case it's something else
+	if (resultString.startsWith('ERROR: Internal Server Error')) {
+		// almost all Python excetions have a class anme in the form *Error (e.g., ValueError).
+		//	That's not a hard and fast rule, however, and so if the match is null, return something generic
+		const pythonException = (resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/) || ['unknown custom exception thrown']
+		)[0].trim();
+		
+		const dbContact = CONFIG['db_contact_message'];
+		// Show the 
+		if (errorExplanation !== '') {
+			const messageBody = `
+				${errorExplanation}${dbContact} 
+				<div class="w-100 d-flex justify-content-between">
+					<button 
+						role="button"
+						class="text-only-button pl-0" 
+						type="button" 
+						data-toggle="collapse" data-target=".modal-error-details-target" aria-expanded="false" aria-controls="modal-error-details-collapse"
+					>
+						Error details
+					</button>
+					<button 
+						role="button"
+						class="text-only-button modal-error-details-target copy-error-text-button collapse"
+						data-toggle="tooltip"
+						data-placement="bottom"
+					>
+						Copy error text
+					</button>
+				</div>
+				<p id="modal-error-details-collapse" class="collapse modal-error-details-target modal-error-text-container pt-3">
+					${resultString}
+				</p>`;
+			showModal(messageBody, 'Unexpected Error');
+		}
+
+		return pythonException;
+	} else {
+		return false;
+	}
 }

@@ -158,7 +158,6 @@ if (isset($_FILES['uploadedFile'])) {
 		$thumbnailName = $uuid . '_thumbnail.jpg';
 
 		// Use ImageMagick if it's an image
-		$imgMagickPath = 'C:\\ProgramData\\ImageMagick-7.1.0-Q16-HDRI\\';
 		$command = '';
 		if ($generalType === 'image') {
 			$command = $imgMagickPath . "magick $uploadFilePath$gifFrameIndex -resize 200x200 attachments/$thumbnailName";
@@ -169,7 +168,7 @@ if (isset($_FILES['uploadedFile'])) {
 		$cmdResult = runCmd($command);
 		$resultArray = array(
 			'filePath' => $uploadFilePath,
-			'thumbnailFilename' => boolval($cmdResult) ? $thumbnailName : false,
+			'thumbnailFilename' => $thumbnailName,
 			'cmdResult' => $cmdResult,
 			'command' => $command,
 			'mimeType' => $mimeType,

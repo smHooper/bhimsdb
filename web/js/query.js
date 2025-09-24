@@ -795,7 +795,7 @@ var BHIMSQuery = (function(){
 			const attachments = selectedEncounterData.attachments || [];
 			entryForm.fieldValues.attachments = [...attachments];
 			const $hasAttachmentsInput = $('#input-has_attachments');
-			if (attachments.length) $hasAttachmentsInput.val(1); //open the collapse
+			if (attachments.length) $hasAttachmentsInput.val(1).change(); //open the collapse
 			for (attachmentInfo of attachments) {
 				if (attachmentInfo.file_path) {
 					this.loadAttachment(attachmentInfo);

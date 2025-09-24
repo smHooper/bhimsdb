@@ -284,11 +284,17 @@ var BHIMSQuery = (function(){
 				)
 			);
 			for (const tableName of this.joinedDataTables) {
-				// construct WHERE statement in the format "WHERE encounters.id IN (...) AND <tableName>.<fieldName>..." 
-				//	unless there are no query params for this table. If that's the case just use "WHERE encounters.id IN (...)"
-				const tableWhereClauseString = whereClauses[tableName] ? 'AND ' + whereClauses[tableName].join(' AND ') : '';
-				const whereString = `WHERE ${encounterIDClause} ${tableWhereClauseString}`;
-				const sql = `SELECT ${tableName}.* FROM ${tableName} INNER JOIN encounters ON encounters.id=${tableName}.encounter_id ${whereString} ORDER BY ${tableName}.${this.tableSortColumns[tableName]}`;
+				// use only the encounter ID to select from related tables. This is so that if someone 
+				//	queries encounters where, say, someone ran from a bear, it pull all reactions 
+				//	rather than applying the WHERE statement to the reactions table and only 
+				//	returning the "ran away" reaction
+				const whereString = `WHERE ${encounterIDClause}`;
+				const sql = `
+					SELECT ${tableName}.* FROM ${tableName} 
+					INNER JOIN encounters ON encounters.id=${tableName}.encounter_id 
+					${whereString} 
+					ORDER BY ${tableName}.${this.tableSortColumns[tableName]}
+				`;
 				const deferred = queryDB(sql);
 
 				deferred.done( queryResultString => {
@@ -789,7 +795,7 @@ var BHIMSQuery = (function(){
 			const attachments = selectedEncounterData.attachments || [];
 			entryForm.fieldValues.attachments = [...attachments];
 			const $hasAttachmentsInput = $('#input-has_attachments');
-			if (attachments.length) $hasAttachmentsInput.val(1); //open the collapse
+			if (attachments.length) $hasAttachmentsInput.val(1).change(); //open the collapse
 			for (attachmentInfo of attachments) {
 				if (attachmentInfo.file_path) {
 					this.loadAttachment(attachmentInfo);

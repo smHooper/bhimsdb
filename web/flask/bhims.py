@@ -57,6 +57,11 @@ def get_db_schema() -> str:
 	return 'public' if get_environment() == 'prod' else 'dev'
 
 
+def get_content_dir(dirname='attachments'):
+	"""helper function to get the path to a subdirectory of root"""
+	return os.path.join(os.path.dirname(__file__), '..', dirname)
+
+
 def get_engine(access='read', schema='public'):
 	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
 	return create_engine(url).execution_options(schema_translate_map={'public': schema, None: schema})
@@ -68,12 +73,17 @@ def get_config_from_db(schema='public'):
 	with engine.connect() as conn:
 		cursor = conn.execute(f'TABLE {schema}.config')
 		for row in cursor:
-			app.config[row['property']] = (
+			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
 				int(row['value']) if row['data_type'] == 'integer' else
 				(row['value'] == 'true') if row['data_type'] == 'boolean' else
 				row['value']
 			)
+			db_config[row['property']] = value
+			app.config[row['property']] = value
+
+	return db_config
+
 
 db_schema = get_db_schema()
 get_config_from_db(db_schema)
@@ -88,6 +98,12 @@ WriteSession = sessionmaker(write_engine)
 @app.route('/flask/test', methods=['GET', 'POST'])
 def hello():
 	return 'hello'
+
+
+@app.route('/flask/config', methods=['GET'])
+def get_db_config():
+
+	return jsonify(get_config_from_db(db_schema))
 
 
 @app.route('/flask/park_form_id/<encounter_id>', methods=['GET', 'POST'])

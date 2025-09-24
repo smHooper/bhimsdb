@@ -165,6 +165,24 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 }
 
 
+function getConfig() {
+	$.post({
+		url: '/flask/config',
+	}).then(result => {
+		if (!pythonReturnedError(result)) {
+			CONFIG = {...result};
+			CONFIG['db_contact_message']
+				.replace(
+					'{db_admin_email}',
+					CONFIG['db_admin_email']
+				);
+		}
+	})
+}
+CONFIG = {};
+getConfig();
+
+
 function getUserInfo() {
 	return $.post({
 		url: 'bhims.php',

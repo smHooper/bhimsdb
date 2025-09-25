@@ -16,7 +16,12 @@ from argparse import Namespace
 from flask import Flask, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
 
-from subprocess import check_output as subprocess_check_output, Popen
+from subprocess import CREATE_NEW_PROCESS_GROUP
+from subprocess import DETACHED_PROCESS
+from subprocess import DEVNULL
+from subprocess import run as subprocess_run
+from subprocess import Popen
+
 from uuid import uuid4
 from werkzeug.datastructures import FileStorage
 
@@ -283,28 +288,17 @@ def save_submission_time():
 	return 'true'
 
 
-def save_attachment_to_file(client_filename: str, uploaded_file: FileStorage):
-	"""
-	Save a file passed to the server
-	"""
-	client_basename, extension = os.path.splitext(client_filename)
-	server_filename = str(uuid4()) + extension	
-	file_path = os.path.join(get_content_dir('attachments'), server_filename)
-	request.files[client_filename].save(file_path)
-
-	return os.path.abspath(file_path)
-
 @app.route('/flask/save/attachments', methods=['POST'])
 def save_attachment():
 
 	response = []
-	for client_filename, uploaded_file in request.files.items():
-		
-		client_basename, extension = os.path.splitext(client_filename)
+	for inputName, uploaded_file in request.files.items():
+
+		client_basename, extension = os.path.splitext(uploaded_file.filename)
 		server_filename = str(uuid4()) + extension
 		attachment_dir = get_content_dir('attachments')	
-		file_path = os.path.join(attachment_dir, server_filename)
-		request.files[client_filename].save(file_path)
+		file_path = os.path.abspath(os.path.join(attachment_dir, server_filename))
+		request.files[inputName].save(file_path)
 
 		mimetype = uploaded_file.mimetype.lower()
 		
@@ -316,8 +310,10 @@ def save_attachment():
 		gif_frame_index = '[0]' if specific_file_type == 'gif' else ''
 		thumbnail_filename = re.sub(f'\\{extension}$', f'_thumbnail.jpg', server_filename)
 		thumbnail_path = os.path.join(attachment_dir, thumbnail_filename)
+		
 		# for images, use image-magick to create a resize jpg
 		thumbnail_exe_dir = app.config['IMAGE_MAGICK_DIR']
+		
 		thumbnail_command = []
 		if general_file_type == 'image':
 			thumbnail_command = [
@@ -336,12 +332,37 @@ def save_attachment():
 				 '-vframes', '1',
 				 thumbnail_path
 			]
+			
+
+			# Make a webm version of the file as an efficient backup in case the original 
+			#	isn't supported by the browser when the attachment is served back up
+			if not mimetype == 'video/webm':
+				command = [
+					os.path.join(thumbnail_exe_dir, 'ffmpeg'), 
+					'-i', file_path, 
+					'-c:v', 'libvpx-vp9', 
+					'-b:v', '0', 
+					'-crf', '45', 
+					'-preset', 'good',
+					'-b:a', '96k'#
+					re.sub(f'\\{extension}$', '.webm', file_path)
+				]
+				try:
+					Popen(
+						command,
+						stdout=DEVNULL,
+						stderr=DEVNULL,
+						creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+					)
+				except:
+					pass
+
 		thumbnail_success = True
 		if thumbnail_command:
 			try:
-				subprocess_check_output(*thumbnail_command)
-			except:
-				thumbnail_success = False
+				subprocess_run(thumbnail_command, check=True, stdout=DEVNULL, stderr=DEVNULL)
+			except Exception as e:
+				thumbnail_success = str(e)
 
 		response.append({
 			'file_path': file_path,

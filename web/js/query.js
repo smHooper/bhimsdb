@@ -1255,28 +1255,29 @@ var BHIMSQuery = (function(){
 							.done(result => {
 								if (pythonReturnedError(result)) {
 									failedFiles.push(fileName);
-									return Deferred.resolve(false);
+									return $.Deferred().resolve(false);
 								} else {
+									result = result[0];
 									const thisFile = fileInput.files[0];
 									delete uploadInfo.values.uploadedFile;
 									attachmentValues = {
 										client_filename: fileName,
-										file_path: result.filePath,//should be the saved filepath (with UUID)
+										file_path: result.file_path,//should be the saved filepath (with UUID)
 										file_size_kb: Math.floor(thisFile.size / 1000),
 										mime_type: thisFile.type,
 										attached_by: entryForm.username,//retrieved in window.onload()
 										datetime_attached: timestamp,
 										last_changed_by: entryForm.username,
 										datetime_last_changed: timestamp,
-										thumbnail_filename: result.thumbnailFilename || null,
+										thumbnail_filename: result.thumbnail_filename || null,
 										...uploadInfo.values
 									}
 									
 									const $thumbnail = $fileInput.parent()
 										.siblings('.file-preview-container')
 											.find('.file-thumbnail');
-									if (result.thumbnailFilename) $thumbnail.attr('src', 'attachments/' + result.thumbnailFilename);
-									$thumbnail.data('file-path', result.filePath);
+									if (result.thumbnail_filename) $thumbnail.attr('src', 'attachments/' + result.thumbnail_filename);
+									$thumbnail.data('file-path', result.file_path);
 
 									// delete old file if this is an update
 									if (filePath) {

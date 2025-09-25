@@ -16,7 +16,7 @@ from argparse import Namespace
 from flask import Flask, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
 
-from subprocess import check_output as subprocess_check_output
+from subprocess import check_output as subprocess_check_output, Popen
 from uuid import uuid4
 from werkzeug.datastructures import FileStorage
 
@@ -323,17 +323,17 @@ def save_attachment():
 			thumbnail_command = [
 				os.path.join(thumbnail_exe_dir, 'magick'), 
 				file_path + gif_frame_index, 
-				'-resize 200x200',
+				'-resize', '200x200',
 				thumbnail_path
 			]
 		# for videos, extract the frame at the 1 second timestamp
 		if general_file_type == 'video' or mimetype == 'application/octet-stream':
 			thumbnail_command = [
 				os.path.join(thumbnail_exe_dir, 'ffmpeg'), 
-				'-ss 00:00:01.00', 
-				'-i $uploadFilePath', 
-				'-vf scale=200:200:force_original_aspect_ratio=decrease',
-				 '-vframes 1',
+				'-ss',  '00:00:01.00', 
+				'-i', file_path, 
+				'-vf', 'scale=200:200:force_original_aspect_ratio=decrease',
+				 '-vframes', '1',
 				 thumbnail_path
 			]
 		thumbnail_success = True

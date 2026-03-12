@@ -534,3 +534,80 @@ function pythonReturnedError(resultString, {errorExplanation=''}={}) {
 		return false;
 	}
 }
+
+
+/*
+Helper function to debug issues with collapses
+*/
+function toggleCollapseEventMonitoring(selector, toggleOn=true) {
+	const $collapse = $(selector).closest('.collapse');
+
+	if (toggleOn) {
+		$collapse.on('show.bs.collapse', e => {
+			const a = 1;
+		});
+		$collapse.on('shown.bs.collapse', e => {
+			const a = 1;
+		});
+		$collapse.on('hide.bs.collapse', e => {
+			const a = 1;
+		});
+		$collapse.on('hidden.bs.collapse', e => {
+			const a = 1;
+		});
+	} else {
+		$collapse.off('show.bs.collapse');
+		$collapse.off('shown.bs.collapse');
+		$collapse.off('hide.bs.collapse');
+		$collapse.off('hidden.bs.collapse');
+	}
+}
+
+function toggleModalEventMonitoring(selector, toggleOn=true) {
+	const $modal = $(selector).closest('.modal');
+
+	if (toggleOn) {
+		$modal.on('show.bs.modal', e => {
+			const a = 1;
+		});
+		$modal.on('shown.bs.modal', e => {
+			const a = 1;
+		});
+		$modal.on('hide.bs.modal', e => {
+			const a = 1;
+		});
+		$modal.on('hidden.bs.modal', e => {
+			const a = 1;
+		});
+	} else {
+		$modal.off('show.bs.modal');
+		$modal.off('shown.bs.modal');
+		$modal.off('hide.bs.modal');
+		$modal.off('hidden.bs.modal');
+	}
+}
+
+
+function toggleToastEventMonitoring(selector, toggleOn=true) {
+	const $toast = $(selector).closest('.toast');
+
+	if (toggleOn) {
+		$toast.on('show.bs.toast', e => {
+			const a = 1;
+		});
+		$toast.on('shown.bs.toast', e => {
+			const a = 1;
+		});
+		$toast.on('hide.bs.toast', e => {
+			const a = 1;
+		});
+		$toast.on('hidden.bs.toast', e => {
+			const a = 1;
+		});
+	} else {
+		$toast.off('show.bs.toast');
+		$toast.off('shown.bs.toast');
+		$toast.off('hide.bs.toast');
+		$toast.off('hidden.bs.toast');
+	}
+}

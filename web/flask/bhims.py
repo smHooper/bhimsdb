@@ -344,7 +344,7 @@ def save_attachment():
 					'-b:v', '0', 
 					'-crf', '45', 
 					'-preset', 'good',
-					'-b:a', '96k'#
+					'-b:a', '96k',#
 					re.sub(f'\\{extension}$', '.webm', file_path)
 				]
 				try:

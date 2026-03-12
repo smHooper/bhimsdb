@@ -433,8 +433,11 @@ input:checked:focus + .slider:before {
   justify-content: flex-end;
 }
 
+.toast .close,
 .modal-img-body-header > .close {
   color: white;
+}
+.modal-img-body-header > .close {
   font-size: 2rem;
 }
 
@@ -452,6 +455,21 @@ audio.modal-img {
 audio.modal-img {
   height: 40px;
   max-width: 500px;
+}
+
+.toast {
+  background: #739138;
+  border-radius: 20px;
+  color: white;
+  box-shadow: 5px 6px 9px 2px #00000033;
+  z-index:10000;
+}
+.toast .toast-body {
+  align-items: center;
+}
+.toast-body > * {
+  height: 100%;
+  line-height: 100%;
 }
 
 /*------- -------*/

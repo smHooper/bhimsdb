@@ -818,6 +818,7 @@ var BHIMSEntryForm = (function() {
 				$('#attachment-modal').on('hidden.bs.modal', e => {
 					// Release resources of video preview when modal closes
 					const $source = $('#modal-video-preview,#modal-audio-preview').not('.hidden').find('source');
+
 					const currentSrc = $source.attr('src');
 					if ($source.length && currentSrc != "#") {
 						$source.parent()[0].pause();//pause the video/audio because resetting src doesn't seem to work
@@ -828,8 +829,11 @@ var BHIMSEntryForm = (function() {
 					// Remove any inline css to the img/video/audio container element
 					$(e.target).find('.modal-img-body').css('width', '');
 
+					// prepend the backup source to the video element
+					$('#modal-video-preview .backup-video-source').insertBefore('#modal-video-preview .original-video-source');
 				});
 
+				$('#load-original-video-button').click(e => this.onLoadOriginalVideoClick(e));
 
 				// Save user input when the user leaves the page
 				$(window).on('beforeunload', e => {
@@ -3027,6 +3031,45 @@ var BHIMSEntryForm = (function() {
 	}
 
 
+	Constructor.prototype.onLoadOriginalVideoClick = function(e) {
+		
+		// Don't let event bubble to the modal because the click will dismiss it
+		e.stopPropagation();
+
+		const $modal = $('#attachment-modal');
+		const $video = $('#modal-video-preview');
+		const videoElement = $video.get(0);
+		// move the top source to the bottom
+		const $firstSource = $video.find('source').first().appendTo($video);
+
+		const errorHandler = e => {
+			console.log(e)
+		}
+		const successHandler = e => {
+
+			const $alert = $('#video-loaded-alert');
+			$alert.toast({delay: 1000});
+			$alert.toast('show');
+			$('#load-original-video-button').text(
+				$firstSource.is('.backup-video-source') ?
+				'Load compressed video' :
+				'Load full res video'
+			);
+		}
+		// reload the video with the original source at the top. It will fallback to the backup
+		videoElement.addEventListener('error', errorHandler);
+		videoElement.addEventListener('loadeddata', successHandler);
+		videoElement.load();
+		setTimeout(
+			() => {
+				videoElement.removeEventListener('error', errorHandler);
+				videoElement.removeEventListener('loadeddata', successHandler);
+			}, 
+			500
+		);
+	}
+
+
 	Constructor.prototype.onSubmitButtonClick = function(e) {
 
 		e.preventDefault();
@@ -3522,7 +3565,23 @@ function showModalVideoAudio($el, objectURL) {
 	$el.removeClass('hidden')
 		.siblings(':not(.modal-header-container)')
 			.addClass('hidden');
-	$el.children('source').attr('src', objectURL);
+	if ($el.is('video.loaded-from-server')) {
+		// backup is loaded first because it's smaller and a better supported file format
+		$el.find('source.backup-video-source')
+			.attr('src', objectURL.replace(/\.[a-zA-Z]{3,4}$/, '.webm'));
+		// if something got messed up and the webm doesn't exist, the .load() method
+		//	will automatically fallback to the original
+		$el.find('source.original-video-source')
+			.attr('src', objectURL);
+
+		// show the button to load the original source
+		$el.closest('.modal')
+			.find('.modal-footer')
+				.removeClass('hidden')
+				.attr('aria-hidden', false);
+	} else {
+		$el.children('source').attr('src', objectURL);
+	}
 	$el.get(0).load();
 }
 
@@ -3544,8 +3603,11 @@ function onThumbnailClick(e, loadFromMemory=true) {
 				thumbnailSrc.replace('_thumbnail', '')
 			); 
 		} else if (fileType.toString().match('2|3')) {
-			const url = loadFromMemory ? URL.createObjectURL(file) : 'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop();
+			const url = loadFromMemory ? 
+				URL.createObjectURL(file) : 
+				'attachments/' + $thumbnail.data('file-path').split('\\').pop().split('/').pop();
 			const $el = fileType == 2 ? $('#modal-video-preview') : $('#modal-audio-preview');
+			if (!loadFromMemory) $el.addClass('loaded-from-server');
 			showModalVideoAudio($el, url);
 		}
 

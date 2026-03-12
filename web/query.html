@@ -217,7 +217,8 @@
 					</div>
 					<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
 					<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
-						<source src="#">
+						<source src="#" class="backup-video-source">
+						<source src="#" class="original-video-source">
 						Sorry, your browser does not support HTML video content
 					</video>
 					<audio class="modal-img hidden" id="modal-audio-preview" controls alt="preview of uploaded audio">
@@ -225,10 +226,28 @@
 						Sorry, your browser does not support HTML audio content
 					</audio>
 				</div>
+				<div class="modal-footer mt-3 hidden" aria-hidden="true">
+					<button id="load-original-video-button" class="generic-button">load full res video</button>
+				</div>
 			</div>
 		</div>
 	</div>
 	
+
+	<div aria-live="polite" aria-atomic="true" class="d-flex justify-content-center align-items-center h-100 w-100">
+		<div id="video-loaded-alert" class="toast fade hide align-items-center border-0 position-absolute" role="alert" aria-live="assertive" aria-atomic="true">
+			<div class="d-flex p-3">
+				<div class="toast-body">
+					<i id="video-loaded-check" class="fas fa-check fa-lg"></i>
+					<span class="ml-3">video source loaded</span>
+					<button type="button" class="close ml-4" data-bs-dismiss="toast" aria-label="Close">
+						<span aria-hidden="true">×</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<!-- export dialog -->
 	<div id="data-export-modal" class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-modal="true">
 		<div class="modal-dialog modal-img-body data-export-modal-dialog" role="document">

@@ -13,15 +13,29 @@ import base64
 from datetime import datetime
 from argparse import Namespace
 
-from flask import Flask, render_template, request, json, url_for
+from flask import Flask, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
 
-sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../py/scripts'))
+from subprocess import CREATE_NEW_PROCESS_GROUP
+from subprocess import DETACHED_PROCESS
+from subprocess import DEVNULL
+from subprocess import run as subprocess_run
+from subprocess import Popen
+
+from typing import Any, Mapping
+
+from uuid import uuid4
+from werkzeug.datastructures import FileStorage
+
+sys.path.append(
+	os.path.join(os.path.abspath(
+		os.path.dirname(__file__)), 
+		'../../py/scripts'
+	)
+)
 from export_data import export_data
-from tables import *
-
-
-CONFIG_FILE = '//inpdenaterm01/bhims/config/bhims_config.json'
+import tables
+import bhims_utils as utils
 
 app = Flask(__name__)
 
@@ -32,53 +46,49 @@ def internal_server_error(error):
 
 
 # Load config
+CONFIG_FILE = utils.CONFIG_FILE
 if not os.path.isfile(CONFIG_FILE):
 	raise IOError(f'CONFIG_FILE does not exists: {CONFIG_FILE}')
 if not app.config.from_file(CONFIG_FILE, load=json.load):
 	raise IOError(f'Could not read CONFIG_FILE: {CONFIG_FILE}')
 
-
-def get_unique_id() -> str:
-	"""equivalent to php uniqid()"""
-	return hex(int(datetime.now().timestamp() * 10000000))[2:]
-
-
-def get_environment() -> str:
-	""" return a string indicating whether this is the production or development env."""
-	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
-
-
-def get_db_schema() -> str:
-	""" return the database schema based on the current environment"""
-	return 'public' if get_environment() == 'prod' else 'dev'
-
-
-def get_engine(access='read', schema='public'):
-	url = URL.create('postgresql', **app.config[f'DB_{access.upper()}_PARAMS'])
-	return create_engine(url).execution_options(schema_translate_map={'public': schema, None: schema})
-
-
-def get_config_from_db(schema='public'):
-	engine = get_engine()
+def get_config_from_db(schema='public') -> Mapping[str, Any]:
+	engine = utils.get_engine()
 	db_config = {}		
 	with engine.connect() as conn:
 		cursor = conn.execute(f'TABLE {schema}.config')
 		for row in cursor:
-			app.config[row['property']] = (
+			value = (
 				float(row['value']) if row['data_type'] == 'float' else  
 				int(row['value']) if row['data_type'] == 'integer' else
 				(row['value'] == 'true') if row['data_type'] == 'boolean' else
 				row['value']
 			)
+			db_config[row['property']] = value
+			app.config[row['property']] = value
 
-db_schema = get_db_schema()
+	return db_config
+
+
+db_schema = utils.get_db_schema()
 get_config_from_db(db_schema)
 
 # Establish global scope sessionmakers to reuse at the function scope
-read_engine = get_engine(access='read', schema=db_schema)
-write_engine = get_engine(access='write', schema=db_schema)
+read_engine = utils.get_engine(access='read', schema=db_schema)
+write_engine = utils.get_engine(access='write', schema=db_schema)
 ReadSession = sessionmaker(read_engine)
 WriteSession = sessionmaker(write_engine)
+
+
+def get_auth_user() -> str:
+    raw = (
+		request.environ.get("AUTH_USER") or 
+		request.headers.get("AUTH_USER", "")
+    )
+    if not raw:
+        return ''
+    # Strip domain prefix (DOMAIN\username → username)
+    return raw.split("\\")[-1].lower()
 
 
 @app.route('/flask/test', methods=['GET', 'POST'])
@@ -86,10 +96,41 @@ def hello():
 	return 'hello'
 
 
+@app.route('/flask/config', methods=['GET'])
+def get_db_config():
+
+	return jsonify(get_config_from_db(db_schema))
+
+
+@app.route('/flask/user_info', methods=['GET'])
+def get_user_info():
+	username = get_auth_user()
+	with ReadSession() as read_session, WriteSession() as write_session:
+		user = (
+			read_session.scalars(
+				select(tables.User).filter_by(
+					ad_username=username
+				)
+			).first()
+		)
+		# If ther user doesn't exist
+		if not user:
+			# Insert with default role 1 (data entry)
+			user = tables.User(ad_username=username, role=1)
+			write_session.add(user)
+			write_session.commit()
+			write_session.refresh(user)
+	
+	return jsonify({
+		'username': user.ad_username,
+		'role': user.role
+	})
+		
+
 @app.route('/flask/park_form_id/<encounter_id>', methods=['GET', 'POST'])
 def create_park_form_id(encounter_id):
 	id_format = app.config['park_form_id_format']
-	engine = get_engine()
+	engine = utils.get_engine()
 	sql = f'''
 		WITH search_date AS (
 			SELECT datetime_entered AS search_date
@@ -129,7 +170,7 @@ def get_next_park_form_id(year):
 	pattern = re.compile(r'(%[a-zA-Z])')
 	for result in pattern.finditer(id_format): 
 		id_format = '{' + id_format[result.start() : result.start() + 2] + '}' + id_format[result.start() + 2:]
-	engine = get_engine()
+	engine = utils.get_engine()
 	sql = f'''
 		SELECT 
 			coalesce(max(substring(park_form_id, '\\d+$')::INTEGER), 0) + 1 AS form_count, 
@@ -144,7 +185,7 @@ def get_next_park_form_id(year):
 			# format dateime, then substitue encounter data and configuration values
 			return id_format.format(**{**row, **app.config})
 		else:
-			raise ValueError(f'Encounter ID {encounter_id} does not exist in the database')
+			raise ValueError(f'No encounters with start_date in year {year} exist in the database')
 	
 
 
@@ -152,8 +193,8 @@ def get_next_park_form_id(year):
 def run_export_data():
 
 	params = dict(request.form)
-	params['environment'] = get_environment()
-	params['request_id'] = get_unique_id()
+	params['environment'] = utils.get_environment()
+	params['request_id'] = utils.get_unique_id()
 	params['input'] = json.loads(params['exportParams'])
 	params['verbose'] = False
 	
@@ -205,6 +246,19 @@ def send_submission_notification():
 
 
 #---------------------- DB i/o ----------------------#
+# All-purpose SELECT query endpoint
+@app.route('/flask/db/select', methods=['POST'])
+def run_select_query():
+
+	request_data = request.get_json()	
+	response_data = utils.query_db(request_data)
+	response = {'data': response_data}
+
+	if 'queryTime' in request_data:
+		response['queryTime'] = request_data['queryTime']
+
+	return jsonify(response)
+
 
 @app.route('/flask/deleteEncounter', methods=['POST'])
 def delete_encounter():
@@ -218,7 +272,6 @@ def delete_encounter():
 
 	encounter_id = data['encounter_id']
 
-	#engine = get_engine('write')
 	with WriteSession() as session:
 		with session.begin():
 			# Delete any attachments for this encounter, which are stored on the server
@@ -250,7 +303,6 @@ def save_submission_time():
 
 	username = data['username']
 
-	#engine = get_engine(acess='write', schema=get_db_schema())
 	with WriteSession() as session:
 		statement = (
 			update(User)
@@ -261,6 +313,91 @@ def save_submission_time():
 		session.commit()
 
 	return 'true'
+
+
+@app.route('/flask/save/attachments', methods=['POST'])
+def save_attachment():
+
+	response = []
+	for inputName, uploaded_file in request.files.items():
+
+		client_basename, extension = os.path.splitext(uploaded_file.filename)
+		server_filename = str(uuid4()) + extension
+		attachment_dir = utils.get_content_dir('attachments')	
+		file_path = os.path.abspath(os.path.join(attachment_dir, server_filename))
+		request.files[inputName].save(file_path)
+
+		mimetype = uploaded_file.mimetype.lower()
+		
+		# Get general file type (i.e.,image, video, or audio) and specific (e.g., png, mp4, etc)
+		general_file_type, specific_file_type = mimetype.split('/')
+		
+		# Make a thumbnail
+		# 	If it's a GIF, the image-magick command will need an index of a frame to extract
+		gif_frame_index = '[0]' if specific_file_type == 'gif' else ''
+		thumbnail_filename = re.sub(f'\\{extension}$', f'_thumbnail.jpg', server_filename)
+		thumbnail_path = os.path.join(attachment_dir, thumbnail_filename)
+		
+		# for images, use image-magick to create a resize jpg
+		thumbnail_exe_dir = app.config['IMAGE_MAGICK_DIR']
+		
+		thumbnail_command = []
+		if general_file_type == 'image':
+			thumbnail_command = [
+				os.path.join(thumbnail_exe_dir, 'magick'), 
+				file_path + gif_frame_index, 
+				'-resize', '200x200',
+				thumbnail_path
+			]
+		# for videos, extract the frame at the 1 second timestamp
+		if general_file_type == 'video' or mimetype == 'application/octet-stream':
+			thumbnail_command = [
+				os.path.join(thumbnail_exe_dir, 'ffmpeg'), 
+				'-ss',  '00:00:01.00', 
+				'-i', file_path, 
+				'-vf', 'scale=200:200:force_original_aspect_ratio=decrease',
+				 '-vframes', '1',
+				 thumbnail_path
+			]
+			
+
+			# Make a webm version of the file as an efficient backup in case the original 
+			#	isn't supported by the browser when the attachment is served back up
+			if not mimetype == 'video/webm':
+				command = [
+					os.path.join(thumbnail_exe_dir, 'ffmpeg'), 
+					'-i', file_path, 
+					'-c:v', 'libvpx-vp9', 
+					'-b:v', '0', 
+					'-crf', '45', 
+					'-preset', 'good',
+					'-b:a', '96k',#
+					re.sub(f'\\{extension}$', '.webm', file_path)
+				]
+				try:
+					Popen(
+						command,
+						stdout=DEVNULL,
+						stderr=DEVNULL,
+						creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+					)
+				except:
+					pass
+
+		thumbnail_success = True
+		if thumbnail_command:
+			try:
+				subprocess_run(thumbnail_command, check=True, stdout=DEVNULL, stderr=DEVNULL)
+			except Exception as e:
+				thumbnail_success = str(e)
+
+		response.append({
+			'file_path': file_path,
+			'thumbnail_filename': thumbnail_filename,
+			'thumbnail_success': thumbnail_success,
+		})
+
+	return jsonify(response)
 
 
 if __name__ == '__main__':

@@ -258,10 +258,12 @@
 	<script>
 		$(document).ready(function(){
 
-			getUserInfo().then(resultString => {
-				const userInfo = $.parseJSON(resultString)[0];
-				if (!DATA_ACCESS_USER_ROLES.includes(parseInt(userInfo.role))) {
-					showPermissionDeniedAlert();
+			getUserInfo().then(userInfo => {
+				if (!pythonReturnedError(userInfo)) {
+					if (!DATA_ACCESS_USER_ROLES.includes(parseInt(userInfo.role))) {
+						showPermissionDeniedAlert();
+					}
+					$('#username').text(userInfo.username);
 				}
 			})
 
@@ -284,19 +286,6 @@
 				window.history.replaceState(null, document.title, document.URL.split('#')[0]);
 			});
 
-			$.ajax({
-				url: 'bhims.php',
-				method: 'POST',
-				data: {action: 'getUser'},
-				cache: false
-			}).done(function(resultString) {
-				if (queryReturnedError(resultString)) {
-					throw 'User role query failed: ' + resultString;
-				} else {
-					const result = $.parseJSON(resultString);
-					$('#username').text(result[0].username);
-				}
-			});
 
 			$('.sidebar-collapse-button').click((e) => {
 				$('.sidebar-collapse-button, nav.sidebar').toggleClass('collapsed');

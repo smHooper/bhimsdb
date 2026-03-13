@@ -108,8 +108,7 @@ var BHIMSEntryForm = (function() {
 
 		var deferred = $.Deferred();
 		const userInfoDeferred = getUserInfo()
-			.then(resultString => {
-				const userInfo = $.parseJSON(resultString)[0];
+			.then(userInfo => {
 				_this.username = userInfo.username;
 				_this.userRole = userInfo.role;
 				

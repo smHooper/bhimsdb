@@ -165,14 +165,33 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 }
 
 
+<<<<<<< Updated upstream
+=======
+function getConfig() {
+	$.get({
+		url: '/flask/config',
+	}).then(result => {
+		if (!pythonReturnedError(result)) {
+			CONFIG = {...result};
+			CONFIG['db_contact_message']
+				.replace(
+					'{db_admin_email}',
+					CONFIG['db_admin_email']
+				);
+		}
+	})
+}
+CONFIG = {};
+getConfig();
+
+
+>>>>>>> Stashed changes
 function getUserInfo() {
-	return $.post({
-		url: 'bhims.php',
-		data: {action: 'getUser'},
-		cache: false
-	}).done(function(resultString) {
-		if (queryReturnedError(resultString)) {
-			throw 'User role query failed: ' + resultString;
+	return $.get({
+		url: '/flask/user_info',
+	}).done(function(result) {
+		if (pythonReturnedError(result)) {
+			throw 'User role query failed: ' + result;
 		} else {
 
 		}

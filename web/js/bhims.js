@@ -165,8 +165,7 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 }
 
 
-<<<<<<< Updated upstream
-=======
+
 function getConfig() {
 	$.get({
 		url: '/flask/config',
@@ -185,7 +184,6 @@ CONFIG = {};
 getConfig();
 
 
->>>>>>> Stashed changes
 function getUserInfo() {
 	return $.get({
 		url: '/flask/user_info',
@@ -492,7 +490,7 @@ function parseURLQueryString(queryString=window.location.search) {
 
 function pythonReturnedError(resultString) {
 
-	return resultString.startsWith('ERROR: Internal Server Error') ?
+	return resultString.toString().startsWith('ERROR: Internal Server Error') ?
 	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
 	   false;
 }

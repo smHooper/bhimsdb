@@ -19,7 +19,7 @@ import sys
 sys.path.append(
 	os.path.join(os.path.abspath(
 		os.path.dirname(__file__)), 
-		'../../py/scripts'
+		'../../py/resource'
 	)
 )
 from tables import model_dict
@@ -30,6 +30,7 @@ CONFIG_FILE = '//inpdenaterm01/bhims/config/bhims_config.json'
 with open(CONFIG_FILE) as f:
 	config = json.load(f)
 
+tables = model_dict()
 
 def get_unique_id() -> str:
 	"""equivalent to php uniqid()"""
@@ -51,10 +52,13 @@ def get_environment() -> str:
 	return 'prod' if '\\prod\\' in os.path.abspath(__file__) else 'dev'
 
 
-def get_db_schema() -> str:
+def get_schema() -> str:
 	""" return the database schema based on the current environment"""
 	return 'public' if get_environment() == 'prod' else 'dev'
 
+schema = get_schema()
+ReadSession = sessionmaker(get_engine(access='read', schema=schema))
+WriteSession = sessionmaker(get_engine(access='write', schema=schema))
 
 def get_where_clause(
 		table_dict: Mapping, 
@@ -152,6 +156,8 @@ def sanitize_query_value(value: Any) -> Any:
 	"""
 	if isinstance(value, (datetime.date, datetime.datetime)):
 		value = value.strftime('%Y-%m-%d %H:%M')
+	elif isinstance(value, datetime.time):
+		value = value.strftime('%H:%M')
 
 	return value
 
@@ -164,7 +170,11 @@ def orm_to_dict(
 	"""
 	Helper function to process an ORM class instance into a dictionary
 	"""	
-	prohibited_columns = prohibited_columns or config['PHOHIBITED_QUERY_COLUMNS']
+	prohibited_columns = (
+		prohibited_columns or 
+		config.get('PHOHIBITED_QUERY_COLUMNS') or 
+		{}
+	)
 	exclude_columns = prohibited_columns.get(orm_class_instance.__table__.name) or []
 	
 	# If specific columns weren't specified, return all
@@ -208,12 +218,8 @@ def query_db(query_params:dict):
 		set([*where_clauses.keys(), *selects.keys()])
 	)
 
-	prohibited_columns = config['PHOHIBITED_QUERY_COLUMNS']
+	prohibited_columns = config.get('PHOHIBITED_QUERY_COLUMNS') or {}
 	
-	schema = get_schema()
-	read_engine = get_engine(access='read', schema=schema)
-	ReadSession = sessionmaker(read_engine)
-
 	# If raw SQL was passed, execute it
 	with ReadSession() as session:
 		if sql:
@@ -223,7 +229,7 @@ def query_db(query_params:dict):
 				else param 
 				for name, param in (query_params.get('params') or {}).items()
 			}
-			result = session.execute(sql.replace('{schema}', db_schema), params)
+			result = session.execute(sql.replace('{schema}', schema), params)
 			
 			response_data = select_result_to_dict(result)
 
@@ -231,10 +237,10 @@ def query_db(query_params:dict):
 		elif len(table_names):
 			
 			result = (session
-				.query(*[model_dict[table_name_] for table_name_ in table_names])
+				.query(*[tables[table_name_] for table_name_ in table_names])
 				.where(*[
 					get_where_clause(
-						model_dict,
+						tables,
 						table_name,
 						where.get('column_name'), 
 						where.get('operator') or '', 
@@ -249,8 +255,8 @@ def query_db(query_params:dict):
 			joins = query_params.get('joins')
 			if joins:
 				for join_ in joins: 
-					left_table = model_dict[join_.get('left_table')]
-					right_table = model_dict[join_.get('right_table')]
+					left_table = tables[join_.get('left_table')]
+					right_table = tables[join_.get('right_table')]
 					left_table_column = getattr(
 						left_table, 
 						join_.get('left_table_column')
@@ -271,7 +277,7 @@ def query_db(query_params:dict):
 				# If there are multiple ORDER BY columns, successive calls to 
 				#	.order_by will modify the result accordingly
 				for order_by in order_by_clauses:
-					table = model_dict[order_by['table_name']]
+					table = tables[order_by['table_name']]
 					order = asc # function from sqla
 					if 'order' in order_by:
 						order = (
@@ -328,5 +334,5 @@ __all__ = [
 	'sanitize_query_value',
 	'orm_to_dict',
 	'select_result_to_dict',
-	'query_db'
+	'query_db',
 ]

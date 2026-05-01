@@ -13,6 +13,9 @@ import base64
 from datetime import datetime
 from argparse import Namespace
 
+import logging
+from logging.config import dictConfig
+
 from flask import Flask, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
 
@@ -30,20 +33,137 @@ from werkzeug.datastructures import FileStorage
 sys.path.append(
 	os.path.join(os.path.abspath(
 		os.path.dirname(__file__)), 
+		'../../py/resource'
+	)
+)
+sys.path.append(
+	os.path.join(os.path.abspath(
+		os.path.dirname(__file__)), 
 		'../../py/scripts'
 	)
 )
 from export_data import export_data
-import tables
+from tables import model_dict
 import bhims_utils as utils
 
-app = Flask(__name__)
+
+app_name = __name__
+tables = model_dict()
+
+###### Enable logging #####
+log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+if not os.path.isdir(log_dir):
+	os.mkdir(log_dir)
+
+class RequestLoggingFormatter(logging.Formatter):
+	"""
+	Configure a custom formatter to include request information
+	"""
+	def format(self, record):
+		if has_request_context():
+			record.url = request.url
+			record.remote_addr = request.remote_addr
+			record.user = request.remote_user
+			record.request_data = (
+				'**ommitted**' if request.url.endswith('checkPassword') else 
+				json.dumps(request.form)
+			)
+		else:
+			record.url = None
+			record.remote_addr = None
+			record.user = None
+			record.request_data = None
+		return super().format(record)
+
+
+def configure_logging(app_name, log_dir):
+
+
+	with open(utils.CONFIG_FILE) as f:
+		app_config = json.load(f)
+
+	environment = utils.get_environment()
+	
+	# If the config file doesn't have a specific property set for error notification 
+	#	recipients, just send them to the DB admin
+	error_recipients = (
+		app_config.get('ERROR_NOTIFICATION_RECIPIENTS') or 
+		app_config.get('DB_ADMIN_EMAIL')
+	)
+	# And since the recipients could be a string or list, make sure it's a list
+	if not isinstance(error_recipients, list):
+		error_recipients = str(error_recipients).split(',')
+	
+	logging_config = {
+		'version': 1,
+		'formatters': {
+			'default': {
+				'datefmt': '%B %d, %Y %H:%M:%S %Z',
+			},
+		},
+		'handlers': {
+			# Configure a logger that will create a new file each day
+			#	Only 100 logs will be saved before they oldest one is deleted
+			'file': {
+				'class': 'logging.handlers.TimedRotatingFileHandler',
+				'filename': os.path.join(log_dir, 'flask.log'),
+				'when': 'D',
+				'interval': 1,
+				'backupCount': 100,
+				'formatter': 'default',
+				'level': 'INFO'
+			},
+			# Logger for email notifications of Python errors
+			'email': {
+				'class': 	'logging.handlers.SMTPHandler',
+				'level': 	'ERROR',
+				'mailhost': app_config['MAIL_SERVER'],
+				'fromaddr': f'BHIMS Error Notifications <{app_name}.{environment}-notifications@nps.gov>',
+				'toaddrs':	error_recipients,
+				'subject':	f'An error occurred with the {app_name} app'
+			}
+		},
+		'root': {
+			'level': 'INFO',
+			'handlers': ['file', 'email'],
+		}
+	}
+
+	dictConfig(logging_config)
+
+	line_separator = '-' * 150 
+	file_formatter = RequestLoggingFormatter(line_separator + 
+	    '\n[%(asctime)s] %(user)s requested %(url)s from %(remote_addr)s\n' 
+	    'with POST data %(request_data)s\n'
+	    '%(levelname)s in %(module)s message:\n %(message)s\n' +
+	    line_separator
+	)
+
+	email_formatter = RequestLoggingFormatter(
+		'Time: %(asctime)s\n'
+		'User: %(user)s\n'
+		'URL: %(url)s\n'
+		'Remote Address: %(remote_addr)s\n'
+		'Logger name: %(name)s\n'
+		'\n'
+	)
+
+	root_logger = logging.root
+	root_logger.handlers[0].setFormatter(file_formatter) # file
+	root_logger.handlers[1].setFormatter(email_formatter) # email
+
+
+# Configure logging before initializing the Flask instance because Flask will 
+#	otherwise create its own default_logger if a logger doesn't already exist
+#	according to the docs: https://flask.palletsprojects.com/en/stable/logging/
+configure_logging(app_name, log_dir)
+
+app = Flask(app_name)
 
 # Error handling
 @app.errorhandler(500)
 def internal_server_error(error):
 	return 'ERROR: Internal Server Error.\n' + traceback.format_exc()
-
 
 # Load config
 CONFIG_FILE = utils.CONFIG_FILE
@@ -70,7 +190,7 @@ def get_config_from_db(schema='public') -> Mapping[str, Any]:
 	return db_config
 
 
-db_schema = utils.get_db_schema()
+db_schema = utils.get_schema()
 get_config_from_db(db_schema)
 
 # Establish global scope sessionmakers to reuse at the function scope
@@ -105,10 +225,11 @@ def get_db_config():
 @app.route('/flask/user_info', methods=['GET'])
 def get_user_info():
 	username = get_auth_user()
+	User = tables['User']
 	with ReadSession() as read_session, WriteSession() as write_session:
 		user = (
 			read_session.scalars(
-				select(tables.User).filter_by(
+				select(User).filter_by(
 					ad_username=username
 				)
 			).first()
@@ -116,7 +237,7 @@ def get_user_info():
 		# If ther user doesn't exist
 		if not user:
 			# Insert with default role 1 (data entry)
-			user = tables.User(ad_username=username, role=1)
+			user = User(ad_username=username, role=1)
 			write_session.add(user)
 			write_session.commit()
 			write_session.refresh(user)

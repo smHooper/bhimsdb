@@ -37,16 +37,15 @@ function configureReviewCard() {
 		ORDER BY start_date
 	`;
 
-	queryDB(sql, 'bhims')
-		.done((queryResultString) => {
-        	let resultString = queryResultString.trim();
-        	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
-        		alert('Unable to query review status: ' + resultString);
-        		return false; // Save was unsuccessful
-        	} else {
+	queryDB({sql: sql})
+		.done(response => {
+        	
+			const errorExplanation = 'An unexpected error occurred while connecting to the' + 
+				' database and getting encounter review status.';
+        	if (!pythonReturnedError(response, {errorExplanation: errorExplanation})) {
 
         		// Loop through each result row and for each field, collect running totals and a list of IDs
-        		const queryResult = $.parseJSON(resultString);
+        		const queryResult = response.data || [];
         		let reviewTotals = Object.fromEntries(ratingFieldNames.map(f => [f, 0]));//queryResult.length;
         		let reviewIDs = Object.fromEntries(ratingFieldNames.map(f => [f, []]))
         		for (const row of queryResult) {
@@ -240,11 +239,12 @@ function configureMap(divID, modalDivID=null) {
 		;
 	`;
 
-	const fieldInfoDeferred = queryDB(fieldInfoSQL).done(
-		queryResultString => {
-			const queryResult = $.parseJSON(queryResultString);
-			if (queryResult) {
-				for (const row of queryResult) {
+	const fieldInfoDeferred = queryDB({sql: fieldInfoSQL})
+		.done(response => {
+			const errorExplanation = 'An unexpected error occurred while connecting to the' + 
+				' database and getting field info.'
+			if (!pythonReturnedError(response, {errorExplanation: errorExplanation})) {
+				for (const row of response.data || []) {
 					const columnName = row.field_name;
 					FIELD_INFO[columnName] = {};
 					for (const property in row) {
@@ -252,10 +252,10 @@ function configureMap(divID, modalDivID=null) {
 					}
 					const lookupTableName = row.lookup_table || row.field_name + 's';
 					if (row.html_input_type === 'select' && !(lookupTableName in LOOKUP_TABLES)) {
-						queryDB(`SELECT code, name FROM ${lookupTableName}`).done(
-							resultString => {
-								if (!queryReturnedError(resultString)) { 
-									const result = $.parseJSON(resultString);
+						queryDB({sql:`SELECT code, name FROM ${lookupTableName}`})
+							.done(response => {
+								if (!pythonReturnedError(response)) { 
+									const result = response.data || [];
 									LOOKUP_TABLES[lookupTableName] = {};
 									for (const row of result) {
 										LOOKUP_TABLES[lookupTableName][row.code] = row.name; 
@@ -297,14 +297,10 @@ function configureMap(divID, modalDivID=null) {
 			latitude IS NOT NULL AND longitude IS NOT NULL
 	`;
 	fieldInfoDeferred.done(() => {
-		queryDB(sql, 'bhims')
-			.done((queryResultString) => {
-	        	let resultString = queryResultString.trim();
-	        	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
-	        		alert('Unable to query encounters locations: ' + resultString);
-	        		return false; // Save was unsuccessful
-	        	} else {
-	        		let queryResult = $.parseJSON(resultString);
+		queryDB({sql: sql})
+			.done(response => {
+	        	if (!pythonReturnedError(response, {errorExplanation: 'An unexpected error occurred while getting encounter locations.'})) {
+	        		let queryResult = response.data || [];
 	        		let features = [];
 	        		for (let row of queryResult) {
 	        			
@@ -498,14 +494,10 @@ function configureDailyEncounterChart() {
 		$(e.native.target).css("cursor", el[0] ? "pointer" : "default");
 	}
 
-	queryDB(sql, 'bhims')
-		.done((queryResultString) => {
-        	let resultString = queryResultString.trim();
-        	if (resultString.startsWith('ERROR') || resultString === "false" || resultString === "php query failed") {
-        		alert('Unable to query encounters per day: ' + resultString);
-        		return false; // Save was unsuccessful
-        	} else {
-        		let queryResult = $.parseJSON(resultString);
+	queryDB({sql: sql})
+		.done((response) => {
+        	if (!pythonReturnedError(response, {errorExplanation: 'An unexpected error occurred while getting daily encounter data.'})) {
+        		let queryResult = response.data || [];
         		var data = [];
         		var xlabels = [];
         		for (let row of queryResult) {

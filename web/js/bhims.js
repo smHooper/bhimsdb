@@ -22,46 +22,58 @@ function deepCopy(inObject) {
 	return outObject;
 }
 
-
-function queryDB(sql, {schema='public'}={}) {
-
-	return $.ajax({
-		url: 'bhims.php',
-		method: 'POST',
-		data: {action: 'query', queryString: sql, db: 'bhims'},
-		cache: false
-	});
+function print(i) {
+	console.log(i);
 }
 
 
-function fillSelectOptions(selectElementID, queryString, optionClassName='') {
+/*
+Run a SELECT query by either sending WHERE (and possibly ORDER BY) parameters to use the 
+SQLAlchemy ORM or raw SQL and parameters to execute parameterized SQL
+*/
+function queryDB({tables=[], selects={}, joins=[], where={}, orderBy=[], sql='', sqlParameters={}, returnTimestamp=false}={}) {
 	
-	let deferred = queryDB(queryString)
-	deferred.then(
-		doneFilter=function(queryResultString){
-			
-			queryResultString = queryResultString.trim();
+	var requestData = Object.keys({...selects, ...where}).length || tables.length ? 
+		{	
+			tables: tables,
+			select: selects,
+			joins: joins,
+			where: where,
+			order_by: orderBy
+		} : 
+		{sql: sql, params: sqlParameters};
 
-			var queryResult;
-			try {
-				queryResult = $.parseJSON(queryResultString);
-			} catch {
-				//console.log(`error filling in ${selectElementID}: ${queryResultString}`);
-			}
-			if (queryResult) {
-				const $select = $('#' + selectElementID)
-				$select.find('option:not([value=""])').remove();
-				queryResult.forEach(function(object) {
-					$select.append(
-						`<option class="${optionClassName}" value="${object.value}">${object.name}</option>`
-					);
-				})
+	if (returnTimestamp) requestData.queryTime = (new Date()).getTime();
+	
+	return $.post({
+		url: '/flask/db/select',
+		data: JSON.stringify(requestData),
+		contentType: 'application/json'
+	});
+}	
+
+
+function fillSelectOptions(selectElementID, sqlArgs, optionClassName='') {
+	
+	let deferred = queryDB(sqlArgs)
+	deferred.then(
+		doneFilter=response => {
+			if (pythonReturnedError(response)) {
+				print(`fillSelectOptions() failed for ${selectElementID} with error: ` + response);
 			} else {
-				console.log(`error filling in ${selectElementID}: ${queryResultString}`);
-			}
+				const queryResult = response.data || [];
+				const $el = $('#' + selectElementID);
+				for (const row of queryResult) {
+					$el.append(
+						`<option class="${optionClassName}" value="${row.value || row.code}">${row.name}</option>`
+					);
+				}
+				const defaultValue = $el.data('default-value');
+				if (defaultValue !== undefined) $el.val(defaultValue);
+			} 
 		},
-		failFilter=function(xhr, status, error) {
-			console.log(`fill select failed with status ${status} because ${error} on #${selectElementID}`)
+		failFilter=(_, status, error) => {
+			console.log(`fill select failed with status ${status} because ${error} from query:\n${queryString}`)
 		}
 	);
 
@@ -165,12 +177,14 @@ function showModal(message, title, modalType='alert', footerButtons='', {dismiss
 }
 
 
-
 function getConfig() {
-	$.get({
+	return $.get({
 		url: '/flask/config',
-	}).then(result => {
-		if (!pythonReturnedError(result)) {
+	}).done(result => {
+		if (!pythonReturnedError(
+				result, 
+				{errorExplanation: 'An error occurred while loading configuration values from the database.'}
+			)) {
 			CONFIG = {...result};
 			CONFIG['db_contact_message']
 				.replace(
@@ -188,7 +202,7 @@ function getUserInfo() {
 	return $.get({
 		url: '/flask/user_info',
 	}).done(function(result) {
-		if (pythonReturnedError(result)) {
+		if (pythonReturnedError(result, {errorExplanation: 'An error occurred while loading user information.'})) {
 			throw 'User role query failed: ' + result;
 		} else {
 
@@ -429,9 +443,8 @@ Helper function to ask server if the app is running in the production or develop
 */
 function getEnvironment() {
 
-	return $.post({
-		url: 'bhims.php',
-		data: {action: 'getEnvironment'}
+	return $.get({
+		url: '/flask/environment',
 	});
 
 }
@@ -441,17 +454,11 @@ Load configuration values from the database
 */
 function loadConfigValues(config) {
 
-	return queryDB('SELECT property, data_type, value FROM config')
-		.done(queryResultString => {
-			if (queryReturnedError(queryResultString)) {
-				print('Problem querying config values: ' + queryResultString);
-			} else {
-				for (const {property, data_type, value, ...rest} of $.parseJSON(queryResultString)) {
-					config[property] = 
-						data_type === 'integer' ? parseInt(value) : 
-						data_type === 'float' ? parseFloat(value) : 
-						data_type === 'boolean' ? value.toLowerCase().startsWith('t') :
-						value; // it's a string
+	return getConfig()
+		.done(response => {
+			if (!pythonReturnedError(response)) {
+				for (const key in response) {
+					config[key] = response[key];
 				}
 			}
 		})
@@ -488,9 +495,77 @@ function parseURLQueryString(queryString=window.location.search) {
 	}
 }
 
-function pythonReturnedError(resultString) {
+// function pythonReturnedError(resultString) {
 
-	return resultString.toString().startsWith('ERROR: Internal Server Error') ?
-	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
-	   false;
+// 	return resultString.toString().startsWith('ERROR: Internal Server Error') ?
+// 	   resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/)[0].trim() :
+// 	   false;
+// }
+/*
+Use the current-value data property to reset an input's value
+*/
+function resetRevertableField($input, {triggerChange=true}={}) {
+	const previousValue = $input.data('current-value');
+	if ($input.is('[type=checkbox]')) {
+		$input.prop('checked', previousValue === 'true')
+	} else if ($input.is('select')) {
+		if (previousValue) {
+			$input.val(previousValue)
+		}
+	} else {
+		$input.val(previousValue)
+	}
+	if (triggerChange) $input.change();
+}
+
+
+function getDBContactMessage() {
+	return (' ' + CONFIG.db_contact_message) || 
+		' Make sure you\'re still connected to the NPS network and try again.' +
+		` <a href="mailto:${CONFIG.db_admin_email}">Contact your database` +
+		' adminstrator</a> if the problem persists.';
+}
+
+
+function pythonReturnedError(resultString, {errorExplanation=''}={}) {
+	resultString = String(resultString); // force as string in case it's something else
+	if (resultString.startsWith('ERROR: Internal Server Error')) {
+		// almost all Python excetions have a class anme in the form *Error (e.g., ValueError).
+		//	That's not a hard and fast rule, however, and so if the match is null, return something generic
+		const pythonException = (resultString.match(/[A-Z]+[a-zA-Z]*Error: .*/) || ['unknown custom exception thrown']
+		)[0].trim();
+		
+		const dbContact = getDBContactMessage();
+		// Show the 
+		// if (errorExplanation !== '') {
+		// 	const messageBody = `
+		// 		${errorExplanation}${dbContact} 
+		// 		<div class="w-100 d-flex justify-content-between">
+		// 			<button 
+		// 				role="button"
+		// 				class="text-only-button pl-0" 
+		// 				type="button" 
+		// 				data-toggle="collapse" data-target=".modal-error-details-target" aria-expanded="false" aria-controls="modal-error-details-collapse"
+		// 			>
+		// 				Error details
+		// 			</button>
+		// 			<button 
+		// 				role="button"
+		// 				class="text-only-button modal-error-details-target copy-error-text-button collapse"
+		// 				data-toggle="tooltip"
+		// 				data-placement="bottom"
+		// 			>
+		// 				Copy error text
+		// 			</button>
+		// 		</div>
+		// 		<p id="modal-error-details-collapse" class="collapse modal-error-details-target modal-error-text-container pt-3">
+		// 			${resultString}
+		// 		</p>`;
+		// 	showModal(messageBody, 'Unexpected Error');
+		// }
+
+		return pythonException;
+	} else {
+		return false;
+	}
 }

@@ -216,6 +216,11 @@ def hello():
 	return 'hello'
 
 
+@app.route('/flask/environment', methods=['GET'])
+def get_environment():
+	return utils.get_environment()
+
+
 @app.route('/flask/config', methods=['GET'])
 def get_db_config():
 
@@ -225,7 +230,7 @@ def get_db_config():
 @app.route('/flask/user_info', methods=['GET'])
 def get_user_info():
 	username = get_auth_user()
-	User = tables['User']
+	User = tables['users']
 	with ReadSession() as read_session, WriteSession() as write_session:
 		user = (
 			read_session.scalars(
@@ -396,7 +401,7 @@ def delete_encounter():
 	with WriteSession() as session:
 		with session.begin():
 			# Delete any attachments for this encounter, which are stored on the server
-			for attachment in session.scalars(select(Attachment).filter_by(encounter_id=encounter_id)):
+			for attachment in session.scalars(select(tables['attachments']).filter_by(encounter_id=encounter_id)):
 				file_path = attachment.file_path
 				if os.path.isfile(file_path):
 					os.remove(file_path)
@@ -405,8 +410,31 @@ def delete_encounter():
 					os.remove(thumbnail_path)
 			
 			# Delete the encounter, which will cascade to all related tables
-			encounter = session.get(Encounter, encounter_id)
+			encounter = session.get(tables['encounters'], encounter_id)
 			session.delete(encounter)
+
+	return 'true'
+
+
+def delete_from_table_by_id(table, record_id):
+	with WriteSession() as session, session.begin():
+		record = session.get(table, record_id)
+		return session.delete(record)
+	
+
+@app.route('/flask/deleteByID', methods=['POST'])
+def delete_by_id():
+	request_data = request.get_json()
+	if not 'tableName' in request_data:
+		raise ValueError('No tableName in request data')
+	if not 'id' in request_data:
+		raise ValueError('No id in request data')
+
+	table = tables.get(request_data['tableName'])
+	if not table:
+		raise ValueError(f"Table '{request_data['tableName']}' not found")
+
+	delete_from_table_by_id(table, request_data['id'])
 
 	return 'true'
 
@@ -424,6 +452,7 @@ def save_submission_time():
 
 	username = data['username']
 
+	User = tables['users']
 	with WriteSession() as session:
 		statement = (
 			update(User)
@@ -434,6 +463,59 @@ def save_submission_time():
 		session.commit()
 
 	return 'true'
+
+
+@app.route('/flask/db/lookupValues', methods=['GET'])
+def get_lookup_tables():
+	"""
+	Get all lookup tables that are used to populate dropdowns in the form
+	"""
+	sql = f'''
+		SELECT table_name 
+		FROM information_schema.tables 
+		WHERE 
+			table_schema='{db_schema}' AND 
+			table_name LIKE '%_codes' AND
+			table_name <> 'park_unit_codes'
+		;
+	'''
+	result = {}
+	with WriteSession() as session:
+		lookup_tables = [r['table_name'] for r in utils.select_result_to_dict(session.execute(sql))]
+		for table_name in lookup_tables:
+			rows = utils.select_result_to_dict(session.execute(f'TABLE {table_name}'))
+			result[table_name] = {r['code']: r for r in rows}
+
+	return jsonify(result)
+
+
+@app.route('/flask/db/primaryKeys', methods=['GET'])
+def get_table_sort_columns():
+	"""
+	Get primary keys for all tables
+	"""
+	sql = '''
+		SELECT 
+			tc.table_schema, tc.table_name, kc.column_name
+		FROM information_schema.table_constraints tc
+			INNER JOIN information_schema.key_column_usage kc 
+			ON kc.table_name = tc.table_name AND kc.table_schema = tc.table_schema AND kc.constraint_name = tc.constraint_name
+		WHERE 
+			tc.constraint_type = 'PRIMARY KEY' AND
+			kc.column_name <> 'encounter_id' AND 
+			kc.table_name NOT LIKE '%_codes' AND
+			kc.ordinal_position is not null
+		ORDER BY 
+			tc.table_schema,
+			tc.table_name,
+			kc.position_in_unique_constraint
+	'''
+	result = {}
+	with WriteSession() as session:
+		for row in utils.select_result_to_dict(session.execute(sql)):
+			result[row['table_name']] = row['column_name']
+
+	return jsonify(result)
 
 
 @app.route('/flask/save/attachments', methods=['POST'])

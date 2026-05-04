@@ -65,36 +65,14 @@ var BHIMSQuery = (function(){
 	to the encounter and the encounter_id
 	*/
 	Constructor.prototype.getTableSortColumns = function() {
-		const sql = `
-			SELECT 
-				tc.table_schema, tc.table_name, kc.column_name
-			FROM information_schema.table_constraints tc
-				INNER JOIN information_schema.key_column_usage kc 
-				ON kc.table_name = tc.table_name AND kc.table_schema = tc.table_schema AND kc.constraint_name = tc.constraint_name
-			WHERE 
-				tc.constraint_type = 'PRIMARY KEY' AND
-				kc.column_name <> 'encounter_id' AND 
-				kc.table_name NOT LIKE '%_codes' AND
-				kc.ordinal_position is not null
-			ORDER BY 
-				tc.table_schema,
-				tc.table_name,
-				kc.position_in_unique_constraint
-			;
-		`;
-		return queryDB(sql)
-			.done(queryResultString => {
-				if (queryReturnedError(queryResultString)) { 
-					console.log(`error configuring main form: ${queryResultString}`);
-				} else {
-					const result = $.parseJSON(queryResultString);
-					//var tableSortColumns = {};
-					for (row of result) {
-						this.tableSortColumns[row.table_name] = row.column_name;
-					}
+		return $.get({url: '/flask/db/primaryKeys'})
+			.done(response => {
+				for (const [tableName, columnName] of Object.entries(response)) {
+					this.tableSortColumns[tableName] = columnName;
 				}
 			});
 	}
+
 
 	/* 
 	Query each right-side table separately
@@ -105,25 +83,25 @@ var BHIMSQuery = (function(){
 			SELECT 
 				DISTINCT table_name 
 			FROM information_schema.columns 
-			WHERE table_schema='${entryForm.dbSchema}' AND column_name='encounter_id'
+			WHERE table_schema='{schema}' AND column_name='encounter_id'
 		;`;
-		return queryDB(tablesSQL).done( tableQueryResultString => {
-			const rightSideTables = $.parseJSON(tableQueryResultString);
-			for (const row of rightSideTables) {
-				const tableName = row.table_name;
-				this.joinedDataTables.push(tableName);
-			}
-		});
+		return queryDB({sql: tablesSQL})
+			.done( response => {
+				const rightSideTables = response.data || [];
+				for (const row of rightSideTables) {
+					const tableName = row.table_name;
+					this.joinedDataTables.push(tableName);
+				}
+			});
 	}
 
 
 	Constructor.prototype.queryEncounterIDs = function() {
 
-		return queryDB(`SELECT id FROM encounters`).done(queryResultString => {
-			if (queryReturnedError(queryResultString)) { 
-				console.log(`error query encounters table: ${queryResultString}`);
-			} else {
-				for (row of $.parseJSON(queryResultString)) {
+		return queryDB({sql: `SELECT id FROM encounters`}).done(response => {
+			if (!pythonReturnedError(response)) { 
+				const result = response.data || [];
+				for (row of result) {
 					this.encounterIDs.push(row.id);
 				}
 				$('#query-result-count > .query-result-count-text').text(this.encounterIDs.length);
@@ -158,13 +136,13 @@ var BHIMSQuery = (function(){
 			}
 			if (whereClauses[tableName]) {
 				if (whereClauses[tableName].length && tableName !== 'encounters') {
-					joinClauses.push(`LEFT JOIN ${tableName} ON encounters.id=${tableName}.encounter_id`);
+					joinClauses.push(`LEFT JOIN {schema}.${tableName} ON encounters.id=${tableName}.encounter_id`);
 				}
 			}
 		}
 
 		const encountersWhereStatement = encountersWhereClauses.length ? 'WHERE ' + encountersWhereClauses.join(' AND ') : '';
-		const encountersSQL = `SELECT DISTINCT encounters.* FROM encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`;
+		const encountersSQL = `SELECT DISTINCT encounters.* FROM {schema}.encounters ${joinClauses.join(' ')} ${encountersWhereStatement} ORDER BY encounters.start_date`;
 		
 		return  [encountersSQL, whereClauses];
 	}
@@ -188,13 +166,11 @@ var BHIMSQuery = (function(){
 		
 		const [encountersSQL, whereClauses] = this.getEncountersSQL(sqlQueryParameters);
 		var encounterResult = {};
-		var encountersDeferred = queryDB(encountersSQL)
-			.done(queryResultString => {
-				if (queryReturnedError(queryResultString)) { 
-					console.log(`error query encounters table: ${queryResultString}`);
-				} else {
+		var encountersDeferred = queryDB({sql: encountersSQL})
+			.done(response => {
+				if (!pythonReturnedError(response, {errorExplanation: 'An error occurred while querying encounters data.'})) { 
 					var liElements = [];
-					encounterResult = $.parseJSON(queryResultString);
+					encounterResult = response.data || [];
 
 					// Unload any previous data since we know the query returned something
 					this.queryResult = {}; 
@@ -295,44 +271,41 @@ var BHIMSQuery = (function(){
 					${whereString} 
 					ORDER BY ${tableName}.${this.tableSortColumns[tableName]}
 				`;
-				const deferred = queryDB(sql);
-
-				deferred.done( queryResultString => {
-					if (queryReturnedError(queryResultString)) { 
-							console.log(`error querying ${tableName}: ${queryResultString}`);
-					} else { 
-						const result = $.parseJSON(queryResultString);
-						//this.queryResult[tableName] = {};
-						if (tableName in selectMultipleFields) {
-							const fieldName = selectMultipleFields[tableName];
-							const sortedResult = (result[0] || {}).display_order ? 
-								result.sort((row1, row2) => parseInt(row1.display_order) - parseInt(row2.display_order)) :
-								result;
-							const encounterID = result[0].encounter_id;
-							this.queryResult[encounterID][fieldName] = sortedResult.map(row => row[fieldName]);
-						} else {
-							for (const row of result) {
-								for (const columnName in row) {
-									if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
-										row[columnName] = this.anonymizedDefaults[columnName];
-										this.ignorePIIFields = true;
+				const deferred = queryDB({sql: sql})
+					.done( response => {
+						if (!pythonReturnedError(response, {errorExplanation: `An error occurred while querying data from the '${tableName}' table.`})) { 
+							const result = response.data || [];
+							//this.queryResult[tableName] = {};
+							if (tableName in selectMultipleFields) {
+								const fieldName = selectMultipleFields[tableName];
+								const sortedResult = (result[0] || {}).display_order ? 
+									result.sort((row1, row2) => parseInt(row1.display_order) - parseInt(row2.display_order)) :
+									result;
+								const encounterID = result[0].encounter_id;
+								this.queryResult[encounterID][fieldName] = sortedResult.map(row => row[fieldName]);
+							} else {
+								for (const row of result) {
+									for (const columnName in row) {
+										if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
+											row[columnName] = this.anonymizedDefaults[columnName];
+											this.ignorePIIFields = true;
+										}
 									}
+									const encounterID = row.encounter_id;
+									if (oneToManyTables.includes(tableName)) {
+										if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
+										this.queryResult[encounterID][tableName].push({...row});
+									} else {
+										this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
+									}
+									//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};	
 								}
-								const encounterID = row.encounter_id;
-								if (oneToManyTables.includes(tableName)) {
-									if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
-									this.queryResult[encounterID][tableName].push({...row});
-								} else {
-									this.queryResult[encounterID] = {...this.queryResult[encounterID], ...row};
-								}
-								//if (!this.queryResult[tableName][encounterID]) this.queryResult[tableName][encounterID] = {};	
 							}
 						}
-					}
-					
-				}).fail((xhr, status, error) => {
-					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
-				});
+						
+					}).fail((xhr, status, error) => {
+						console.log(`An unexpected error occurred while connecting to the database: ${error} while getting data values from ${tableName}.`)
+					});
 				deferreds.push(deferred);
 			}
 
@@ -696,22 +669,18 @@ var BHIMSQuery = (function(){
 
 		showLoadingIndicator('deleteDBRecordFromCard');
 		const failMessage = 
-			`The record fromt the ${tableName} table could not be deleted.` + 
+			`The record from the '${tableName}' table could not be deleted.` + 
 			` Make sure you're connected to the NPS network and try again.` + 
 			` If the problem persists, contact your system administrator.`
 		;
-		queryDB(
-			`DELETE FROM ${tableName} WHERE id=${databaseID};`
-		).done(queryResultString => {
-			if (queryResultString.trim().startsWith('ERROR')) {
-				console.log(queryResultString);
-				setTimeout(
-					()=> {
-						showModal(failMessage, 'Database error')
-					},
-					1000
-				);
-			} else {
+		$.post({
+			url: 'flask/deleteByID', 
+			data: JSON.stringify({
+				tableName: tableName,
+				id: databaseID
+			})
+		}).done(response => {
+			if (!pythonReturnedError(response, {errorExplanation: failMessage})) {
 				// Check if this is the last card before calling onConfirmDeleteCardClick 
 				//	because the removal happens asynchronously, and it would be impossible 
 				//	to know if that has happened or not before checking if this is the last card
@@ -1556,15 +1525,15 @@ var BHIMSQuery = (function(){
 	Constructor.prototype.getReactionByFromReactionCodes = function() {
 		
 		var deferred = $.Deferred();
-		queryDB(
-			`SELECT * FROM reaction_codes;`
-		).then(queryResultString => {
-			if (queryReturnedError(queryResultString)) {
-				console.log('Could not getReactionByFromReactionCodes because ' + queryResultString);
+		queryDB({
+			sql: `SELECT * FROM {schema}.reaction_codes;`
+		}).then(response => {
+			if (pythonReturnedError(response)) {
+				console.log('Could not getReactionByFromReactionCodes because ' + response);
 				deferred.resolve();
 			} else {
 				var reactionCodesTable = {};
-				for (const row of $.parseJSON(queryResultString)) {
+				for (const row of (response.data || [])) {
 					reactionCodesTable[row.code] = {...row};
 				}
 				const reactionRows = this.queryResult[this.selectedID].reactions || [];
@@ -1674,38 +1643,14 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.getLookupValues = function() {
 		
-		const sql = `
-			SELECT table_name 
-			FROM information_schema.tables 
-			WHERE table_schema='${entryForm.dbSchema}' AND table_name LIKE '%_codes';
-		`;
-		// Since this array of deferreds will get returned before all the $.Deferreds get added, 
-		//	initialize with a dummy Deferred. When the for-loop is done, this dummy Deferred can 
-		//	be resolved to indicate that all have been added 
-		var deferreds = [$.Deferred()];
-
-		queryDB(sql).done(tableQueryResultString => {
-			const queryResult = $.parseJSON(tableQueryResultString);
-			for (const tableRow of queryResult) {
-				var tableName = tableRow.table_name;
-				this.lookupValues[tableName] = {};
-				const d = queryDB(`SELECT * FROM ${tableName};`).done(lookupQueryResultString => {
-					const lookupResult = $.parseJSON(lookupQueryResultString);
-					let tName = tableRow.table_name;
-					for (const lookupRow of lookupResult) {
-						this.lookupValues[tName][lookupRow.code] = {...lookupRow};
-					}
-				}).fail((xhr, status, error) => {
-					console.log(`An unexpected error occurred while connecting to the database: ${error} while getting lookup values from ${tableName}.`)
-				});
-				deferreds.push(d);
-			}
-			deferreds[0].resolve(); // trigger initial dummy Deferred 
-		}).fail((xhr, status, error) => {
-			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		});
-
-		return deferreds;	
+		return $.get({url: 'flask/db/lookupValues'})
+			.done(result => {	
+				if (!pythonReturnedError(result)) {
+					this.lookupValues = result;
+				}
+			}).fail((xhr, status, error) => {
+				console.log(`An unexpected error occurred while connecting to the database: ${error} while getting lookup values.`)
+			})	
 	}
 
 
@@ -1733,22 +1678,23 @@ var BHIMSQuery = (function(){
 
 		const [sql, _] = this.getEncountersSQL(this.queryOptions);
 		const countSQL = `SELECT count(*) FROM (${sql}) AS t;`;
-		return queryDB(countSQL).done(queryResultString => {
-			if (queryReturnedError(queryResultString)) { 
-				console.log(`error query encounters table: ${queryResultString}`);
-			} else {
-				const result = $.parseJSON(queryResultString);
-				if (result.length) {
-					const count = parseInt(result[0].count);
-					const isSameAsTotal = count === this.encounterIDs.length;
-					const $countText = $('#query-encounters-count')
-					$('#query-result-count').toggleClass('invisible', isSameAsTotal)
-					$countText.text(count);
-					if (!isSameAsTotal) runCountUpAnimations();
-				}
+		return queryDB({sql: countSQL})
+			.done(response => {
+				if (pythonReturnedError(response)) { 
+					console.log(`error query encounters table: ${response}`);
+				} else {
+					const result = response.data || [];
+					if (result.length) {
+						const count = parseInt(result[0].count);
+						const isSameAsTotal = count === this.encounterIDs.length;
+						const $countText = $('#query-encounters-count')
+						$('#query-result-count').toggleClass('invisible', isSameAsTotal)
+						$countText.text(count);
+						if (!isSameAsTotal) runCountUpAnimations();
+					}
 
-			}
-		});
+				}
+			});
 	}
 
 
@@ -1798,7 +1744,7 @@ var BHIMSQuery = (function(){
 		var valueRangeDeferreds = [valueRangeTrigger];
 
 		// Query the DB to get the numeric fields per table
-		queryDB(`
+		queryDB({sql: `
 			SELECT 
 				table_name, 
 				string_agg(field_name, ',' ORDER BY field_name) AS fields
@@ -1810,11 +1756,9 @@ var BHIMSQuery = (function(){
 				table_name IS NOT NULL
 			GROUP BY table_name
 			;
-		`).done(queryResultString => {
-			if (queryReturnedError(queryResultString)) { 
-				console.log(`error getting numeric fields: ${queryResultString}`);
-			} else {
-				const queryResults = $.parseJSON(queryResultString);
+		`}).done(response => {
+			if (!pythonReturnedError(response)) { 
+				const queryResults = response.data || [];
 				for (const i in queryResults) {
 					const row = queryResults[i];
 					const fieldNames = row.fields.split(',');
@@ -1823,14 +1767,14 @@ var BHIMSQuery = (function(){
 					}).join(', ');
 					const maxString = minString.replace(/min/g, 'max');
 					
-					const deferred = queryDB(
-						`SELECT '${row.table_name}' as table_name, ${minString}, ${maxString} FROM ${row.table_name} GROUP BY table_name;` 
-					).then(resultString => {
-						if (queryReturnedError(resultString)) { 
-							console.log(`error getting value ranges: ${queryResultString}`);
+					const deferred = queryDB({
+						sql: `SELECT '${row.table_name}' as table_name, ${minString}, ${maxString} FROM ${row.table_name} GROUP BY table_name;`
+					}).then(response => {
+						if (pythonReturnedError(response)) { 
+							console.log(`error getting value ranges: ${response}`);
 						} else {
 							// Each result will be a single row
-							const result = $.parseJSON(resultString)[0];
+							const result = (response.data || [])[0] || {};
 							const tableName = result.table_name;
 							numericFieldRanges[tableName] = {};
 							for (field in result) {
@@ -1877,12 +1821,12 @@ var BHIMSQuery = (function(){
 					css_class NOT LIKE '%boolean-collapse-trigger%' 
 				ORDER BY table_name, display_order;
 			`; 
-			queryDB(queryOptionSQL).then(queryResultString => {
-				if (queryReturnedError(queryResultString)) { 
-					console.log(`error configuring query options: ${queryResultString}`);
+			queryDB({sql: queryOptionSQL}).then(response => {
+				if (pythonReturnedError(response)) { 
+					console.log(`error configuring query options: ${response}`);
 				} else {
 					queryOptionConfig = {};
-					var queryResults = $.parseJSON(queryResultString);
+					var queryResults = response.data || [];
 					// Add other fields
 					const otherQueryOptions = [
 						{id: 998, table_name: 'attachments', field_name: 'file_size_kb', html_input_type: 'number', html_id: 'input-file_size_kb', display_name: 'File size (kb)', description: 'File size of the attachment'},
@@ -2585,17 +2529,14 @@ var BHIMSQuery = (function(){
 		})
 
 		// Get username
-		$.ajax({
-			url: 'bhims.php',
-			method: 'POST',
-			data: {action: 'getUser'},
-			cache: false
-		}).done(function(resultString) {
-			if (queryReturnedError(resultString)) {
-				throw 'User role query failed: ' + resultString;
+		getUserInfo().done(result => {
+			if (
+				pythonReturnedError(result, {errorExplanation: 'An error occurred while retrieving user information'})
+				|| !result.username
+			) {
+				throw 'User role query failed: ' + result;
 			} else {
-				const result = $.parseJSON(resultString);
-				$('#username').text(result[0].username);
+				$('#username').text(result.username);
 			}
 		});
 
@@ -2624,7 +2565,7 @@ var BHIMSQuery = (function(){
 		
 		$.when(
 			this.getTableSortColumns(),
-			...this.getLookupValues(), 
+			this.getLookupValues(), 
 			entryForm.configureForm(mainParentID='#row-details-pane', isNewEntry=false),
 			this.getJoinedDataTables(),
 			this.queryEncounterIDs()

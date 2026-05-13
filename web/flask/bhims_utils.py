@@ -2,6 +2,8 @@
 import datetime
 import json
 import os
+from string import ascii_letters, digits
+from secrets import choice as secret_choice
 from sqlalchemy import (
 	asc, 
 	create_engine, 
@@ -36,6 +38,9 @@ def get_unique_id() -> str:
 	"""equivalent to php uniqid()"""
 	return hex(int(datetime.now().timestamp() * 10000000))[2:]
 
+def get_random_string(length=8):
+	alphabet = ascii_letters + digits
+	return ''.join(secret_choice(alphabet) for i in range(length))
 
 def get_content_dir(dirname='attachments'):
 	"""helper function to get the path to a subdirectory of root"""

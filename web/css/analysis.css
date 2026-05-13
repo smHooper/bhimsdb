@@ -1,0 +1,570 @@
+:root {
+	--search-bar-padding: 20px;
+	--query-parameter-container-height: 400px;
+	--sidebar-collapse-transition-length: 0.25s;
+	--climberdb-data-table-row-height: 60px;
+}
+@import './bhims.css';
+
+.main-content-wrapper {
+	display: flex;
+	flex-wrap: nowrap;
+	padding: 0;
+}
+.fuzzy-search-bar {
+	text-indent: 0;
+	margin-bottom: var(--search-bar-padding);
+	padding-right: 60px;
+	transition: opacity var(--sidebar-collapse-transition-length);
+}
+.query-options-sidebar {
+	height: 100%;
+	overflow-y: auto;
+/*	border: 0 10px 0 0 #ddd;*/
+	position: relative;
+	z-index: 2;
+	box-shadow: 0px 14px 12px 8px #00000033;
+	padding: 20px;
+	transition: width 0.25;
+}
+.query-parameters-container {
+	width: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: start;
+	max-height: var(--query-parameter-container-height);/*height: 300px seems to be the only thing that makes overflow of ul work*/
+	min-height: 45px;
+	overflow-y: auto;
+	align-content: flex-start;
+}
+#query-option-list {
+	list-style: none;
+	padding: 0;
+	width: 100%;
+	overflow: auto;
+	height: calc(100% - var(--fuzzy-search-bar-height) - var(--search-bar-padding));
+	margin: 0;
+}
+.query-option {
+	padding: 0 15px;
+	position: relative;
+	height: 60px; 	
+	line-height: 60px;
+	width:  100%;
+	margin-bottom: 2px;
+	background-color: #ddd;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	cursor: pointer;
+	z-index: 0;
+	transition: all 0.25s;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.query-option:not(.selected):hover {
+	background-color: rgba(220, 220, 220);
+}
+.query-option.selected {
+	box-shadow: 1px 4px 5px 3px rgb(0 0 0 / 15%);
+	z-index: 1;
+	justify-content: space-between;
+	cursor: unset;
+	pointer-events: none;
+}
+.query-option.selected, 
+.query-option.selected {
+	color: #219ebc;
+}
+.query-details-container {
+	padding: 30px;
+	display: flex;
+	flex-direction: column;
+	max-height: 100%;
+	background: linear-gradient(2deg, var(--sunrise-linear-gradient-colors))/*#44a9ba, #ffe7aad1);*/
+}
+
+/*collapse styling*/
+.change-query-option-sidebar-size-button {
+	position: absolute;
+	right: var(--search-bar-padding);
+}
+.query-options-sidebar.collapsed {
+	max-width: 60px;
+}
+.query-options-sidebar.collapsed .fuzzy-search-bar{
+	opacity: 0;
+	padding-right: 0;
+}
+.query-options-sidebar.collapsed #query-option-list {
+	overflow: hidden;
+}
+.query-options-sidebar.collapsed .query-option {
+	height: 0px;
+	color: #00679b00;
+	box-shadow: none;
+}
+.query-options-sidebar.collapsed .change-query-option-sidebar-size-button {
+	left: 15px;
+}
+
+.query-result-container {
+	display: flex;
+	justify-content: center;
+	position: relative;
+	margin-top: 15px;
+	max-height: calc(100% - 100px);
+	border-radius: 10px;
+	overflow-y: auto;
+}
+.table-row-counter-wrapper {
+	margin-right: 20px;
+	line-height: 40px;
+	font-weight: bold;
+}
+.climberdb-data-table {
+	max-height: 100%;
+	min-width: 100%;
+}
+.climberdb-data-table th {
+	background-color: #0a4664;
+}
+.climberdb-data-table tbody {
+	overflow-y: auto;
+	min-width: 100%;
+	color: #023047;
+}
+
+.climberdb-data-table tbody td {
+	padding: 2px;
+}
+.climberdb-data-table tbody td span.cell-content {
+	background: #ffffff20;
+	padding-left: 10px;
+	padding-right: 10px;
+}
+.climberdb-data-table tbody .cell-content a {
+	color: #00679b;
+}
+.climberdb-data-table tbody tr:hover td > span.cell-content {
+  background-color: #ffffff30;
+}
+
+select.input-field.default, 
+.input-field::placeholder, 
+textarea.narrative-field::placeholder {
+    color: hsla(1, 0%, 10%, 0.5); /*make placeholder darker for darker background*/
+}
+
+/*-------select2 styling--------*/
+.select2-container {
+	max-width: calc(100% - 20px);
+}
+.input-field,
+.select2-container,
+.select2-container .selection {
+	min-height: 38px;
+}
+/*for some stupid reason, the select2 field as it appears when empty doesn't extend the full 
+height of the container, so make sure it aligns with the bottom of the rest of the fields*/
+.bhims-select2.is-empty ~ .select2-container > .selection {
+	position: relative;
+	bottom: -5px; 
+}
+
+.query-option-operator {
+  margin-right: 10px;
+}
+.dashboard-main .select2-container--default .select2-selection--multiple,
+.dashboard-main .select2-container--default .select2-selection--single,
+.query-option-operator,
+.query-option-input-field  {
+  background-color: rgba(0, 0, 0, 0);
+  border: none;
+  border-bottom: solid rgba(0, 0, 0, 0.2) 2px;
+  border-radius: 0px;
+  transition: all 0.2s;
+  align-self: flex-end;
+}
+.dashboard-main .select2-container--default.select2-container--focus .select2-selection--multiple,
+.dashboard-main .select2-container--default.select2-container--focus .select2-selection--single,
+.query-option-operator:focus,
+.query-option-input-field:focus  { /*the select box*/
+  border: none;
+  border-bottom: solid rgba(0, 0, 0, 0.6) 2px;
+}
+.dashboard-main .select2-container--default .select2-selection--multiple .select2-selection__choice,
+.dashboard-main .select2-container--default .select2-selection--single .select2-selection__choice {/*the selected item pill*/
+  background: transparent;
+  color: var(--ui-bg-dark-blue);
+  border: solid transparent 1.5px;
+  border-radius: 2rem;
+  transition: all .2s;
+}
+.dashboard-main .select2-container--default .select2-selection--multiple .select2-selection__choice:hover,
+.dashboard-main .select2-container--default .select2-selection--single .select2-selection__choice:hover {
+  border: solid var(--ui-bg-dark-blue) 1.5px;
+
+}
+.dashboard-main .select2-container--default .select2-selection--multiple .select2-selection__choice__remove,
+.dashboard-main .select2-container--default .select2-selection--single .select2-selection__choice__remove {
+  border: none;
+  color: var(--ui-bg-dark-blue);
+  background-color: transparent;
+  border-radius: 1.1em;
+  top: 0.25em;
+  width: 1.1rem;
+  height: 1.1rem;
+  transition: background 0.2s;
+  
+}
+/*.dashboard-main .select2-container--default .select2-selection--multiple 
+  .select2-selection__choice__remove:hover,
+.dashboard-main .select2-container--default .select2-selection--single 
+  .select2-selection__choice__remove:hover {
+  background: rgba(0, 0, 0, 0.2);
+}*/
+.dashboard-main .select2-container--default .select2-selection--multiple .select2-selection__choice__remove span,
+.dashboard-main .select2-container--default .select2-selection--single .select2-selection__choice__remove span { /*the x*/
+  /* font-size: 1.5rem; */
+  position: relative;
+  top: -.65rem;
+  left: -.05rem;
+}
+.select2-container--open {
+  z-index: 5000;
+}
+body .select2-container > .select2-dropdown {
+  background: var(--ui-bg-dark-blue);
+  color: white;
+}
+body .select2-container--default .select2-results__option {
+	font-size: 14px;
+}
+body .select2-container--default .select2-results__option--selected {
+  background: var(--ui-primary-highlight-color);
+}
+body .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+  background-color: var(--ui-secondary-highlight-color);
+}
+.select2-container .select2-search--inline .select2-search__field {
+	font-family: var(--default-font-family);
+}
+/*--------------*/
+
+.query-parameter-field-container {
+	display: flex;
+	flex-wrap: wrap;
+	width: 100%;
+	height: 100%;
+}
+/*.query-parameter-option-list-container {
+	display: flex;
+	flex-wrap: wrap;
+	width: 100%;
+	height: 100%;
+	padding: 0 15px;
+}*/
+.query-parameter-option-container {
+	display: flex;
+	flex-wrap: wrap;
+	padding: 0;
+	overflow-y: auto;
+	width: 100%;
+}
+.query-parameter-option-container .show-query-parameter-button {
+	height: 40px;
+	border-radius: 40px;
+	margin-right: 15px;
+	padding: 5px 10px;
+	border: solid transparent 1.5px;
+	transition: all 0.3s;
+}
+.query-parameter-option-container .show-query-parameter-button:hover, 
+.query-parameter-option-container .show-query-parameter-button:focus {
+	border-color: var(--ui-primary-text-color);
+	cursor: pointer;
+}
+.show-query-parameter-button::after {
+	content: " +";
+	font-weight: bold;
+	opacity: 0;
+	transition: 0.3s opacity
+}
+.show-query-parameter-button:hover::after,
+.show-query-parameter-button:focus::after {
+	opacity: 1;
+}
+
+.field-container {
+	max-height: 66px;
+}
+.text-only-button.add-remove-all-multiselect-options-button {
+	font-size: 12px;
+	color: var(--ui-primary-text-color);
+	position: absolute;
+	top: 0;
+	right: 45px;
+	opacity: 0;
+	pointer-events: none;
+	transition: 0.3s opacity .15s ease;
+}
+.field-container:hover .add-remove-all-multiselect-options-button {
+	opacity: 1;
+	pointer-events: all;
+}
+.icon-button.hide-query-parameter-button,
+.icon-button.remove-stat-row-button {
+	opacity: 0;
+	background: none;
+	color: var(--ui-primary-text-color);
+	height: 1.75rem;
+	width: 1.75rem;
+	border-radius: 1.75rem;
+	transition: all 0.3s;
+}
+.field-container:hover .icon-button.hide-query-parameter-button, 
+.stat-field-row:hover .icon-button.remove-stat-row-button, 
+.input-field:focus ~ .icon-button.hide-query-parameter-button,
+.input-field:focus ~ .icon-button.remove-stat-row-button {
+	opacity: 1;
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.stat-field-row {
+	width: 100%;
+	display: flex;
+	margin-top: 20px;
+}
+.stat-field-row.cloneable {
+	display: none;
+}
+
+/*resize bar*/
+.dragbar.vertical-resize {
+	width: 100%;
+	height: 10px;
+	margin-top: 15px;
+	padding: 2px 0;
+	cursor: row-resize;
+}
+.visible-dragbar {
+	height: 100%;
+	width: 100%;
+	background-color: var(--ui-primary-color);
+	opacity: 0.1;
+	transition: 0.2s all ease-in 0.1s;
+}
+/*.dragbar.vertical-resize:hover,
+.dragbar.vertical-resize.resizing {
+	padding: 2px 0; /* increase height of bar on hover 
+}*/
+.dragbar:hover > .visible-dragbar,
+.dragbar.resizing > .visible-dragbar {
+	opacity: 1;
+}
+
+.query-option-double-value-container {
+	height: 100%;
+}
+
+#reset-query-climbers-climbs-button {
+	color: var(--ui-primary-text-color);
+}
+#reset-query-climbers-climbs-button:hover,
+#reset-query-climbers-climbs-button:focus {
+	font-weight: bold;
+}
+
+.copy-query-link-button {
+	color: var(--ui-primary-text-color);
+}
+
+/*for datetime fields, if the operator is BETWEEN and therefore 
+2 fields are showing, make the field-container extra-wide*/
+@media (min-width: 768px) {
+	.field-container.is-between {
+		flex: 0 0 100%;
+		max-width: 100%;
+	}
+	.field-container.is-between .datetime-query-operator {
+		align-self: center;
+	}
+	.field-container.is-between .query-option-double-value-container,
+	.field-container.is-between .double-value-field {
+		display: flex;
+		flex: 1 1 auto;
+		max-width: 100%;
+	}
+	.field-container.is-between .query-option-double-value-container span {
+		margin-right: 10px;
+		margin-left: 10px;
+		align-self: center;
+	}
+}
+@media (min-width: 992px) {
+	.field-container.is-between {
+		flex: 0 0 50%;
+		max-width: 50%;
+	}
+	.field-container.is-between .datetime-query-operator {
+		align-self: flex-end;
+	}
+}
+
+
+.icon-button, 
+.text-only-button {
+  background-color: rgba(0,0,0,0);
+  color: var(--ui-primary-color);
+  border: none;
+  -moz-box-shadow:    none;
+  -webkit-box-shadow: none;
+  box-shadow:         none;
+  cursor: pointer;
+  transition: all 0.2s linear;
+}
+.icon-button:hover {
+  opacity: 1;
+}
+/*minimally sized label mostly for screen readers*/
+.icon-button-label {
+  font-size: 12px;
+  width: 100%;
+  margin: 0;
+  margin-top: -5px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+
+/*.field-container.double-input-criterion-container {
+	margin-right: 15px;
+}
+.input-field.double-input-criterion {
+	max-width: unset;
+}
+.input-field.double-input-criterion.col-4 {
+	flex: 0 0 33%;
+}
+.input-field.double-input-criterion.col {
+	flex-basis: 0;
+	-ms-flex-positive: 1;
+	flex-grow: 1;
+	max-width: 100%;
+	margin-left: 10px;
+}*/
+/*########################################################
+--------- styling for standalone data tables ------------ 
+#########################################################*/
+.climberdb-data-table-wrapper table,
+.climberdb-data-table-wrapper .input-field {
+  font-size: 20px;
+}
+.climberdb-data-table-wrapper table { 
+border-collapse: separate;
+border-radius: 10px;
+border-spacing: 0px;
+}
+.climberdb-data-table td,
+.climberdb-data-table th {
+  /*border:  1px solid #f28100;*/
+  padding: 4px;
+}
+.climberdb-data-table th  {
+  background-color: #0a4664;/*#6bb6b9;*/
+  color:  white;
+  text-align: center;
+}
+/*for tables with multiple rows in the header, make the 
+whole header sticky*/
+.climberdb-data-table thead {
+  position: sticky;
+  top: 0;
+  padding: 10px;
+}
+/*Make corners round for header*/
+.climberdb-data-table th:first-of-type {
+  border-top-left-radius: 10px;
+}
+.climberdb-data-table th:last-of-type {
+  border-top-right-radius: 10px;
+}
+/*Make corners round for bottom two rows*/
+.climberdb-data-table tr:last-of-type td:first-of-type, /*when editing*/
+.climberdb-data-table tr:last-of-type td:first-of-type > span {
+  border-bottom-left-radius: 10px;
+}
+.climberdb-data-table tr:last-of-type td:nth-of-type(5),
+.climberdb-data-table tr:last-of-type td:nth-of-type(5) > span {
+  border-bottom-right-radius: 10px;
+}
+.climberdb-data-table tbody tr td:not(.no-border) {
+  padding: 2px;
+}
+.climberdb-data-table tbody tr td:first-of-type {
+  padding-left: 0;
+}
+.climberdb-data-table tbody tr td:nth-of-type(5) {
+  padding-right: 0;
+}
+
+td.no-border {
+  border: none !important;
+}
+
+.climberdb-data-table tr {
+  /*text-align: center;*/
+  height: var(--climberdb-data-table-row-height);
+}
+.climberdb-data-table tbody tr {
+  /*height: 50px;*/
+  transition: 0.25s all;
+}
+.climberdb-data-table tbody tr td:not(.no-border) > span {
+  background: #ffffff20;
+  padding-left: 10px;
+  padding-right: 10px;
+  height: var(--climberdb-data-table-row-height);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: 0.25s all;
+}
+/*.climberdb-data-table tbody td span.cell-content {
+
+}*/
+.climberdb-data-table .input-field {
+  border-bottom: none;
+  border-radius: 5px;
+  height: 100%;
+}
+
+.climberdb-data-table .sort-column-button {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  color: white;
+}
+.climberdb-data-table .sort-column-button span {
+  flex: 1 0 calc(100% - 20px);
+  font-weight: bold;
+}
+.climberdb-data-table .sort-column-button i {
+  opacity: 0;
+  transition: 0.25s all;
+  width: 15px;
+  float: right;
+  margin-left: 5px;
+}
+.climberdb-data-table .sort-column-button:hover i {
+  opacity: 1;
+}
+
+/*^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------- styling for standalone data tables ------------ 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^*/

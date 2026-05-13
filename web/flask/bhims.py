@@ -1,13 +1,13 @@
 import os, sys
 import traceback
 import re
-
-from sqlalchemy import create_engine, select, update
+from pandas import DataFrame
+from pandas import ExcelWriter
+from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import Session, sessionmaker
-import bcrypt
-import pandas as pd
-import smtplib
+from sqlalchemy.orm import sessionmaker
+import shutil
 import base64
 
 from datetime import datetime
@@ -16,7 +16,7 @@ from argparse import Namespace
 import logging
 from logging.config import dictConfig
 
-from flask import Flask, render_template, request, json, jsonify, url_for
+from flask import Flask, has_request_context, render_template, request, json, jsonify, url_for
 from flask_mail import Mail, Message
 
 from subprocess import CREATE_NEW_PROCESS_GROUP
@@ -333,6 +333,83 @@ def run_export_data():
 	# return just exportdir\file.xlsx
 	return '/'.join(output_path.split('/')[-2:])
 
+
+def write_query_to_excel(
+		query_data, 
+		query_name, 
+		excel_path, 
+		excel_start_row=0, 
+		write_columns=True, 
+		write_mode='a', 
+		query_url=''
+	):
+
+	# Write to the excel file
+	if_sheet_exists = 'overlay' if write_mode == 'a' else None
+	with ExcelWriter(
+			excel_path, 
+			engine='openpyxl', 
+			mode=write_mode, 
+			if_sheet_exists=if_sheet_exists
+		) as writer:
+		
+		query_data.to_excel(
+			writer, 
+			sheet_name='data', 
+			startrow=excel_start_row, 
+			header=write_columns, 
+			index=False
+		)
+
+# Export results of predefined queries
+@app.route('/flask/analysis/export', methods=['POST'])
+def export_query():
+
+	data = dict(request.form)
+
+	# Make sure any filename is unique
+	random_string = utils.get_random_string()
+
+	query_name = data['query_name']
+
+	# Convert JSON string arrays to lists because arrays can't be sent directly
+	data['columns'] = json.loads(data['columns'])
+	if query_name == 'guide_company_client_status' or query_name == 'guide_company_briefings':
+		data['client_status_columns'] = json.loads(data['client_status_columns'])
+		data['briefing_columns'] = json.loads(data['briefing_columns'])
+
+	data['query_data'] = json.loads(data['query_data'])
+	
+	if data['export_type'] == 'excel':
+		
+		# If a template Excel file exists, make a copy in the exports directory to make a new file to write to
+		excel_filename =  data['base_filename'] + '.xlsx' if 'base_filename' in data else f'{query_name}_{random_string}.xlsx'
+		export_dir = utils.get_content_dir('export_cache')
+		if not os.path.isdir(export_dir):
+			os.mkdir(export_dir)
+		excel_path = os.path.join(export_dir, excel_filename)
+		excel_template_path = os.path.join(os.path.dirname(__file__), 'templates', f'{query_name}.xlsx')
+		excel_write_mode = 'w' # default to write a new file
+		if os.path.isfile(excel_template_path):
+			shutil.copy(excel_template_path, excel_path)
+			excel_write_mode = 'a' # to keep style in template, write in append mode
+
+		query_data = DataFrame(data['query_data']).reindex(columns=data['columns'])
+		write_query_to_excel(
+			query_data, 
+			query_name, 
+			excel_path, 
+			excel_start_row=int(data.get('excel_start_row') or 0),
+			write_columns=data['excel_write_columns'],
+			query_url=data.get('query_url') or '',
+			write_mode=excel_write_mode
+		)
+
+		return 'export_cache/' + excel_filename
+
+	else:
+		raise ValueError(f'''invalid export_type: "{data['export_type']}" ''')
+	
 
 #--------------- Email notifications ---------------------#
 def get_email_logo_base64(): 

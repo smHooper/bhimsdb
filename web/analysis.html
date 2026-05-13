@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta name="viewport" content="width=device-width,height=device-height, user-scalable=no" />
+	<title>DENA BHIMS analysis</title>
+	<link rel="icon" type="image/x-icon" href="/imgs/favicon.ico">
+	
+	<!--jquery -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+	
+	<!-- bootstrap -->
+	<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css"/>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
+
+	<!--fonts -->
+	<link rel="preconnect" href="https://fonts.gstatic.com">
+	<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+
+	<!-- font awesome --> 
+	<link href="packages/fontawesome/css/all.min.css" rel="stylesheet">
+
+	<!-- select2 -->
+	<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+	
+	<!-- Leaflet -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+		crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+		integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+		crossorigin=""></script>
+
+	<link rel="stylesheet" href="css/bhims.css">
+	<link rel="stylesheet" href="css/analysis.css">
+</head>
+
+<body>
+	 <!-- loading indicator should be hidden and will only be shown when loading data -->
+	<div id="loading-indicator-background" class="modal-background modal-background-light hidden" ></div>
+	<div id="loading-indicator" class="hidden"></div>
+
+
+	<nav class="bhims-header-menu">
+		<div class="header-menu-item-group">
+			<button class="icon-button sidebar-collapse-button" title="Toggle sidebar menu">
+				<div class="sidebar-collapse-button-line"></div>
+				<div class="sidebar-collapse-button-line"></div>
+				<div class="sidebar-collapse-button-line"></div>
+			</button>
+			<a class="home-button" role="button" href="bhims-index.html">
+				<img src="imgs/bhims_icon_50px.svg" alt="home icon">
+			</a>
+			<h4 class="page-title">BHIMS analysis</h4>
+		</div>
+
+		<div class="header-menu-item-group" id="username-container">
+			<img id="username-icon" src="imgs/user_icon_50px.svg" alt="username icon">
+			<label id="username"></label>
+		</div>
+	</nav>
+
+	<main class="dashboard-main">
+
+		<!-- nav sidebar -->
+		<div class="main-container-with-sidebar">
+			<nav class="sidebar">
+				<div class="sidebar-sticky">
+					<div class="sidebar-background"></div>
+					<ul class="sidebar-nav-group">
+
+						<li class="nav-item">
+							<a href="bhims-dashboard.html">
+								<img class="sidebar-nav-item-icon" src="imgs/dashboard_icon_50px.svg">
+								<span class="sidebar-nav-item-label">dashboard</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="query.html">
+								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
+								<span class="sidebar-nav-item-label">query data</span>
+							</a>
+						</li>
+
+						<li class="nav-item selected">
+							<a href="analysis.html">
+								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
+								<span class="sidebar-nav-item-label">analyze data</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="manage-users.html">
+								<img class="sidebar-nav-item-icon" src="imgs/user_icon_50px.svg">
+								<span class="sidebar-nav-item-label">manage users</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="config.html">
+								<img class="sidebar-nav-item-icon" src="imgs/settings_icon_50px.svg">
+								<span class="sidebar-nav-item-label">configure app</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="entry-form.html">
+								<img class="sidebar-nav-item-icon" src="imgs/entry_form_icon_50px.svg">
+								<span class="sidebar-nav-item-label">new encounter</span>
+							</a>
+						</li>
+
+					</ul>
+
+				</div>
+			</nav>
+
+			<!--main dashboard content -->
+			<div class="main-content-wrapper">
+				<div class="query-options-sidebar col-3">
+					<input id="query-option-search-input" class="fuzzy-search-bar w-100" placeholder="Type to search for queries" title="Search for queries">
+					<button class="icon-button change-query-option-sidebar-size-button collapse-sidebar-button" role="button" title="Collapse query options">
+						<i class="fas fa-arrow-left fa-arrow-from-right fa-lg"></i>
+						<label class="icon-button-label">hide</label>
+					</button>
+					<ul id="query-option-list">
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							data-tags="count">
+								Count of Encounters
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-bear-behavior-query-button" 
+							data-tags="behavior, bear behavior, rating, probable cause, assessment"
+							data-export-name="encounters_per_bear_behavior">
+								Ecnounters by Bear Behavior Rating
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="backcountry-encounters-per-bear-behavior-query-button" 
+							data-tags="backcountry, behavior, bear behavior, rating, probable cause, assessment"
+							data-export-name="backcountry_encounters_per_bear_behavior">
+								Backcountry Encounters by Bear Behavior
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="frontcountry-encounters-per-bear-behavior-query-button" 
+							data-tags="frontcountry, behavior, bear behavior, rating, probable cause, assessment"
+							data-export-name="frontcountry_encounters_per_bear_behavior">
+								Frontcountry Encounters by Bear Behavior
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-mgmt-classification-query-button" 
+							data-tags="management, classification, rating, assessment"
+							data-export-name="encounters_per_mgmt_class">
+								Encounters by Mgmt. Class
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="backcountry-encounters-per-mgmt-classification-query-button" 
+							data-tags="backcountry, management, classification, rating, assessment"
+							data-export-name="backcountry_encounters_per_mgmt_class">
+								Backcountry Encounters by Mgmt. Class
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="frontcountry-encounters-per-mgmt-classification-query-button" 
+							data-tags="frontcountry, management, classification, rating, assessment"
+							data-export-name="frontcountry_encounters_per_mgmt_class">
+								Frontcountry Encounters by Mgmt. Class
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-with-improper-reactions-query-button" 
+							data-tags="improper, reaction, improper reaction, assessment"
+							data-export-name="encounters_with_improper_reactions">
+								Encounters with Improper Reactions
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="improper-reactions-count-query-button" 
+							data-tags="improper, reaction, improper reaction, assessment"
+							data-export-name="count_of_improper_reactions">
+								Count of Improper Reactions
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="improper-reactions-per-user-group-query-button" 
+							data-tags="improper, reaction, improper reaction, assessment, user group, activity, human activity"
+							data-export-name="improper_reactions_per_user_group">
+								Improper Reactions per User Group
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="improper-vs-improper-reactions-query-button" 
+							data-tags="improper, reaction, improper reaction, assessment"
+							data-export-name="improper_vs_proper_reaction_count">
+								Count of Proper vs Improper Reactions
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="east-fork-improper-vs-improper-reactions-query-button" 
+							data-tags="east fork, toklat, improper, reaction, improper reaction, assessment"
+							data-export-name="east_fork_improper_vs_proper_reaction_count">
+								East Fork Proper vs Improper Reactions
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-backcountry-unit-query-button" 
+							data-tags="backcountry, unit, backcountry unit"
+							data-export-name="encounters_per_bc_unit">
+								Encounters by Backcountry Unit
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-place-name-query-button" 
+							data-tags="location, trail, campground, place, place name"
+							data-export-name="encounters_per_place_name">
+								Encounters by Place Name
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-place-name-mgmt-classification-query-button" 
+							data-tags="location, trail, campground, place, place name, management, classification, assessment"
+							data-export-name="encounters_per_place_name_and_mgmt_class">
+								Encounters by Place Name and Mgmt. Class
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="encounters-per-human-activity-query-button" 
+							data-tags="user group, activity, human activity"
+							data-export-name="encounters_per_user_group">
+								Encounters by User Group
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="frontcountry-encounters-per-human-activity-query-button" 
+							data-tags="frountcountry, user group, activity, human activity"
+							data-export-name="frontcountry_encounters_per_user_group">
+								Frontcountry Encounters by User Group
+						</li>
+						<li 
+							class="query-option" 
+							role="button" 
+							data-query-name="count_encounters" 
+							id="management-classification-per-human-activity-query-button" 
+							data-tags="management, classification, user group, activity, human activity"
+							data-export-name="mgmt_class_per_user_group">
+								Management Classification by User Group
+						</li>
+					</ul>
+					<h4 id="no-query-match-message" class="hidden" aria-hidden="true">No queries match your search</h4>
+				</div>
+				<div class="query-details-container col">
+					<div class="query-parameters-header">
+
+						<!-- Count of Encounters -->
+						<div class="query-parameters-container hidden" data-query-name="count_encounters">
+							<div class="w-100 mb-3 d-flex justify-content-between">
+								<h4 class="mb-0">Count of Encounters</h4>
+								<button id="reset-query-climbers-climbs-button" class="text-only-button">Reset query filters</button>
+							</div>
+							<div class="w-100"></div>
+							<!-- <div class="field-container col-sm col-md-4 col-lg-3">
+								<select id="count_encounters-summary_or_records" class="input-field no-option-fill" name="count_encounters-summary_or_records" data-default-value="summary" title="What would you like to query?" required>
+									<option value="summary" selected>Count of records</option>
+									<option value="records">Records with links</option>
+								</select>
+								<label class="field-label" for="count_encounters-summary_or_records">What would you like to query?</label>
+							</div> -->
+							<div class="field-container col-sm col-md-4 col-lg-3">
+								<select id="count_encounters-count_field" class="input-field no-option-fill" name="count_encounters-count_field" title="Count expedition members, climbers, or climbs?" data-default-value="encounter_id" required>
+									<option value="encounter_id" selected>Encounters</option>
+									<option value="improper_reaction_id">Improper reactions</option>
+									<option value="property_damage_id">Property damage</option>
+									<option value="structure_interaction_id">Structure interactions</option>
+								</select>
+								<label class="field-label" for="count_per_guide_company-count_field">What would you like to count?</label>
+							</div>
+							<div class="field-container col-sm col-md-4 col-lg-3"> <!--collapse show"> -->
+								<select id="count_encounters-group_by_fields" class="input-field no-option-fill bhims-select2 is-empty" multiple="multiple" name="group_by_fields" placeholder="Group rows by" data-dependent-target="#count_encounters-summary_or_records" data-dependent-value="summary" required>
+									<option value="did_react_properly"				>People Reacted Properly?</option>
+									<option value="improper_reaction_code"			>Improper Reaction</option>
+									<option value="probable_cause_code"				>Bear Behavior Rating</option>
+									<option value="management_classification_code"	>Management Classification</option>
+									<option value="backcountry_unit_code"			>Backcountry Unit</option>
+									<option value="place_name_code"					>Place Name</option>
+									<option value="road_name_code"					>Road Name</option>
+									<option value="bear_cohort_code"				>Bear Cohort</option>
+									<option value="bear_did_charge"					>Bear Charged?</option>
+									<option value="food_was_present"				>Food Present?</option>
+									<option value="bear_obtained_food"				>Bear Obtained Food?</option>
+									<option value="bear_spray_was_used"				>Bear Spray Used?</option>
+									<option value="bear_spray_was_effective"		>Bear Spray Effective?</option>
+									<option value="general_human_activity_code"		>Human Activity</option>
+									<option value="human_group_type_code"			>Human Group Type</option>
+									<option value="country_code"					>Country of Origin</option>
+									<option value="initial_bear_action_code"		>Initial Bear Action</option>
+									<option value="initial_human_action_code"		>Initial Human Action</option>
+									<option value="reported_probable_cause_code"	>Reported Cause</option>
+									<option value="was_making_noise"				>Making Noise?</option>
+									<option value="structure_interaction_code"		>Structure Interaction</option>
+									<option value="structure_type_code"				>Structure Type</option>
+									<option value="encounter_year"					>Year</option>
+									<option value="to_char(start_date, 'Month')"	>Month</option>
+									<option value="start_date"						>Encounter Date</option>
+									<option value="to_char(start_date, 'MM-DD')"	>Encounter Day of Year</option>
+									<option value="encounter_id"					>Encounter ID</option>
+									<option value="improper_reaction_id"			>Improper Reaction ID</option>
+								</select>
+								<label class="field-label" for="count_encounters-group_by_fields">Group rows by</label>
+							</div>
+							<div class="field-container col-sm col-md-4 col-lg-3"> <!--collapse show"> -->
+								<select id="count_encounters-pivot_field" class="input-field default no-option-fill keep-default-option" name="pivot_field" title="Split columns by" data-dependent-target="#count_encounters-summary_or_records" data-dependent-value="summary">
+									<option value=""								>Split columns by</option>
+									<option value="did_react_properly"				>People Reacted Properly?</option>
+									<option value="improper_reaction_code"			>Improper Reaction</option>
+									<option value="probable_cause_code"				>Bear Behavior Rating</option>
+									<option value="management_classification_code"	>Management Classification</option>
+									<option value="backcountry_unit_code"			>Backcountry Unit</option>
+									<option value="place_name_code"					>Place Name</option>
+									<option value="road_name_code"					>Road Name</option>
+									<option value="bear_cohort_code"				>Bear Cohort</option>
+									<option value="bear_did_charge"					>Bear Charged?</option>
+									<option value="food_was_present"				>Food Present?</option>
+									<option value="bear_obtained_food"				>Bear Obtained Food?</option>
+									<option value="bear_spray_was_used"				>Bear Spray Used?</option>
+									<option value="bear_spray_was_effective"		>Bear Spray Effective?</option>
+									<option value="general_human_activity_code"		>Human Activity</option>
+									<option value="human_group_type_code"			>Human Group Type</option>
+									<option value="country_code"					>Country of Origin</option>
+									<option value="initial_bear_action_code"		>Initial Bear Action</option>
+									<option value="initial_human_action_code"		>Initial Human Action</option>
+									<option value="reported_probable_cause_code"	>Reported Cause</option>
+									<option value="was_making_noise"				>Making Noise?</option>
+									<option value="structure_interaction_code"		>Structure Interaction</option>
+									<option value="structure_type_code"				>Structure Type</option>
+									<option value="encounter_year"					>Year</option>
+									<option value="to_char(start_date, 'Month')"	>Month</option>
+									<option value="start_date"						>Encounter Date</option>
+									<option value="to_char(start_date, 'MM-DD')"	>Encounter Day of Year</option>
+								</select>
+								<label class="field-label" for="count_encounters-pivot_field">Split columns by</label>
+							</div>
+							<div class="field-container col-sm col-md-4 col-lg-3 collapse">
+								<div class="field-container col-6"> 
+									<input id="count_encounters-day_search_start" class="input-field" type="date" name="day_search_start" title="Search start date" data-dependent-target="#count_encounters-group_by_fields" data-dependent-value="day::date|to_char(day, 'MM-DD')" required> <!--comma will truncate the actual <option> value-->
+									<label class="field-label" for="count_encounters-day_search_start">Search start date</label>
+								</div>
+								<div class="field-container col-6"> 
+									<input id="count_encounters-day_search_end" class="input-field" type="date" name="day_search_end" title="Search start date" required>
+									<label class="field-label" for="count_encounters-day_search_end">Search end date</label>
+								</div>
+							</div>
+							<h5 class="w-100 mt-3">Query Parameters</h5>
+							<div class="query-parameter-option-container" role="list">
+								<div class="show-query-parameter-button" role="button" data-field-name="management_classification_code">Management Classification</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="probable_cause_code">Bear Behavior Rating </div>
+								<div class="show-query-parameter-button" role="button" data-field-name="backcountry_unit_code">Backcountry Unit</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="place_name_code">Place Name</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="road_name_code">Road Name</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="bear_cohort_code">Bear Cohort</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="bear_did_charge">Bear Charged?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="food_present_code">Food Present?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="bear_obtained_food">Bear Obtained Food?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="bear_spray_was_used">Bear Spray Used?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="bear_spray_was_effective">Bear Spray Effective?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="general_human_activity_code">Human Activity</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="human_group_type">Human Group Type</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="country_code">Country of Origin</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="initial_bear_action_code">Initial Bear Action</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="initial_human_action_code">Initial Human Action</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="encounter_year">Year</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="start_date">Encounter Date</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="reported_probable_cause_code">Reported Cause</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="was_making_noise">Making Noise?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="did_react_properly">People Reacted Properly?</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="improper_reaction_code">Improper Reaction</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="structure_interaction_code">Structure Interaction</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="structure_type_code">Structure Type</div>
+							</div>
+
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-management_classification_code" 
+									class="input-field default bhims-select2 is-empty where-clause-field" 
+									multiple="multiple" 
+									name="management_classification_code" 
+									title="Management Classification" 
+									placeholder="Management Classification" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-management_classification_code">Management Classification</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-probable_cause_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="probable_cause_code" 
+									placeholder="Probable cause filter" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-probable_cause_code">Probable Cause</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-backcountry_unit_code" 
+									class="input-field default bhims-select2 is-empty where-clause-field include-dsiabled-options  has-null-option" 
+									name="backcountry_unit_code" 
+									multiple="multiple" 
+									placeholder="Backcountry unit filter" 
+									title="Backcountry unit" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-backcountry_unit_code">Backcountry Unit</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-place_name_code" 
+									class="input-field default bhims-select2 is-empty where-clause-field include-dsiabled-options  has-null-option" 
+									name="place_name_code" 
+									multiple="multiple" 
+									placeholder="Place name filter" 
+									title="Place name" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-place_name_code">Place Name</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-road_name_code" 
+									class="input-field default bhims-select2 is-empty where-clause-field" 
+									name="road_name_code" 
+									multiple="multiple" 
+									placeholder="Road name filter" 
+									title="Road name" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-road_name_code">Road Name</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-bear_cohort_code" 
+									class="input-field default bhims-select2 is-empty where-clause-field" 
+									name="bear_cohort_code" 
+									multiple="multiple" 
+									placeholder="Bear cohort" 
+									title="Bear cohort filter" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-bear_cohort_code">Bear Cohort</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-bear_did_charge" 
+									class="input-field default bhims-select2 is-empty where-clause-field" 
+									name="bear_did_charge"  
+									data-lookup-table="boolean_response_codes"
+									multiple="multiple" 
+									placeholder="Bear did charge" 
+									title="Bear did charge filter" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-bear_did_charge">Bear Charged</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-food_present_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="food_present_code" 
+									placeholder="Food Present?" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-food_present_code">Food Present?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-bear_obtained_food" 
+									class="input-field default bhims-select2 is-empty where-clause-field" 
+									name="bear_obtained_food" 
+									multiple="multiple"  
+									data-lookup-table="boolean_response_codes"
+									placeholder="Bear obtained food" 
+									title="Bear obtained food filter" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-bear_obtained_food">Bear Obtained Food?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-bear_spray_was_used" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple"  
+									data-lookup-table="boolean_response_codes"
+									name="bear_spray_was_used" 
+									placeholder="Bear spray was used" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-bear_spray_was_used">Bear Spray Used?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-bear_spray_was_effective" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple"  
+									data-lookup-table="boolean_response_codes"
+									name="bear_spray_was_effective" 
+									placeholder="Bear spray was effective" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-bear_spray_was_effective">Bear Spray Effective?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-general_human_activity_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="general_human_activity_code" 
+									placeholder="Human Activity" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-general_human_activity_code">Human Activity</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-human_group_type" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="human_group_type_code" 
+									placeholder="Human Group Type" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-human_group_type">Human Group Type</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-country_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="country_code" 
+									placeholder="Country" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-country_code">Country</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-initial_bear_action_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="initial_bear_action_code" 
+									placeholder="Initial Bear Action" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-initial_bear_action_code">Initial Bear Action</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-initial_human_action_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="initial_human_action_code" 
+									placeholder="Initial Human Action" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-initial_human_action_code">Initial Human Action</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-encounter_year" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field no-option-fill year-select-field" 
+									multiple="multiple" 
+									name="encounter_year" 
+									placeholder="Year" 
+									required>
+								</select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-encounter_year">Year</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<div class="where-clause-date-field-container col d-flex">
+									<select id="count_encounters-start_date_operator" class="input-field query-option-operator datetime-query-operator" value="equals">
+										<option value="=" selected>equals</option>
+										<option value="<=">is before</option>
+										<option value=">=">is after</option>
+										<option value="BETWEEN">is between</option>
+									</select>
+									<input id="count_encounters-start_date" class="input-field single-value-field datetime-query-option where-clause-field" type="date" data-field-name="start_date" name="start_date" data-validation-field-name="Start date" required>
+									<div class="query-option-double-value-container hidden">
+										<input id="count_encounters-start_date-low_value" class="input-field query-option-input-field double-value-field low-value-field datetime-query-option" type="date" data-field-name="start_date" data-validation-field-name="Start date" aria-hidden="true" required>
+										<span>and</span>
+										<input id="count_encounters-start_date-high_value" class="input-field query-option-input-field double-value-field high-value-field datetime-query-option" type="date" data-field-name="start_date" data-validation-field-name="Start date" aria-hidden="true" required>
+									</div>
+								</div>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-start_date_operator">Encounter Date</label>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select id="count_encounters-reported_probable_cause_code" class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" multiple="multiple" name="reported_probable_cause_code" placeholder="Reported Cause" required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-reported_probable_cause_code">Reported Cause</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-was_making_noise" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="was_making_noise" 
+									data-lookup-table="boolean_response_codes"
+									placeholder="Making Noise?" 
+									required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-was_making_noise">Making Noise?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-did_react_properly" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="did_react_properly" 
+									data-lookup-table="boolean_response_codes"
+									placeholder="People Reacted Properly?" 
+									required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-did_react_properly">Reacted Properly?</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select 
+									id="count_encounters-improper_reaction_code" 
+									class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" 
+									multiple="multiple" 
+									name="improper_reaction_code" 
+									placeholder="Improper Reaction" 
+									required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-improper_reaction_code">Improper Reaction</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select id="count_encounters-structure_interaction_code" class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" multiple="multiple" name="structure_interaction_code" placeholder="Structure Interaction" required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-structure_interaction_code">Structure Interaction</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
+								<select id="count_encounters-structure_type_code" class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" multiple="multiple" name="structure_type_code" placeholder="Structure Type" required></select>
+								<button class="icon-button hide-query-parameter-button">
+									<i class="fas fa-lg fa-times"></i>
+								</button>
+								<label class="field-label" for="count_encounters-structure_type_code">Structure Type</label>
+								<button class="text-only-button add-remove-all-multiselect-options-button">add all</button>
+							</div>
+							
+						</div>
+
+					</div>
+					<div class="w-100 d-flex justify-content-center">
+						<div class="d-flex justify-content-center">
+							<button id="run-query-button" class="generic-button hidden" title="Run query">Run query</button>
+							<div id="run-query-loading-indicator" class="run-query-loading-indicator loading-indicator-dot-container pr-5 hidden" aria-hidden="true">
+								<div class="loading-indicator-dot dot1"></div>
+								<div class="loading-indicator-dot dot2"></div>
+								<div class="loading-indicator-dot dot3"></div>
+							</div>
+						</div>
+						<button id="copy-query-link-button" class="generic-button icon-button color-primary-text ml-3">
+							<i class="fas fa-link fa-2x">
+							</i>
+							<strong>get query link</strong>
+						</button>
+					</div>
+
+					<div id="query-parameter-dragbar" class="dragbar resize-query-parameter-contianer vertical-resize">
+						<div class="visible-dragbar"></div> <!--to make the clickable area larger but reduce visual weight-->
+					</div>
+
+					<div class="w-100 d-flex justify-content-end">
+						<div class="table-row-counter-wrapper hidden" aria-hidden="true">
+							Number of results: <span class="table-row-counter"></span>
+						</div>
+						<button id="export-data-button" class="expedition-edit-button icon-button hidden" type="button" aria-label="Open exports menu" title="Exports data" aria-hidden="true">
+							<i class="fas fa-2x fa-file-export"></i>
+							<label class="icon-button-label">export</label>
+						</button>
+					</div>
+					<div class="query-result-container">
+					</div>
+				</div>
+			</div><!--main-content-->
+		</div> <!--wrapper-->
+	</main>
+
+	<!--alert/message modal -->
+	<div class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-hidden="true"></div>
+	
+	<!-- map modal -->
+	<div class="modal fade lightbox-modal entry-form-modal" id="map-modal" tabindex="-1" role="dailog" aria-hidden="true">
+		<div class="modal-dialog" role="document">
+		<div class="modal-content">
+			<div class="modal-body modal-img-body">
+			<div class="modal-header-container">
+				<div class="modal-img-body-header">
+					<button type="button" class="close icon-button" data-dismiss="modal" aria-label="Minimize map">
+						<img src="imgs/minimize_window_icon_50px.svg"></img>
+					</button>
+				</div>
+			</div>
+			
+			<div class="map modal-map" id="modal-encounter-location-map">  
+			</div>
+			
+			</div>
+		</div>
+		</div>
+	</div>
+
+	<!--attachment preview modal -->
+	<div class="modal fade lightbox-modal" id="attachment-modal" tabindex="-1" role="dialog" aria-hidden="true">
+		<div class="modal-dialog" role="document" data-dismiss="modal">
+			<div class="modal-content" data-dismiss="modal">
+				<div class="modal-body modal-img-body" >
+					<div class="modal-header-container" data-dismiss="modal">
+						<div class="modal-img-body-header">
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
+					</div>
+					<img class="modal-img hidden" src="#" id="modal-img-preview" alt="preview of uploaded image">
+					<video class="modal-img hidden" id="modal-video-preview" width="320" height="240" controls alt="preview of uploaded video">
+						<source src="#">
+						Sorry, your browser does not support HTML video content
+					</video>
+					<audio class="modal-img hidden" id="modal-audio-preview" controls alt="preview of uploaded audio">
+						<source src="#">
+						Sorry, your browser does not support HTML audio content
+					</audio>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<!-- export dialog -->
+	<div id="data-export-modal" class="modal fade" id="alert-modal" tabindex="-1" role="dialog" aria-labelledby="" aria-modal="true">
+		<div class="modal-dialog modal-img-body data-export-modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Data export options</h5>
+					<button type="button" class="close close-modal" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">×</span>
+					</button>
+				</div>
+				<div class="modal-body">
+					<div class="field-container-row">
+						<!-- <div class="field-container export-option-container">
+							<label class="export-option-label" for="input-export_file_type">file type</label>
+							<select id="input-export_file_type" class="input-field" value="csv" title="">
+								<option value="csv">CSV</option>
+								<option value="shp">shapefile</option>
+							</select>
+						</div> -->
+						<div class="field-container export-option-container col">
+							<label class="export-option-label" for="input-select_fields">Export fields</label>
+							<select id="input-select_fields" class="input-field no-option-fill" name="select_fields" value="all" title="">
+								<option value="all">export all tables and fields</option>
+								<option value="subset">choose a subset</option>
+							</select>
+						</div>
+						<div class="field-container export-option-container col">
+							<label class="export-option-label" for="input-export_codes">Include human-readable values</label>
+							<select id="input-export_codes" class="input-field no-option-fill" name="export_codes" value="yes" title="">
+								<option value="yes">Yes, export both numeric codes and human-readable values</option>
+								<option value="no">No, only export numeric database code values</option>
+							</select>
+						</div>
+					</div>
+					<div class="export-field-options-container collapse" data-dependent-target="#input-select_fields" data-dependent-value="subset">
+						<div id="export-field-options-body">
+							<ul class="tabs" role="tablist">
+								<!-- filled dynamically -->
+							</ul>
+							<div class="export-field-collapse-container">
+								<!-- filled dynamically -->
+							</div>
+						</div>
+						<div class="export-field-options-footer tab-field-list-container">
+							<h5 class="w-100">Removed tables</h5>
+							<!-- shows tables that the user has removed so they can be added back in -->
+						</div> 
+						
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button id="prepare-export-button" class="generic-button modal-button">Create export</button>
+					<button class="generic-button modal-button close-modal" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<script src="js/bhims.js"></script>
+	<script src="js/analysis.js"></script>
+	<script src="js/bhims-custom.js"></script>
+
+	<script>
+
+		var analysis;
+		$(document).ready(function(){
+			analysis = new BHIMSAnalysis().init();
+		});
+	</script>
+
+</body>

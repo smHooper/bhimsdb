@@ -22,7 +22,7 @@ let UNIT_PER_METER_MAP = new Map([
 	["yd", 1.0936132],
 	["m", 1],
 ]);
-var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
+
 
 var BHIMSEntryForm = (function() {
 	
@@ -1396,54 +1396,16 @@ var BHIMSEntryForm = (function() {
 	Validate all fields currently in view
 	*/
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
-
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		const validationDisabled = $('#disable-required-slider-container input[type=checkbox]').is(':checked');
-
-		const $fields = $parent
-			.find('.field-container:not(.disabled)')
-			.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
-			(_, el) => {
-				const $el = $(el);
-				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
-				// Only check for empty fields if validation is enabled (it can be disabled by admins)
-				if (!validationDisabled) {
-					if (!($el.hasClass(MULTIPLE_SELECT_ENTRY_CLASS) ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
-						$el.addClass('error');
-					} else {
-						$el.removeClass('error');
-					}
-				}
-				// Always check if a value exceeds the max length, regardless of whether validation is disabled
-				const maxLength = $el.data('max-length');
-				let valueLength = 0;
-				try {
-					valueLength = el.value.length;
-				} catch {
-					console.log('Could not get value length for field ' + el.id);
-				}
-				if (valueLength > maxLength) {
-					$el.addClass('error');
-				}
-		});
-
-		if ($fields.filter('.error').length) {
-			// Search the parent(s) for any .collapse elements that aren't shown. 
-			//	If one is found, show it
-			for (const el of $parent) {//.each(function() {
-				const $el = $(el);
-				if ($el.hasClass('collapse') && !$el.hasClass('show')) {
-					$el.siblings('.card-header')
-						.find('.card-link')
-						.click();
-					return false;
-				}
+		
+		validateFields(
+			$parent, 
+			{
+				focusOnField: focusOnField, 
+				validationDisabled: validationDisabled
 			}
-			if (focusOnField) $fields.first().focus();
-			return false;
-		} else {
-			return true;
-		}
+		);
 	}
 
 
@@ -1451,54 +1413,7 @@ var BHIMSEntryForm = (function() {
 	Helper function to recursively hide/show fields with data-dependent-target attribute
 	*/
 	Constructor.prototype.toggleDependentFields = function($select) {
-
-		const selectID = '#' + $select.attr('id');
-
-		// Get all the elements with a data-dependent-target 
-		const dependentElements = $(`
-			.collapse.field-container .input-field, 
-			.collapse.accordion, 
-			.collapse.add-item-container .add-item-button,
-			.collapse.export-field-options-container
-			`).filter((_, el) => {return $(el).data('dependent-target') === selectID});
-		//const dependentIDs = $select.data('dependent-target');
-		//var dependentValues = $select.data('dependent-value');
-		dependentElements.each((_, el) => {
-			const $thisField = $(el);
-			if (el.id == 'input-input-recovered_value-0') {
-				let a=0;
-			}
-			var dependentValues = $thisField.data('dependent-value').toString();
-			if (dependentValues) {
-				var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container, .collapse.export-field-options-container');
-				
-				// If there's a ! at the beginning, 
-				const notEqualTo = dependentValues.startsWith('!');
-				dependentValues = dependentValues
-					.toString()
-					.replace('!', '')
-					.split(',').map((s) => {return s.trim()});
-				
-				var selectVal = ($select.val() || '').toString().trim();
-
-				var show = notEqualTo ? 
-					!dependentValues.includes(selectVal) :
-					dependentValues.includes(selectVal);
-				if (!dependentValues[0] === '<blank>') {
-					show = show || selectVal !== '';
-				}
-
-				if (show) {
-					//$thisContainer.removeClass('hidden');
-					$thisContainer.collapse('show');
-					_this.toggleDependentFields($thisField, hide=false)
-				} else {
-					$thisContainer.collapse('hide');
-					//$thisContainer.addClass('hidden');
-					_this.toggleDependentFields($thisField, hide=true)
-				}
-			}
-		});
+		toggleDependentFields($select);
 	}
 
 
@@ -1506,27 +1421,8 @@ var BHIMSEntryForm = (function() {
 	Event handler for selects
 	*/
 	Constructor.prototype.onSelectChange = function(e) {
-		// Set style depending on whether the default option is selected
 		const $select = $(e.target);
-
-		if ($select.val() === '') {
-			$select.addClass('default');
-
-		} else {
-			$select.removeClass('default error');
-			// the user selected an actual option so remove the empty default option
-			// **** DENA staff didn't want option removed ****
-			// for (const el of $select.find('option')) {//.each(function(){
-			// 	const $option = $(el);
-			// 	if ($option.val() == '') {
-			// 		$option.remove();
-			// 	}
-			// }
-		}
-
-		// If there are any dependent fields that should be shown/hidden, 
-		//	toggle its visibility as necessary
-		_this.toggleDependentFields($select);
+		onSelectChange($select);
 	}
 
 

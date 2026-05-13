@@ -326,11 +326,21 @@ var BHIMSQuery = (function(){
 	*/
 	Constructor.prototype.urlQueryToSQL = function(optionConfigComplete) {
 
-		var queryParamString = decodeURIComponent(window.location.search.slice(1));
+		const parsedParams = parseURLQueryString();
+		var queryParams = {}
+		if ('id' in parsedParams) {
+			queryParams = {
+				encounters: {
+					id: {value: parsedParams.id, operator: "="}
+				}
+			}
+		} else {
+			var queryParamString = decodeURIComponent(window.location.search.slice(1));
 
-		// turn the case-sensitive switch on if it was set in the parameters
-		const queryParams = $.parseJSON(queryParamString);
-		$('#case-sensitive-slider-container input[type=checkbox]').prop('checked', queryParams.case_sensitive);
+			// turn the case-sensitive switch on if it was set in the parameters
+			const queryParams = $.parseJSON(queryParamString);
+			$('#case-sensitive-slider-container input[type=checkbox]').prop('checked', queryParams.case_sensitive);
+		}
 
 		// For backwards compatibility with old-style URLs, create the .where property if it doesn't exist
 		if (!('where' in queryParams)) queryParams.where = {...queryParams};
@@ -2555,7 +2565,7 @@ var BHIMSQuery = (function(){
 		$('#copy-query-link-button').click(() => {
 			const options = this.getQueryOptions();
 			const url = encodeURI(`${window.location.href.split('?')[0]}?${JSON.stringify(options)}`);
-			copyToClipboard(url, `Permalink for this query successfully copied to clipboard`);
+			copyToClipboard(url, {modalMessage: `Permalink for this query successfully copied to clipboard`});
 		});
 
 		// Set attribute to indicate that the initial .change event triggered by fillFieldValues() has or 

@@ -434,7 +434,7 @@ CREATE VIEW export_code_value_map_view AS
 -- END$$;
 
 
-CREATE OR REPLACE VIEW dev.analysis_query_view AS
+CREATE OR REPLACE VIEW analysis_query_view AS
 SELECT
     encounters.*,
     encounters.id AS encounter_id,
@@ -514,13 +514,13 @@ SELECT
     extract(year FROM encounters.start_date) AS encounter_year
 FROM
     encounters
-    LEFT JOIN dev.assessment ON assessment.encounter_id = encounters.id
-    LEFT JOIN dev.bears ON bears.encounter_id = encounters.id
-    LEFT JOIN dev.encounter_locations ON encounter_locations.encounter_id = encounters.id
-    LEFT JOIN dev.improper_reactions ON improper_reactions.encounter_id = encounters.id
-    LEFT JOIN dev.property_damage ON property_damage.encounter_id = encounters.id
-    LEFT JOIN dev.reactions ON reactions.encounter_id = encounters.id
-    LEFT JOIN dev.structure_interactions ON structure_interactions.encounter_id = encounters.id;
+    LEFT JOIN assessment ON assessment.encounter_id = encounters.id
+    LEFT JOIN bears ON bears.encounter_id = encounters.id
+    LEFT JOIN encounter_locations ON encounter_locations.encounter_id = encounters.id
+    LEFT JOIN improper_reactions ON improper_reactions.encounter_id = encounters.id
+    LEFT JOIN property_damage ON property_damage.encounter_id = encounters.id
+    LEFT JOIN reactions ON reactions.encounter_id = encounters.id
+    LEFT JOIN structure_interactions ON structure_interactions.encounter_id = encounters.id;
 
 
 -- Fill lookup tables

@@ -188,11 +188,7 @@ body {
 	border-radius: 2rem;
 	transition: all .2s;
 }
-#show-query-options-container .select2-container--default .select2-selection--multiple 
-	.select2-selection__choice:hover {
-	/*border: solid white 1.5px;*/
 
-}
 #show-query-options-container .select2-container--default .select2-selection--multiple 
 	.select2-selection__choice__remove {
 	border: none;
@@ -240,7 +236,7 @@ body {
 }
 
 .query-option-operator option {
-	/*color: black*/;
+	/*color: black;*/
 	background: rgb(25, 25, 25);
 }
 
@@ -291,9 +287,7 @@ body {
 .query-option-condition-container > select.query-option-input-field.select2-no-tag {
 	width: 250px;
 }
-.query-option-condition-container.checkbox-option-group {
 
-}
 .query-option-operator + .query-option-input-field {
 	text-indent: 5px;
 	margin-left: 5px;
@@ -354,9 +348,6 @@ body {
 	background: rgb(82 81 81);
   /*margin: 0 0.6rem;*/
   width: 100%;
-}
-#query-options-drawer .slider-container .query-slider-label-container {
-
 }
 #query-options-drawer .slider-value-input-container {
 	/*width: 100%;*/
@@ -629,10 +620,6 @@ body {
 	opacity: 0;
 	color: white;
 	transition: 0.3s all;
-}
-
-.remove-table-tab-button {
-	/*margin-right: 10px;*/
 }
 
 .export-field-options-container .data-export-table-tab:hover .remove-table-tab-button,

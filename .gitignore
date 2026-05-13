@@ -27,3 +27,6 @@ web/export_cache/*
 
 # virtualenv
 .venv/
+
+# Flask logs
+web/flask/logs/*

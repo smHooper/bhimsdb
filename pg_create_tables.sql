@@ -434,6 +434,95 @@ CREATE VIEW export_code_value_map_view AS
 -- END$$;
 
 
+CREATE OR REPLACE VIEW analysis_query_view AS
+SELECT
+    encounters.*,
+    encounters.id AS encounter_id,
+    assessment.id AS assessment_id,
+    assessment.probable_cause_code,
+    assessment.human_injury_code,
+    assessment.management_classification_code,
+    assessment.responsibility_classification_code,
+    assessment.preparedness_classification_code,
+    assessment.data_quality_code,
+    assessment.data_entry_status_code,
+    assessment.assessment_comments,
+    assessment.assessed_by,
+    assessment.management_action_code,
+    assessment.did_react_properly,
+    bears.id AS bear_id,
+    bears.encounter_id AS bears_encounter_id,
+    bears.bear_number,
+    bears.bear_species_code,
+    bears.bear_sex_code,
+    bears.bear_color_code,
+    bears.bear_age_code,
+    bears.bear_injury_code,
+    bears.bear_park_id,
+    bears.was_previously_encountered,
+    encounter_locations.id AS encounter_location_id,
+    encounter_locations.backcountry_unit_code,
+    encounter_locations.datum_code,
+    encounter_locations.habitat_description,
+    encounter_locations.habitat_type_code,
+    encounter_locations.latitude,
+    encounter_locations.location_accuracy_code,
+    encounter_locations.location_description,
+    encounter_locations.location_source_code,
+    encounter_locations.longitude,
+    encounter_locations.mapping_method_code,
+    encounter_locations.other_habitat_type,
+    encounter_locations.other_mapping_method,
+    encounter_locations.other_place_name,
+    encounter_locations.other_relative_location,
+    encounter_locations.other_visibility,
+    encounter_locations.place_name_code,
+    encounter_locations.relative_location_code,
+    encounter_locations.road_mile,
+    encounter_locations.road_name_code,
+    encounter_locations.visibility_code,
+    encounter_locations.visibility_description,
+    encounter_locations.visibility_distance_m,
+    improper_reactions.id AS improper_reaction_id,
+    improper_reactions.display_order AS improper_reaction_display_order,
+    improper_reactions.encounter_id AS improper_reactions_encounter_id,
+    improper_reactions.improper_reaction_code,
+    improper_reactions.other_improper_reaction_description,
+    property_damage.id AS property_damage_id,
+    property_damage.encounter_id AS property_damage_encounter_id,
+    property_damage.damage_cost,
+    property_damage.is_from_cir,
+    property_damage.property_description,
+    property_damage.property_value,
+    property_damage.quantity,
+    property_damage.recovered_value,
+    property_damage.recovery_date,
+    property_damage.was_in_persons_control,
+    reactions.id AS reaction_id,
+    reactions.encounter_id AS reactions_encounter_id,
+    reactions.is_primary,
+    reactions.other_reaction,
+    reactions.reaction_code,
+    reactions.reaction_description,
+    reactions.reaction_order,
+    structure_interactions.id AS structure_interaction_id,
+    structure_interactions.encounter_id AS structure_interactions_encounter_id,
+    structure_interactions.other_structure_type,
+    structure_interactions.structure_description,
+    structure_interactions.structure_interaction_code,
+    structure_interactions.structure_type_code,
+    extract(year FROM encounters.start_date) AS encounter_year
+FROM
+    encounters
+    LEFT JOIN assessment ON assessment.encounter_id = encounters.id
+    LEFT JOIN bears ON bears.encounter_id = encounters.id
+    LEFT JOIN encounter_locations ON encounter_locations.encounter_id = encounters.id
+    LEFT JOIN improper_reactions ON improper_reactions.encounter_id = encounters.id
+    LEFT JOIN property_damage ON property_damage.encounter_id = encounters.id
+    LEFT JOIN reactions ON reactions.encounter_id = encounters.id
+    LEFT JOIN structure_interactions ON structure_interactions.encounter_id = encounters.id;
+
+
 -- Fill lookup tables
 INSERT INTO backcountry_unit_codes (short_name, name) VALUES (1, '1-Triple Lakes'), (2, '2-Riley Creek'), (3, '3-Jenny Creek'), (4, '4-Upper Savage'), (5, '5-Upper Sanctuary'), (6, '6-Upper Teklanika'), (7, '7-Upper East Fork'), (8, '8-Polychrome Glaciers'), (9, '9-East Branch Upper Toklat'), (10, '10-West Branch Upper Toklat'), (11, '11-Stony Dome'), (12, '12-Sunset/Sunrise Glaciers'), (13, '13-Mount Eielson'), (14, '14-McKinley Bar East'), (15, '15-McKinley Bar West'), (16, '16-Windy Creek'), (17, '17-Foggy And Easy Pass'), (18, '18-Upper Glacier Creek'), (19, '19-Pirate Creek'), (20, '20-McGonagall Pass'), (21, '21-Muddy River'), (22, '22-Upper Foraker'), (23, '23-West Fork Glacier'), (24, '24-Mount Healy'), (25, '25-Healy Ridge'), (26, '26-Primrose Ridge'), (27, '27-Mount Wright'), (28, '28-Sushana River'), (29, '29-Igloo Mountain'), (30, '30-Tributary Creek'), (31, '31-Polychrome Mountain'), (32, '32-Middle Toklat'), (33, '33-Stony Hill'), (34, '34-Mount Galen'), (35, '35-Moose Creek'), (36, '36-Jumbo Creek'), (37, '37-Lower East Fork'), (38, '38-Lower Toklat'), (39, '39-Stony Creek'), (40, '40-Clearwater Fork'), (41, '41-Spruce Peak'), (42, '42-Eureka Creek'), (43, '43-Eldorado Creek'), (44, '44-Peters Glacier'), (45, '45-Mount McKinley'), (46, '46-Upper Kahiltna'), (47, '47-Mount Foraker'), (48, '48-Herron Glacier'), (61, '61-Stampede'), (62, '62-Southeast Stampede'), (63, '63-Southwest Stampede'), (64, '64-Kantishna Hills'), (65, '65-Moose-McKinley'), (66, '66-McKinley-Birch'), (67, '67-Birch-Foraker Preserve'), (68, '68-Herron-Highpower Preserve'), (69, '69-Swift Fork'), (70, '70-Bull River'), (71, '71-Ohio Creek'), (72, '72-Eldridge Glacier'), (73, '73-Buckskin Glacier'), (74, '74-Upper Ruth'), (75, '75-Lower Ruth'), (76, '76-Mount Hunter'), (77, '77-Tokositna Glacier'), (78, '78-Middle Kahiltna'), (79, '79-Little Switzerland'), (80, '80-Upper Yentna-Lacuna'), (81, '81-Lower Kahiltna'), (82, '82-Dall-Yentna Preserve'), (83, '83-Yentna River Preserve'), (84, '84-Mount Dall Preserve'), (85, '85-Kitchatna Preserve'), (86, '86-Mount Mather'), (87, '87-Mount Brooks');
 INSERT INTO bear_color_codes (short_name, name) VALUES ('BLD', 'Blonde'), ('LBR', 'Light brown'), ('DBR', 'Dark brown'), ('BLK', 'Black');

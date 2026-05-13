@@ -22,7 +22,7 @@ let UNIT_PER_METER_MAP = new Map([
 	["yd", 1.0936132],
 	["m", 1],
 ]);
-var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
+
 
 var BHIMSEntryForm = (function() {
 	
@@ -95,9 +95,9 @@ var BHIMSEntryForm = (function() {
 		this.presentMode = queryParams.present === 'true'
 
 
-		const processQueryResult = (obj, result) => {
-			const queryResult = $.parseJSON(result);
-			if (queryResult) {
+		const processQueryResult = (obj, response) => {
+			const queryResult = response.data || [];
+			if (!pythonReturnedError(queryResult)) {
 				for (const row of queryResult) {
 					obj[row.id] = {...row};
 				};
@@ -108,8 +108,7 @@ var BHIMSEntryForm = (function() {
 
 		var deferred = $.Deferred();
 		const userInfoDeferred = getUserInfo()
-			.then(resultString => {
-				const userInfo = $.parseJSON(resultString)[0];
+			.then(userInfo => {
 				_this.username = userInfo.username;
 				_this.userRole = userInfo.role;
 				
@@ -128,25 +127,25 @@ var BHIMSEntryForm = (function() {
 				userInfoDeferred,
 				this.getFieldInfo(),
 				loadConfigValues(this.dataEntryConfig),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_pages ORDER BY page_index;`)
+				queryDB({sql: `SELECT * FROM {schema}.data_entry_pages ORDER BY page_index;`})
 					.done(result => {processQueryResult(pages, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`)
+				queryDB({sql: `SELECT * FROM {schema}.data_entry_sections WHERE is_enabled ORDER BY display_order;`})
 					.done(result => {processQueryResult(sections, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;`)
+				queryDB({sql: `SELECT * FROM {schema}.data_entry_accordions WHERE is_enabled AND section_id IS NOT NULL ORDER BY display_order;`})
 					.done(result => {processQueryResult(accordions, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;`)
+				queryDB({sql: `SELECT * FROM {schema}.data_entry_field_containers WHERE is_enabled AND (section_id IS NOT NULL OR accordion_id IS NOT NULL) ORDER BY display_order;`})
 					.done(result => {processQueryResult(fieldContainers, result)}),
-				queryDB(`SELECT * FROM ${_this.dbSchema}.data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;`)
+				queryDB({sql: `SELECT * FROM {schema}.data_entry_fields WHERE is_enabled AND field_container_id IS NOT NULL ORDER BY display_order;`})
 					.done(result => {processQueryResult(fields, result)}),
 				// Query accepted file attachment extensions for each file type
-				queryDB(`SELECT code, accepted_file_ext FROM file_type_codes WHERE sort_order IS NOT NULL;`)
+				queryDB({sql: `SELECT code, accepted_file_ext FROM {schema}.file_type_codes WHERE sort_order IS NOT NULL;`})
 					.then(
-						doneFilter=function(queryResultString){
-							if (queryReturnedError(queryResultString)) {
+						doneFilter=(response)=>{
+							if (pythonReturnedError(response)) {
 								throw 'Accepted file extension query failed: ' + queryResultString;
 							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								for (const object of queryResult) {//queryResult.forEach(function(object) {
+								const queryResult = response.data || [];
+								for (const object of queryResult) {
 									_this.acceptedAttachmentExtensions[object.code] = object.accepted_file_ext;
 								}
 							}
@@ -657,7 +656,7 @@ var BHIMSEntryForm = (function() {
 					if (lookupTableName != 'undefineds') {//if neither data-lookup-table or name is defined, lookupTableName === 'undefineds' 
 						if (placeholder) $('#' + id).append(`<option class="" value="">${placeholder}</option>`);
 						if (!$el.is('.no-option-fill')) {
-							return fillSelectOptions(id, `SELECT code AS value, name FROM ${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`);
+							return fillSelectOptions(id, {sql: `SELECT code AS value, name FROM {schema}.${lookupTableName} WHERE sort_order IS NOT NULL ORDER BY sort_order`});
 						}
 					}
 				})
@@ -891,38 +890,34 @@ var BHIMSEntryForm = (function() {
 					_this.setDatetimeEntered();
 				}
 
-				queryDB(`SELECT code, latitude, longitude FROM backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryResultString.startsWith('ERROR') || queryResultString === '["query returned an empty result"]') {
+				queryDB({sql: `SELECT code, latitude, longitude FROM {schema}.backcountry_unit_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`})
+					.done(response => {
+							if (pythonReturnedError(response)) {
 								throw 'Backcountry unit coordinates query failed: ' + queryResultString;
 							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								queryResult.forEach(function(object) {
-									_this.backcountryUnitCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
-								})
+								const queryResult = response.data || [];
+								for (const row of queryResult) {
+									_this.backcountryUnitCoordinates[row.code] = {lat: row.latitude, lon: row.longitude};
+								}
 							}
-						},
-						failFilter=function(xhr, status, error) {
+						})
+						.fail((xhr, status, error) => {
 							console.log(`Backcountry unit coordinates query failed with status ${status} because ${error}`)
-						}
-					);
-				queryDB(`SELECT code, latitude, longitude FROM place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`)
-					.then(
-						doneFilter=function(queryResultString){
-							if (queryReturnedError(queryResultString)) {
-								throw 'Placename coordinates query failed: ' + queryResultString;
-							} else {
-								const queryResult = $.parseJSON(queryResultString);
-								queryResult.forEach(function(object) {
-									_this.placeNameCoordinates[object.code] = {lat: object.latitude, lon: object.longitude};
-								})
+						})
+				queryDB({sql: `SELECT code, latitude, longitude FROM {schema}.place_name_codes WHERE sort_order IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;`})
+					.done(response => {
+						if (pythonReturnedError(response)) {
+							throw 'Placename coordinates query failed: ' + queryResultString;
+						} else {
+							const queryResult = response.data || [];
+							for (const row of queryResult) {
+								_this.placeNameCoordinates[row.code] = {lat: row.latitude, lon: row.longitude};
 							}
-						},
-						failFilter=function(xhr, status, error) {
-							console.log(`Placename coordinates query failed with status ${status} because ${error}`)
 						}
-					);
+					})
+					.fail((xhr, status, error) => {
+						console.log(`Placename coordinates query failed with status ${status} because ${error}`)
+					});
 
 				window.addEventListener('fields-full', e => {
 					customizeEntryForm();//setTimeout(() => {customizeEntryForm()}, 5000);
@@ -1080,7 +1075,7 @@ var BHIMSEntryForm = (function() {
 		const sql = `
 			SELECT 
 				fields.* 
-			FROM ${_this.dbSchema}.data_entry_fields fields 
+			FROM {schema}.data_entry_fields fields 
 				JOIN data_entry_field_containers containers 
 				ON fields.field_container_id=containers.id 
 			WHERE 
@@ -1091,57 +1086,25 @@ var BHIMSEntryForm = (function() {
 			;
 		`;
 
-		return queryDB(sql).done(
-			queryResultString => {
-				const queryResult = $.parseJSON(queryResultString);
-				if (queryResult) {
-					for (const row of queryResult) {
-						const columnName = row.field_name;
-						this.fieldInfo[columnName] = {};
-						for (const property in row) {
-							this.fieldInfo[columnName][property] = row[property];
-						}
-					};
+		return queryDB({sql: sql})
+			.done(response => {
+				if (!pythonReturnedError(response, {errorExplanation: 'An unexpected error occurred while connecting to the database and getting field info.'})) {
+					const queryResult = response.data || [];
+					if (queryResult) {
+						for (const row of queryResult) {
+							const columnName = row.field_name;
+							this.fieldInfo[columnName] = {};
+							for (const property in row) {
+								this.fieldInfo[columnName][property] = row[property];
+							}
+						};
+					}
 				}
 			}
 		).fail(
 			(xhr, status, error) => {
 			showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-		})//.always(() => {hideLoadingIndicator()});
-		/*// Check if the user has a field values from a saved session
-
-
-		// Determine which table each column belongs to
-		const sql = `
-			SELECT 
-				table_name,
-				column_name,
-				data_type 
-			FROM information_schema.columns 
-			WHERE 
-				table_schema='public' AND 
-				table_name NOT LIKE '%_codes' AND 
-				column_name NOT IN ('encounter_id', 'id')
-			;
-		`;
-		queryDB(sql)
-			.done(
-				queryResultString => {
-					const queryResult = $.parseJSON(queryResultString);
-					if (queryResult) {
-						const hasSavedSession = Object.keys(this.fieldValues).length;
-						queryResult.forEach( (row) => {
-							const columnName = row.column_name;
-							this.fieldInfo[columnName] = {};
-							this.fieldInfo[columnName].tableName = row.table_name;
-							this.fieldInfo[columnName].dataType = row.data_type;
-						});
-					}
-				}
-			).fail(
-				(xhr, status, error) => {
-				showModal(`An unexpected error occurred while connecting to the database: ${error} from query:\n${sql}.\n\nTry reloading the page.`, 'Unexpected error')
-			});*/
+		})
 	}
 
 
@@ -1433,54 +1396,16 @@ var BHIMSEntryForm = (function() {
 	Validate all fields currently in view
 	*/
 	Constructor.prototype.validateFields = function($parent, focusOnField=true) {
-
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		const validationDisabled = $('#disable-required-slider-container input[type=checkbox]').is(':checked');
-
-		const $fields = $parent
-			.find('.field-container:not(.disabled)')
-			.find('.input-field:required, .required-indicator + .input-field').not('.hidden').each(
-			(_, el) => {
-				const $el = $(el);
-				const $hiddenParent = $el.parents('.collapse:not(.show, .row-details-card-collapse), .card.cloneable, .field-container.disabled, .hidden');
-				// Only check for empty fields if validation is enabled (it can be disabled by admins)
-				if (!validationDisabled) {
-					if (!($el.hasClass(MULTIPLE_SELECT_ENTRY_CLASS) ? $el.val().length : $el.val()) && $hiddenParent.length === 0) {
-						$el.addClass('error');
-					} else {
-						$el.removeClass('error');
-					}
-				}
-				// Always check if a value exceeds the max length, regardless of whether validation is disabled
-				const maxLength = $el.data('max-length');
-				let valueLength = 0;
-				try {
-					valueLength = el.value.length;
-				} catch {
-					console.log('Could not get value length for field ' + el.id);
-				}
-				if (valueLength > maxLength) {
-					$el.addClass('error');
-				}
-		});
-
-		if ($fields.filter('.error').length) {
-			// Search the parent(s) for any .collapse elements that aren't shown. 
-			//	If one is found, show it
-			for (const el of $parent) {//.each(function() {
-				const $el = $(el);
-				if ($el.hasClass('collapse') && !$el.hasClass('show')) {
-					$el.siblings('.card-header')
-						.find('.card-link')
-						.click();
-					return false;
-				}
+		
+		validateFields(
+			$parent, 
+			{
+				focusOnField: focusOnField, 
+				validationDisabled: validationDisabled
 			}
-			if (focusOnField) $fields.first().focus();
-			return false;
-		} else {
-			return true;
-		}
+		);
 	}
 
 
@@ -1488,54 +1413,7 @@ var BHIMSEntryForm = (function() {
 	Helper function to recursively hide/show fields with data-dependent-target attribute
 	*/
 	Constructor.prototype.toggleDependentFields = function($select) {
-
-		const selectID = '#' + $select.attr('id');
-
-		// Get all the elements with a data-dependent-target 
-		const dependentElements = $(`
-			.collapse.field-container .input-field, 
-			.collapse.accordion, 
-			.collapse.add-item-container .add-item-button,
-			.collapse.export-field-options-container
-			`).filter((_, el) => {return $(el).data('dependent-target') === selectID});
-		//const dependentIDs = $select.data('dependent-target');
-		//var dependentValues = $select.data('dependent-value');
-		dependentElements.each((_, el) => {
-			const $thisField = $(el);
-			if (el.id == 'input-input-recovered_value-0') {
-				let a=0;
-			}
-			var dependentValues = $thisField.data('dependent-value').toString();
-			if (dependentValues) {
-				var $thisContainer = $thisField.closest('.collapse.field-container, .collapse.accordion, .collapse.add-item-container, .collapse.export-field-options-container');
-				
-				// If there's a ! at the beginning, 
-				const notEqualTo = dependentValues.startsWith('!');
-				dependentValues = dependentValues
-					.toString()
-					.replace('!', '')
-					.split(',').map((s) => {return s.trim()});
-				
-				var selectVal = ($select.val() || '').toString().trim();
-
-				var show = notEqualTo ? 
-					!dependentValues.includes(selectVal) :
-					dependentValues.includes(selectVal);
-				if (!dependentValues[0] === '<blank>') {
-					show = show || selectVal !== '';
-				}
-
-				if (show) {
-					//$thisContainer.removeClass('hidden');
-					$thisContainer.collapse('show');
-					_this.toggleDependentFields($thisField, hide=false)
-				} else {
-					$thisContainer.collapse('hide');
-					//$thisContainer.addClass('hidden');
-					_this.toggleDependentFields($thisField, hide=true)
-				}
-			}
-		});
+		toggleDependentFields($select);
 	}
 
 
@@ -1543,27 +1421,8 @@ var BHIMSEntryForm = (function() {
 	Event handler for selects
 	*/
 	Constructor.prototype.onSelectChange = function(e) {
-		// Set style depending on whether the default option is selected
 		const $select = $(e.target);
-
-		if ($select.val() === '') {
-			$select.addClass('default');
-
-		} else {
-			$select.removeClass('default error');
-			// the user selected an actual option so remove the empty default option
-			// **** DENA staff didn't want option removed ****
-			// for (const el of $select.find('option')) {//.each(function(){
-			// 	const $option = $(el);
-			// 	if ($option.val() == '') {
-			// 		$option.remove();
-			// 	}
-			// }
-		}
-
-		// If there are any dependent fields that should be shown/hidden, 
-		//	toggle its visibility as necessary
-		_this.toggleDependentFields($select);
+		onSelectChange($select);
 	}
 
 
@@ -2622,15 +2481,16 @@ var BHIMSEntryForm = (function() {
 		
 		// Return the deferred object so other functions can be triggered 
 		//	after the select is filled
-		return fillSelectOptions(reactionSelectID, 
-			`
-			SELECT code AS value, name 
-			FROM reaction_codes 
-			WHERE 
-				sort_order IS NOT NULL AND 
-				action_by=${actionBy} 
-			ORDER BY sort_order
-			`
+		return fillSelectOptions(
+			reactionSelectID, 
+			{sql: `
+				SELECT code AS value, name 
+				FROM reaction_codes 
+				WHERE 
+					sort_order IS NOT NULL AND 
+					action_by=${actionBy} 
+				ORDER BY sort_order
+			`}
 		);
 	}
 

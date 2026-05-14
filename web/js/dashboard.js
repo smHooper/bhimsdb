@@ -250,8 +250,8 @@ function configureMap(divID, modalDivID=null) {
 					for (const property in row) {
 						FIELD_INFO[columnName][property] = row[property];
 					}
-					const lookupTableName = row.lookup_table || row.field_name + 's';
-					if (row.html_input_type === 'select' && !(lookupTableName in LOOKUP_TABLES)) {
+					const lookupTableName = row.lookup_table;// || row.field_name + 's';
+					if (lookupTableName && row.html_input_type === 'select' && !(lookupTableName in LOOKUP_TABLES)) {
 						queryDB({sql:`SELECT code, name FROM ${lookupTableName}`})
 							.done(response => {
 								if (!pythonReturnedError(response)) { 

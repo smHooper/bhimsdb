@@ -83,7 +83,9 @@ var BHIMSQuery = (function(){
 			SELECT 
 				DISTINCT table_name 
 			FROM information_schema.columns 
-			WHERE table_schema='{schema}' AND column_name='encounter_id'
+			WHERE table_schema='{schema}' AND 
+			column_name='encounter_id' AND 
+			table_name NOT LIKE '%_view'
 		;`;
 		return queryDB({sql: tablesSQL})
 			.done( response => {

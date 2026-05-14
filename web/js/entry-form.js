@@ -2481,17 +2481,19 @@ var BHIMSEntryForm = (function() {
 		
 		// Return the deferred object so other functions can be triggered 
 		//	after the select is filled
-		return fillSelectOptions(
-			reactionSelectID, 
-			{sql: `
-				SELECT code AS value, name 
-				FROM reaction_codes 
-				WHERE 
-					sort_order IS NOT NULL AND 
-					action_by=${actionBy} 
-				ORDER BY sort_order
-			`}
-		);
+		if (actionBy) {
+			return fillSelectOptions(
+				reactionSelectID, 
+				{sql: `
+					SELECT code AS value, name 
+					FROM reaction_codes 
+					WHERE 
+						sort_order IS NOT NULL AND 
+						action_by=${actionBy} 
+					ORDER BY sort_order
+				`}
+			);
+		}
 	}
 
 

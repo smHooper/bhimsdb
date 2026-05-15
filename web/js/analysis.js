@@ -992,7 +992,7 @@ const BHIMSAnalysis  = (function() {
 
 		if ('encounter_id' in groupByFields) {
 			this.queries.count_encounters.hrefs = {
-				'Encounter ID': 'query.html?id={Encounter ID}'
+				'Report ID': 'query.html?id={Report ID}'
 			}
 		}
 
@@ -1011,11 +1011,11 @@ const BHIMSAnalysis  = (function() {
 			//	regardless of which raw-data query is run
 			const whereFieldSelectString = Object.entries(whereFields).map(this.fieldToSelectAlias).join(', '); 
 			
-			this.queries.count_encounters.columns = ['Encounter ID', ...whereFieldAliases];
-			outerSelectClause = 'encounter_id AS "Encounter ID", climber_id, ' + whereFieldSelectString;
+			this.queries.count_encounters.columns = ['Report ID', ...whereFieldAliases];
+			outerSelectClause = 'encounter_id AS "Report ID", climber_id, ' + whereFieldSelectString;
 			innerSelectStatement = this.countEncountersBySelectMap[$('#count_encounters-count_field').val()];
 			this.queries.count_encounters.hrefs = {
-				'Encounter ID': encodeURI('query.html?{"encounters": {"id": {"value": {encounter_id}, "operator": "="}}}')
+				'Report ID': encodeURI('query.html?{"encounters": {"id": {"value": {encounter_id}, "operator": "="}}}')
 			}
 		
 		}*/

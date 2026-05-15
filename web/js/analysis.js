@@ -1506,36 +1506,55 @@ const BHIMSAnalysis  = (function() {
 	}
 
 
+	Constructor.prototype.checkUserRole = function(e) {
+		return getUserInfo()
+			.then(userInfo => {
+				// _this.username = userInfo.username;
+				// _this.userRole = userInfo.role;
+				$('#username').text(userInfo.username);
+				// If this is the query page, check if the user has permission to access it
+				const canAccessData = DATA_ACCESS_USER_ROLES.includes(parseInt(userInfo.role))
+				if (!canAccessData) {
+					showPermissionDeniedAlert();
+				}
+			});
+	}
+
+
 	Constructor.prototype.init = function() {
 		// Call super.init()
 		showLoadingIndicator('init');
 
 		_this.configureMainContent();
 		// Initialize select2s individually because the width needs to be set depending on the type of select
+		
+		_this.initDeferred = $.when(
+			_this.checkUserRole(), 
+			...fillAllSelectOptions(), 
+			_this.fillYearSelects()
+		)
+		.then(() => {
+			$('.has-null-option').append('<option value="null">Null</option>');
 
-		return $.when(...fillAllSelectOptions(), _this.fillYearSelects())
-			.then(() => {
-				$('.has-null-option').append('<option value="null">Null</option>');
+			// Initialize select2s individually because the width needs to be set depending on the type of select
+			for (const el of $('.bhims-select2')) {
+				const $select = $(el);
+				$select.select2({
+					width: $select.siblings('.hide-query-parameter-button').length ? 'calc(100% - 28px)' : '100%',
+					placeholder: $select.attr('placeholder')
+				});
+				// .select2 removes the .default class for some reason
+				$select.addClass('default');
+			}
 
-				// Initialize select2s individually because the width needs to be set depending on the type of select
-				for (const el of $('.bhims-select2')) {
-					const $select = $(el);
-					$select.select2({
-						width: $select.siblings('.hide-query-parameter-button').length ? 'calc(100% - 28px)' : '100%',
-						placeholder: $select.attr('placeholder')
-					});
-					// .select2 removes the .default class for some reason
-					$select.addClass('default');
-				}
-
-				// Parse the URL query string if there is one and load a query from the URL.
-				//	If there isn't a query string, this method does nothing. In that case,
-				//	just select the first query option
-				_this.loadQueryFromURL() || $('#query-option-list .query-option').first().click();
-			})
-			.always(() => {
-				hideLoadingIndicator();
-			});
+			// Parse the URL query string if there is one and load a query from the URL.
+			//	If there isn't a query string, this method does nothing. In that case,
+			//	just select the first query option
+			_this.loadQueryFromURL() || $('#query-option-list .query-option').first().click();
+		})
+		.always(() => {
+			hideLoadingIndicator();
+		});
 
 		return _this;
 	}

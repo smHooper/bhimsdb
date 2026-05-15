@@ -1,4 +1,5 @@
 var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
+const DATA_ACCESS_USER_ROLES = [2, 3]
 
 function deepCopy(inObject) {
 	/*

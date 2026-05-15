@@ -364,7 +364,7 @@ const BHIMSAnalysis  = (function() {
 	Constructor.prototype.setCountEncountersParameters = function({
 			queryTarget='summary', 
 			countBy='climbers',
-			year=new Date().getFullYear(), 
+			year=this.MAX_YEAR || Math.max(...$('#count_encounters-encounter_year option').map((_, el) => el.value).get()), 
 			groupByFields=[], 
 			pivotField=''
 		}={}) {
@@ -1325,6 +1325,7 @@ const BHIMSAnalysis  = (function() {
 						//	is actually "= <year>"
 						$('.year-select-field.nullable').append(`<option value="= ${row.year}">${row.year}</option>`);
 					}
+					this.MAX_YEAR = Math.max(response.data.map(({year}) => year));
 				}
 			})
 

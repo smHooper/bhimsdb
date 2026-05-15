@@ -218,6 +218,7 @@ height of the container, so make sure it aligns with the bottom of the rest of t
   width: 1.1rem;
   height: 1.1rem;
   transition: background 0.2s;
+  font-size: 18px;
   
 }
 /*.dashboard-main .select2-container--default .select2-selection--multiple 

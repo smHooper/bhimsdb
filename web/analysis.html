@@ -382,6 +382,13 @@
 								</select>
 								<label class="field-label" for="count_encounters-pivot_field">Split columns by</label>
 							</div>
+							<div class="field-container col-sm col-md-4 col-lg-3">
+								<select id="count_encounters-include_observations" class="input-field no-option-fill" name="count_encounters-include_observations" title="Include observation reports?" data-default-value="no" required>
+									<option value="yes" >Yes</option>
+									<option value="no" selected>No</option>
+								</select>
+								<label class="field-label" for="count_per_guide_company-count_field">Include observation reports?</label>
+							</div>
 							<div class="field-container col-sm col-md-4 col-lg-3 collapse">
 								<div class="field-container col-6"> 
 									<input id="count_encounters-day_search_start" class="input-field" type="date" name="day_search_start" title="Search start date" data-dependent-target="#count_encounters-group_by_fields" data-dependent-value="day::date|to_char(day, 'MM-DD')" required> <!--comma will truncate the actual <option> value-->

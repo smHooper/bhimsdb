@@ -860,7 +860,7 @@ const BHIMSAnalysis  = (function() {
 							$el.find('option:first-child')
 						);
 				}
-				el.value = defaultValue || '';
+				$el.val( defaultValue || (el.multiple ? [] : ''));
 				$el.toggleClass('default', !defaultValue);
 					//.change();
 			} else {

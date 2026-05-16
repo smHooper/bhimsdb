@@ -67,7 +67,7 @@ var BHIMSEntryForm = (function() {
 		this.presentMode = false;
 		this.maxFileUploadSize = 2147483648;
 		this.userRolesForNotification = [1]; // if user has one of these roles, an email notification should be sent on submission
-		this.dataAccessUserRoles = [2, 3]; // to determine if user should be able to open query page
+		this.dataAccessUserRoles = DATA_ACCESS_USER_ROLES;//[2, 3]; // to determine if user should be able to open query page
 		this.roadsGeoJSON;
 		this.dataEntryConfig = {};
 		this.dbSchema = 'public';

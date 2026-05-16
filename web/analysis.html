@@ -88,7 +88,7 @@
 
 						<li class="nav-item selected">
 							<a href="analysis.html">
-								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
+								<img class="sidebar-nav-item-icon" src="imgs/analysis_icon_50px.svg">
 								<span class="sidebar-nav-item-label">analyze data</span>
 							</a>
 						</li>
@@ -310,7 +310,7 @@
 							</div> -->
 							<div class="field-container col-sm col-md-4 col-lg-3">
 								<select id="count_encounters-count_field" class="input-field no-option-fill" name="count_encounters-count_field" title="Count expedition members, climbers, or climbs?" data-default-value="encounter_id" required>
-									<option value="encounter_id" selected>Encounters</option>
+									<option value="encounter_id" selected>Reports</option>
 									<option value="improper_reaction_id">Improper reactions</option>
 									<option value="property_damage_id">Property damage</option>
 									<option value="structure_interaction_id">Structure interactions</option>
@@ -343,9 +343,9 @@
 									<option value="structure_type_code"				>Structure Type</option>
 									<option value="encounter_year"					>Year</option>
 									<option value="to_char(start_date, 'Month')"	>Month</option>
-									<option value="start_date"						>Encounter Date</option>
-									<option value="to_char(start_date, 'MM-DD')"	>Encounter Day of Year</option>
-									<option value="encounter_id"					>Encounter ID</option>
+									<option value="start_date"						>Report Date</option>
+									<option value="to_char(start_date, 'MM-DD')"	>Report Day of Year</option>
+									<option value="encounter_id"					>Report ID</option>
 									<option value="improper_reaction_id"			>Improper Reaction ID</option>
 								</select>
 								<label class="field-label" for="count_encounters-group_by_fields">Group rows by</label>
@@ -377,10 +377,17 @@
 									<option value="structure_type_code"				>Structure Type</option>
 									<option value="encounter_year"					>Year</option>
 									<option value="to_char(start_date, 'Month')"	>Month</option>
-									<option value="start_date"						>Encounter Date</option>
-									<option value="to_char(start_date, 'MM-DD')"	>Encounter Day of Year</option>
+									<option value="start_date"						>Report Date</option>
+									<option value="to_char(start_date, 'MM-DD')"	>Report Day of Year</option>
 								</select>
 								<label class="field-label" for="count_encounters-pivot_field">Split columns by</label>
+							</div>
+							<div class="field-container col-sm col-md-4 col-lg-3">
+								<select id="count_encounters-include_observations" class="input-field no-option-fill" name="count_encounters-include_observations" title="Include observation reports?" data-default-value="no" required>
+									<option value="yes" >Yes</option>
+									<option value="no" selected>No</option>
+								</select>
+								<label class="field-label" for="count_per_guide_company-count_field">Include observation reports?</label>
 							</div>
 							<div class="field-container col-sm col-md-4 col-lg-3 collapse">
 								<div class="field-container col-6"> 
@@ -392,7 +399,7 @@
 									<label class="field-label" for="count_encounters-day_search_end">Search end date</label>
 								</div>
 							</div>
-							<h5 class="w-100 mt-3">Query Parameters</h5>
+							<h5 class="w-100 mt-3">Additional Filters</h5>
 							<div class="query-parameter-option-container" role="list">
 								<div class="show-query-parameter-button" role="button" data-field-name="management_classification_code">Management Classification</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="probable_cause_code">Bear Behavior Rating </div>
@@ -411,7 +418,7 @@
 								<div class="show-query-parameter-button" role="button" data-field-name="initial_bear_action_code">Initial Bear Action</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="initial_human_action_code">Initial Human Action</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="encounter_year">Year</div>
-								<div class="show-query-parameter-button" role="button" data-field-name="start_date">Encounter Date</div>
+								<div class="show-query-parameter-button" role="button" data-field-name="start_date">Report Date</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="reported_probable_cause_code">Reported Cause</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="was_making_noise">Making Noise?</div>
 								<div class="show-query-parameter-button" role="button" data-field-name="did_react_properly">People Reacted Properly?</div>
@@ -704,7 +711,7 @@
 								<button class="icon-button hide-query-parameter-button">
 									<i class="fas fa-lg fa-times"></i>
 								</button>
-								<label class="field-label" for="count_encounters-start_date_operator">Encounter Date</label>
+								<label class="field-label" for="count_encounters-start_date_operator">Report Date</label>
 							</div>
 							<div class="field-container col-sm-6 col-md-4 col-lg-3 pr-3 collapse">
 								<select id="count_encounters-reported_probable_cause_code" class="input-field query-option-input-field bhims-select2 is-empty where-clause-field has-null-option" multiple="multiple" name="reported_probable_cause_code" placeholder="Reported Cause" required></select>

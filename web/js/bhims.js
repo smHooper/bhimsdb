@@ -1,4 +1,5 @@
 var MULTIPLE_SELECT_ENTRY_CLASS = 'bhims-select2';
+const DATA_ACCESS_USER_ROLES = [2, 3]
 
 function deepCopy(inObject) {
 	/*
@@ -567,8 +568,8 @@ function addSidebarMenu() {
 					<div class="sidebar-background"></div>
 					<ul class="sidebar-nav-group">
 
-						<li class="nav-item selected">
-							<a href="dashboard.html">
+						<li class="nav-item">
+							<a href="bhims-dashboard.html">
 								<img class="sidebar-nav-item-icon" src="imgs/dashboard_icon_50px.svg">
 								<span class="sidebar-nav-item-label">dashboard</span>
 							</a>
@@ -578,6 +579,13 @@ function addSidebarMenu() {
 							<a href="query.html">
 								<img class="sidebar-nav-item-icon" src="imgs/query_icon_50px.svg">
 								<span class="sidebar-nav-item-label">query data</span>
+							</a>
+						</li>
+
+						<li class="nav-item">
+							<a href="analysis.html">
+								<img class="sidebar-nav-item-icon" src="imgs/analysis_icon_50px.svg">
+								<span class="sidebar-nav-item-label">analyze data</span>
 							</a>
 						</li>
 
@@ -606,6 +614,7 @@ function addSidebarMenu() {
 
 				</div>
 			</nav>
+		</div>
 	`).prependTo('main');
 
 	$(`

@@ -4,9 +4,6 @@ const BHIMSAnalysis  = (function() {
 	var Constructor = function() {
 		_this = this;
 
-		_this.routeCodes = {};
-		_this.mountainCodes = {};
-		_this.guideCompanies = {};
 		_this.result = [];
 		_this.ancillaryResult = []; // for things like briefings that go along with 
 		_this.countEncountersBySelectMap = { // mapping #count_encounters-count_field values to SELECT statements for readability
@@ -24,6 +21,7 @@ const BHIMSAnalysis  = (function() {
 			'did_react_properly',
 			'was_making_noise'
 		];
+		_this.observationManagementClassCode = 1;
 		_this.queries = {
 
 			count_encounters: {
@@ -149,6 +147,20 @@ const BHIMSAnalysis  = (function() {
 
 		$('#count_encounters-summary_or_records').change(() => {
 			this.onCountEncountersQueryByChange()
+		});
+
+		// When the user changes the include_observations or mgmt class filter, check to see 
+		// 	if they should be warned that these two fields conflict semanticatlly
+		$(`
+			#count_encounters-include_observations,
+			#count_encounters-management_classification_code
+		`).change(() => {
+			this.showIncludeObservationWarning();
+		});
+		// Also perform this check when the mgmt class filter is shown in case there were previously 
+		// 	selected filter options and they were previously hidden and therefore ignored
+		$('.show-query-parameter-button[data-field-name=management_classification_code]').click(() => {
+			this.showIncludeObservationWarning({checkIfManagementClassVisiable: false});
 		});
 
 		// prepared query handlers
@@ -357,6 +369,35 @@ const BHIMSAnalysis  = (function() {
 		)
 	}
 
+	/*
+	Check if the observation/mgmt class filter parameters conflict and if so, warn the user
+	*/
+	Constructor.prototype.showIncludeObservationWarning = function({checkIfManagementClassVisiable=true}={}) {
+		// add parameter to check .collapse.show class or not
+		// Only check the value if the mgmt class field is visible
+		const inlcudeObservations = $('#count_encounters-include_observations').val() === 'yes';
+		const $managementClassField = $(`${checkIfManagementClassVisiable ? '.collapse.show' : ''} #count_encounters-management_classification_code`);
+		const filterValues =  ($managementClassField.val() || []).map(v => parseInt(v));
+		
+		// If there aren't any management class values, just exit because the showModalWarning gate will 
+		// 	evaluate to true if includeObservations === true
+		if (!filterValues.length) return;
+
+		const showModalWarning = (
+			(!filterValues.includes(this.observationManagementClassCode) && inlcudeObservations) ||
+			(filterValues.includes(this.observationManagementClassCode) && !inlcudeObservations) 
+		)
+		if (showModalWarning) {
+			const message = (inlcudeObservations ?
+				'You have selected to include observations but your Management Classification filter options exclude them.' :
+				'You have selected to exclude observations but your Management Classification filter options include them.') +
+				' Be aware that the <strong>query results will not show reports classified as "Observation"</strong> as a result.';
+			
+			showModal(message, 'WARNING: Conflicting Field Filters');
+		}
+	}
+
+
 
 	/*
 	Helper function to set default options for canned count_encounters derative queries
@@ -364,7 +405,7 @@ const BHIMSAnalysis  = (function() {
 	Constructor.prototype.setCountEncountersParameters = function({
 			queryTarget='summary', 
 			countBy='climbers',
-			year=new Date().getFullYear(), 
+			year=this.MAX_YEAR || Math.max(...$('#count_encounters-encounter_year option').map((_, el) => el.value).get()), 
 			groupByFields=[], 
 			pivotField=''
 		}={}) {
@@ -819,7 +860,7 @@ const BHIMSAnalysis  = (function() {
 							$el.find('option:first-child')
 						);
 				}
-				el.value = defaultValue || '';
+				$el.val( defaultValue || (el.multiple ? [] : ''));
 				$el.toggleClass('default', !defaultValue);
 					//.change();
 			} else {
@@ -890,15 +931,30 @@ const BHIMSAnalysis  = (function() {
 				else {
 					return this.whereFieldToClause(el);
 				}
-			}).get()
-			.join(' AND ');
+			}).get();
 		
+		// DENA staff regularly toggle observations in or out of queries, so this should be a separate option
+		//	to make including/excluding them more explicit
+		if ($('#count_encounters-include_observations').val() === 'no') {
+			whereClauses.push(`management_classification_code <> ${this.observationManagementClassCode}`)
+		}
+
 		// If there were any WHERE clauses, add the "WHERE" to the beginning
-		if (whereClauses.length) whereClauses = `WHERE ${whereClauses}`;
+		let whereClausesString = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+		
+		
+		// const includeObservationsClause = $('#count_encounters-include_observations').val() === 'no' ?
+		// 	` ${whereClausesString.startsWith('WHERE') ? ' AND': 'WHERE'} management_classification_code <> ${this.observationManagementClassCode}` :
+		// 	'';
+		// whereClausesString
 		
 		// Get field/value pairs to be able to get human-readable values
 		const whereFields = Object.fromEntries(
-			$whereFields.map((_, el) => [[el.name, $(el).data('validation-field-name') || $(el).siblings('.field-label').text()]]).get()
+			$whereFields.map(
+				(_, el) => 
+					[[el.name, $(el).data('validation-field-name') || 
+					$(el).siblings('.field-label').text()]]
+			).get()
 		);
 
 		let pivotField = '',
@@ -992,7 +1048,7 @@ const BHIMSAnalysis  = (function() {
 
 		if ('encounter_id' in groupByFields) {
 			this.queries.count_encounters.hrefs = {
-				'Encounter ID': 'query.html?id={Encounter ID}'
+				'Report ID': 'query.html?id={Report ID}'
 			}
 		}
 
@@ -1011,11 +1067,11 @@ const BHIMSAnalysis  = (function() {
 			//	regardless of which raw-data query is run
 			const whereFieldSelectString = Object.entries(whereFields).map(this.fieldToSelectAlias).join(', '); 
 			
-			this.queries.count_encounters.columns = ['Encounter ID', ...whereFieldAliases];
-			outerSelectClause = 'encounter_id AS "Encounter ID", climber_id, ' + whereFieldSelectString;
+			this.queries.count_encounters.columns = ['Report ID', ...whereFieldAliases];
+			outerSelectClause = 'encounter_id AS "Report ID", climber_id, ' + whereFieldSelectString;
 			innerSelectStatement = this.countEncountersBySelectMap[$('#count_encounters-count_field').val()];
 			this.queries.count_encounters.hrefs = {
-				'Encounter ID': encodeURI('query.html?{"encounters": {"id": {"value": {encounter_id}, "operator": "="}}}')
+				'Report ID': encodeURI('query.html?{"encounters": {"id": {"value": {encounter_id}, "operator": "="}}}')
 			}
 		
 		}*/
@@ -1023,7 +1079,7 @@ const BHIMSAnalysis  = (function() {
 		let sql = this.queries.count_encounters.sql
 			.replace('{outer_select}', outerSelectClause)
 			.replace('{inner_select}', innerSelectStatement)
-			.replace('{where_clauses}', whereClauses)
+			.replace('{where_clauses}', whereClausesString)
 			.replace('{joins}', joins)
 			.replace('{group_by}', groupByClause);
 
@@ -1325,6 +1381,7 @@ const BHIMSAnalysis  = (function() {
 						//	is actually "= <year>"
 						$('.year-select-field.nullable').append(`<option value="= ${row.year}">${row.year}</option>`);
 					}
+					this.MAX_YEAR = Math.max(response.data.map(({year}) => year));
 				}
 			})
 
@@ -1506,36 +1563,55 @@ const BHIMSAnalysis  = (function() {
 	}
 
 
+	Constructor.prototype.checkUserRole = function(e) {
+		return getUserInfo()
+			.then(userInfo => {
+				// _this.username = userInfo.username;
+				// _this.userRole = userInfo.role;
+				$('#username').text(userInfo.username);
+				// If this is the query page, check if the user has permission to access it
+				const canAccessData = DATA_ACCESS_USER_ROLES.includes(parseInt(userInfo.role))
+				if (!canAccessData) {
+					showPermissionDeniedAlert();
+				}
+			});
+	}
+
+
 	Constructor.prototype.init = function() {
 		// Call super.init()
 		showLoadingIndicator('init');
 
 		_this.configureMainContent();
 		// Initialize select2s individually because the width needs to be set depending on the type of select
+		
+		_this.initDeferred = $.when(
+			_this.checkUserRole(), 
+			...fillAllSelectOptions(), 
+			_this.fillYearSelects()
+		)
+		.then(() => {
+			$('.has-null-option').append('<option value="null">Null</option>');
 
-		return $.when(...fillAllSelectOptions(), _this.fillYearSelects())
-			.then(() => {
-				$('.has-null-option').append('<option value="null">Null</option>');
+			// Initialize select2s individually because the width needs to be set depending on the type of select
+			for (const el of $('.bhims-select2')) {
+				const $select = $(el);
+				$select.select2({
+					width: $select.siblings('.hide-query-parameter-button').length ? 'calc(100% - 28px)' : '100%',
+					placeholder: $select.attr('placeholder')
+				});
+				// .select2 removes the .default class for some reason
+				$select.addClass('default');
+			}
 
-				// Initialize select2s individually because the width needs to be set depending on the type of select
-				for (const el of $('.bhims-select2')) {
-					const $select = $(el);
-					$select.select2({
-						width: $select.siblings('.hide-query-parameter-button').length ? 'calc(100% - 28px)' : '100%',
-						placeholder: $select.attr('placeholder')
-					});
-					// .select2 removes the .default class for some reason
-					$select.addClass('default');
-				}
-
-				// Parse the URL query string if there is one and load a query from the URL.
-				//	If there isn't a query string, this method does nothing. In that case,
-				//	just select the first query option
-				_this.loadQueryFromURL() || $('#query-option-list .query-option').first().click();
-			})
-			.always(() => {
-				hideLoadingIndicator();
-			});
+			// Parse the URL query string if there is one and load a query from the URL.
+			//	If there isn't a query string, this method does nothing. In that case,
+			//	just select the first query option
+			_this.loadQueryFromURL() || $('#query-option-list .query-option').first().click();
+		})
+		.always(() => {
+			hideLoadingIndicator();
+		});
 
 		return _this;
 	}

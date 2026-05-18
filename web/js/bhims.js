@@ -30,6 +30,16 @@ function print(i) {
 }
 
 
+function isNull(value) {
+
+	return (
+		value === null ||
+		value === undefined ||
+		value === ''
+	);
+
+}
+
 /*
 Run a SELECT query by either sending WHERE (and possibly ORDER BY) parameters to use the 
 SQLAlchemy ORM or raw SQL and parameters to execute parameterized SQL
@@ -67,7 +77,7 @@ function fillSelectOptions(selectElementID, sqlArgs, optionClassName='') {
 				const $el = $('#' + selectElementID);
 				for (const row of queryResult) {
 					$el.append(
-						`<option class="${optionClassName}" value="${row.value || row.code}">${row.name}</option>`
+						`<option class="${optionClassName}" value="${isNull(row.value) ? row.code : row.value}">${row.name}</option>`
 					);
 				}
 				const defaultValue = $el.data('default-value');

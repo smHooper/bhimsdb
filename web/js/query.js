@@ -288,7 +288,7 @@ var BHIMSQuery = (function(){
 							} else {
 								for (const row of result) {
 									for (const columnName in row) {
-										if ((entryForm.fieldInfo[columnName] || {}).has_pii === 't' && this.anonymizedDefaults[columnName]) {
+										if ((entryForm.fieldInfo[columnName] || {}).has_pii && this.anonymizedDefaults[columnName]) {
 											row[columnName] = this.anonymizedDefaults[columnName];
 											this.ignorePIIFields = true;
 										}

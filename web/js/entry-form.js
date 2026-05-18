@@ -365,7 +365,7 @@ var BHIMSEntryForm = (function() {
 								if (fieldInfo.css_class.includes(MULTIPLE_SELECT_ENTRY_CLASS))
 									inputFieldAttributes += ' multiple="true"';
 								const inputTagClosure = inputTag != 'input' ? `</${inputTag}>` : ''; 
-								const required = fieldInfo.required === 't';
+								const required = fieldInfo.required;
 								const $field = $(`
 									<div class="${fieldInfo.parent_css_class}">
 										<${inputTag} ${inputFieldAttributes} ${required ? 'required' : ''}>${inputTagClosure}

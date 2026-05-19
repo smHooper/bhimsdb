@@ -340,7 +340,7 @@ var BHIMSQuery = (function(){
 			var queryParamString = decodeURIComponent(window.location.search.slice(1));
 
 			// turn the case-sensitive switch on if it was set in the parameters
-			const queryParams = $.parseJSON(queryParamString);
+			queryParams = $.parseJSON(queryParamString);
 			$('#case-sensitive-slider-container input[type=checkbox]').prop('checked', queryParams.case_sensitive);
 		}
 

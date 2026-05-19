@@ -283,8 +283,8 @@ var BHIMSQuery = (function(){
 								const sortedResult = (result[0] || {}).display_order ? 
 									result.sort((row1, row2) => parseInt(row1.display_order) - parseInt(row2.display_order)) :
 									result;
-								const encounterID = result[0].encounter_id;
-								this.queryResult[encounterID][fieldName] = sortedResult.map(row => row[fieldName]);
+								const encounterID = (result[0] || {}).encounter_id;
+								if (encounterID) this.queryResult[encounterID][fieldName] = sortedResult.map(row => row[fieldName]);
 							} else {
 								for (const row of result) {
 									for (const columnName in row) {
@@ -293,7 +293,7 @@ var BHIMSQuery = (function(){
 											this.ignorePIIFields = true;
 										}
 									}
-									const encounterID = row.encounter_id;
+									const encounterID = (row || {}).encounter_id;
 									if (oneToManyTables.includes(tableName)) {
 										if (!this.queryResult[encounterID][tableName]) this.queryResult[encounterID][tableName] = [];
 										this.queryResult[encounterID][tableName].push({...row});

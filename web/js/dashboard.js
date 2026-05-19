@@ -8,8 +8,7 @@ var MAP_DATA,
 	FIELD_INFO = {},
 	LOOKUP_TABLES = {},
 	PRESENT_MODE = false,
-	PRESENT_MODE_YEAR = 2023,
-	DATA_ACCESS_USER_ROLES = [2, 3];
+	PRESENT_MODE_YEAR = 2023;
 
 //add bhims-dashboard to main-content
 

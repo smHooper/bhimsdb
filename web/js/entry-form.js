@@ -1399,7 +1399,7 @@ var BHIMSEntryForm = (function() {
 		// If the user has disabled validation, just return true to indicate that they're all valid
 		const validationDisabled = $('#disable-required-slider-container input[type=checkbox]').is(':checked');
 		
-		validateFields(
+		return validateFields(
 			$parent, 
 			{
 				focusOnField: focusOnField, 

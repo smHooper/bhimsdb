@@ -27,7 +27,7 @@ sys.path.append(
 from tables import model_dict
 
 
-CONFIG_FILE = '//inpdenaterm01/bhims/config/bhims_config.json'
+CONFIG_FILE = '//inpdenakeydb01/bhims/config/bhims_config.json'
 
 with open(CONFIG_FILE) as f:
 	config = json.load(f)

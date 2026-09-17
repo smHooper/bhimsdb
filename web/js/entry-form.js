@@ -1009,6 +1009,8 @@ var BHIMSEntryForm = (function() {
 				if (value !== null) {
 					if ($input.is('.input-checkbox')) {
 						$input.prop('checked', value);
+					} else if ($input.is('input[type=date]')) {
+						$input.val(value.split(' ')[0]) // trim 00:00 that comes from flask
 					} else {
 						$input.val(value);
 					}

@@ -276,14 +276,25 @@ function onSelectChange($select) {
 Return an array of objects sorted by a given field
 */
 function sortDataArray(data, sortField, {ascending=true}={}) {
-	return data.sort( (a, b) => {
+	return data.sort((a, b) => {
+		const valA = a[sortField];
+		const valB = b[sortField];
+
+		// Handle nulls first — always sink to the bottom, regardless of direction
+		const aIsNull = valA === null || valA === undefined;
+		const bIsNull = valB === null || valB === undefined;
+		if (aIsNull && bIsNull) return 0;
+		if (aIsNull) return 1;
+		if (bIsNull) return -1;
+
 		// If the values are integers, make them numeric before comparing because string 
 		//	numbers have a different result than actual numbers when comparing values
-		const comparandA = a[sortField].toString().match(/^\d+$/, a[sortField]) ? parseInt(a[sortField]) : a[sortField];
-		const comparandB = b[sortField].toString().match(/^\d+$/, b[sortField]) ? parseInt(b[sortField]) : b[sortField];
+		const comparandA = valA.toString().match(/^\d+$/) ? parseInt(valA) : valA;
+		const comparandB = valB.toString().match(/^\d+$/) ? parseInt(valB) : valB;
 		return ((comparandA > comparandB) - (comparandB > comparandA)) * (ascending ? 1 : -1);
-	})
+	});
 }
+
 
 function showLoadingIndicator(caller, timeout=15000) {
 

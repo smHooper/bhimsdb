@@ -36,7 +36,7 @@ tables = model_dict()
 
 def get_unique_id() -> str:
 	"""equivalent to php uniqid()"""
-	return hex(int(datetime.now().timestamp() * 10000000))[2:]
+	return hex(int(datetime.datetime.now().timestamp() * 10000000))[2:]
 
 def get_random_string(length=8):
 	alphabet = ascii_letters + digits

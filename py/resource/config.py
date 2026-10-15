@@ -17,7 +17,7 @@ def initialize(environment: str):
     """
     global _config
 
-    config_file = f"//INPDENATERM01/bhims/config/{environment}.config"
+    config_file = f"//inpdenakeydb01/bhims/config/{environment}.config"
     _config = ConfigParser()
     _config.read(config_file)
 

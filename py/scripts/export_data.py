@@ -158,7 +158,7 @@ def generate_query_parameters(query_json: Dict, engine: Engine, session: Session
     encounter_ids = select_encounters(criteria_dict, engine) if criteria_dict else None
 
     if include_codes:
-        lookup_table_info = pd.read_sql('TABLE export_code_value_map_view', engine)
+        lookup_table_info = pd.read_sql('TABLE export_code_value_map_view', engine.raw_connection())
         lookup_table_info['join_alias'] = '_' + lookup_table_info.index.astype(str)
         code_names = {info.coded_value: f'_{i}.name AS {info.readable_value}' for i, info in lookup_table_info.iterrows()}
 
@@ -226,7 +226,7 @@ def export_data(args: Namespace) -> None:
                                        selects=params['selects'],
                                        joins=params['joins'],
                                        wheres=params['wheres'])
-            df = pd.read_sql(query, engine)
+            df = pd.read_sql(query, engine.raw_connection())
             df.to_excel(writer, sheet_name=table, index=False)
 
     return output_path
